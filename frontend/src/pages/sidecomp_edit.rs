@@ -1,5 +1,6 @@
-use crate::api;
 use crate::Route;
+use crate::api;
+use crate::components::{AllowedWeaponsCheckboxes, default_allowed_weapons};
 use dioxus::prelude::*;
 
 #[component]
@@ -11,6 +12,13 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
     let mut type_ = use_signal(String::new);
     let mut description = use_signal(String::new);
     let mut registration_open = use_signal(|| false);
+    let mut active = use_signal(|| false);
+    let mut finalized = use_signal(|| false);
+    let mut track_losses = use_signal(|| false);
+    let mut track_chain_losses = use_signal(|| false);
+    let mut track_break_losses = use_signal(|| false);
+    let mut allowed_weapons = use_signal(default_allowed_weapons);
+    let mut top_n_text = use_signal(String::new);
     let mut initialised = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
 
@@ -20,9 +28,42 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
             type_.set(d.type_.clone());
             description.set(d.description.clone().unwrap_or_default());
             registration_open.set(d.registration_open);
+            active.set(d.active);
+            finalized.set(d.finalized);
+            track_losses.set(d.track_losses);
+            track_chain_losses.set(d.track_chain_losses);
+            track_break_losses.set(d.track_break_losses);
+            if d.allowed_weapons.is_empty() {
+                allowed_weapons.set(Vec::new());
+            } else {
+                allowed_weapons.set(d.allowed_weapons.clone());
+            }
+            top_n_text.set(
+                d.only_show_top_n_results
+                    .map(|n| n.to_string())
+                    .unwrap_or_default(),
+            );
             initialised.set(true);
         }
     }
+
+    let disabled_warning_count = {
+        let selected = allowed_weapons();
+        match detail.read().as_ref() {
+            Some(Ok(d)) => {
+                let n = d
+                    .registrants
+                    .iter()
+                    .filter(|r| match r.weapon.as_deref() {
+                        Some(w) => !selected.iter().any(|s| s == w),
+                        None => true,
+                    })
+                    .count() as i32;
+                Some(n)
+            }
+            _ => None,
+        }
+    };
 
     let url_for_back = url.clone();
     let url_for_submit = url.clone();
@@ -47,6 +88,26 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                         let t = type_();
                         let d = description();
                         let open = registration_open();
+                        let is_active = active();
+                        let is_chain_breaking = t == "CHAIN_BREAKING";
+                        let losses = (!is_chain_breaking).then_some(track_losses());
+                        let chain_losses = is_chain_breaking.then_some(track_chain_losses());
+                        let break_losses = is_chain_breaking.then_some(track_break_losses());
+                        let weapons = allowed_weapons();
+                        let top_n = {
+                            let raw = top_n_text().trim().to_string();
+                            if raw.is_empty() {
+                                None
+                            } else {
+                                match raw.parse::<i32>() {
+                                    Ok(v) if v >= 0 => Some(v),
+                                    _ => {
+                                        error.set(Some("Top N results must be a non-negative integer or blank".into()));
+                                        return;
+                                    }
+                                }
+                            }
+                        };
                         error.set(None);
                         spawn(async move {
                             match api::sidecomp_update(
@@ -55,6 +116,12 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                                 Some(&t),
                                 Some(&d),
                                 Some(open),
+                                Some(is_active),
+                                losses,
+                                chain_losses,
+                                break_losses,
+                                Some(&weapons),
+                                top_n,
                             ).await {
                                 Ok(_) => {
                                     navigator.push(Route::SideCompDetail { url: url_inner, comp_id });
@@ -108,6 +175,97 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                         }
                         div { class: "form-text",
                             "When off, only TO check-in can add players."
+                        }
+                    }
+                    div { class: "mb-3 form-check form-switch",
+                        input {
+                            class: "form-check-input",
+                            r#type: "checkbox",
+                            id: "active-toggle",
+                            checked: active(),
+                            disabled: finalized(),
+                            onchange: move |evt| active.set(evt.checked()),
+                        }
+                        label {
+                            class: "form-check-label",
+                            r#for: "active-toggle",
+                            "Active"
+                        }
+                        div { class: "form-text",
+                            if finalized() {
+                                "Results are finalized; this side competition cannot be activated again."
+                            } else {
+                                "When off, results cannot be entered."
+                            }
+                        }
+                    }
+                    if type_() == "CHAIN_BREAKING" {
+                        div { class: "mb-3 form-check form-switch",
+                            input {
+                                class: "form-check-input",
+                                r#type: "checkbox",
+                                id: "track-chain-losses-toggle",
+                                checked: track_chain_losses(),
+                                onchange: move |evt| track_chain_losses.set(evt.checked()),
+                            }
+                            label {
+                                class: "form-check-label",
+                                r#for: "track-chain-losses-toggle",
+                                "Track losses (chains)"
+                            }
+                        }
+                        div { class: "mb-3 form-check form-switch",
+                            input {
+                                class: "form-check-input",
+                                r#type: "checkbox",
+                                id: "track-break-losses-toggle",
+                                checked: track_break_losses(),
+                                onchange: move |evt| track_break_losses.set(evt.checked()),
+                            }
+                            label {
+                                class: "form-check-label",
+                                r#for: "track-break-losses-toggle",
+                                "Track losses (breakers)"
+                            }
+                            div { class: "form-text",
+                                "When off, only wins are entered and ranked for that group."
+                            }
+                        }
+                    } else {
+                        div { class: "mb-3 form-check form-switch",
+                            input {
+                                class: "form-check-input",
+                                r#type: "checkbox",
+                                id: "track-losses-toggle",
+                                checked: track_losses(),
+                                onchange: move |evt| track_losses.set(evt.checked()),
+                            }
+                            label {
+                                class: "form-check-label",
+                                r#for: "track-losses-toggle",
+                                "Track losses"
+                            }
+                            div { class: "form-text",
+                                "When on, standings rank by win percentage. When off, only wins are entered and ranked."
+                            }
+                        }
+                    }
+                    if finalized() {
+                        div { class: "alert alert-secondary", "Results have been finalized." }
+                    }
+                    AllowedWeaponsCheckboxes {
+                        selected: allowed_weapons,
+                        disabled_warning_count,
+                    }
+                    div { class: "mb-3",
+                        label { class: "form-label", "Only show top N results" }
+                        input {
+                            class: "form-control",
+                            r#type: "number",
+                            min: "0",
+                            placeholder: "Leave blank to show all",
+                            value: "{top_n_text}",
+                            oninput: move |evt| top_n_text.set(evt.value()),
                         }
                     }
                     if let Some(err) = error() {
