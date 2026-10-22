@@ -190,3 +190,36 @@ t = Tournament(url="my-event", ..., registrable_config_id=cfg.id)
 ```
 
 **Don't use `db.session.begin()`** — `test_db` already manages the transaction. Call `db.session.add()` / `db.session.commit()` directly.
+
+
+## Mobile browser verification
+
+The redesign has a repeatable Chromium smoke check against the isolated demo.
+It does not run as part of ordinary backend pytest, because it needs a built
+WASM frontend and a running server.
+
+```bash
+just demo
+# In another terminal:
+just frontend
+# In a third terminal:
+uv run playwright install chromium
+uv run python scripts/check_mobile_ui.py --screenshots /tmp/arctos-ui
+```
+
+Alternatively, point `--browser-executable` at an existing Chrome/Chromium
+binary. Use `--base-url http://127.0.0.1:8443` if the frontend uses a different
+port. The script requires the demo-only marker endpoint, rejects non-local
+origins, and blocks mutations except demo login and read-only Markdown
+rendering. It checks phones (360px and 390px), tablet (768px), and desktop
+(1280px), including discovery, account forms, tournament/league pages,
+profiles, schedules, operator/registration tools, and side competitions.
+It also checks search/date filters, validation input retention, phone-sized
+point controls, modern browser input patterns, and a simulated failed match
+finalization without changing a real match. Phone runs exercise bracket
+dragging, pointer capture, cancellation, and panning against a browser-only
+fixture; no layout is saved to the backend.
+
+Camera/audio device behavior and external Google/YouTube integrations still
+need real devices and configured credentials. Browser rendering alone cannot
+verify Bluetooth delay, actual recording, or third-party account flows.
