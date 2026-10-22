@@ -15,9 +15,8 @@
 .arctos-app .organize-trigger > i { font-size: .65rem; }
 .arctos-app .organize-trigger:hover, .arctos-app .organize-trigger[aria-expanded=true] { color: var(--ui-text); background: var(--ui-surface-hover); }
 .arctos-app .organize-dismiss { position: fixed; inset: 0; z-index: 1; border: 0; padding: 0; background: transparent; cursor: default; }
-.arctos-app .organize-dropdown { position: absolute; z-index: 2; top: calc(100% + 8px); right: 0; width: min(290px, calc(100vw - 32px)); padding: .5rem; border: 1px solid var(--ui-border); border-radius: .75rem; background: var(--ui-surface); box-shadow: 0 8px 24px var(--ui-shadow-strong); }
-.arctos-app .organize-dropdown .dropdown-item { display: flex; flex-direction: column; justify-content: center; gap: .2rem; min-height: 52px; white-space: normal; }
-.arctos-app .organize-dropdown small { color: var(--ui-muted); font-size: .8125rem; font-weight: 400; }
+.arctos-app .organize-dropdown { position: absolute; z-index: 2; top: calc(100% + 4px); right: 0; width: max-content; max-width: calc(100vw - 32px); padding: 4px; border: 1px solid var(--ui-border); border-radius: .6rem; background: var(--ui-surface); box-shadow: 0 4px 12px var(--ui-shadow); }
+.arctos-app .organize-dropdown .dropdown-item { display: flex; align-items: center; min-height: 44px; font-size: .875rem; white-space: nowrap; }
 .arctos-app .arctos-segmented { display: inline-flex; padding: 4px; background: var(--ui-surface-muted); border: 1px solid var(--ui-border); border-radius: .8rem; gap: 4px; }
 .arctos-app .arctos-segment { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; border: 0; background: transparent; color: var(--ui-muted); border-radius: .6rem; min-height: 44px; padding: .6rem 1rem; font-size: .9rem; font-weight: 600; white-space: nowrap; }
 .arctos-app .arctos-segment.is-active { background: var(--ui-surface); color: var(--ui-accent-text); box-shadow: 0 1px 4px var(--ui-shadow); }

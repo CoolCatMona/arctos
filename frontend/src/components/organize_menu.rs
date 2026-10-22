@@ -11,9 +11,9 @@ pub enum OrganizeContext {
 #[component]
 pub fn OrganizeMenu(context: OrganizeContext) -> Element {
     let mut open = use_signal(|| false);
-    let (destination, label, description) = match context {
-        OrganizeContext::Events => (Route::NewTournament {}, "Create a tournament", "One competition"),
-        OrganizeContext::Leagues => (Route::NewLeague {}, "Create a league", "A season of events"),
+    let (destination, label) = match context {
+        OrganizeContext::Events => (Route::NewTournament {}, "Create a tournament"),
+        OrganizeContext::Leagues => (Route::NewLeague {}, "Create a league"),
     };
 
     rsx! {
@@ -45,9 +45,7 @@ pub fn OrganizeMenu(context: OrganizeContext) -> Element {
                 }
                 div { id: "organize-options", class: "organize-dropdown",
                     Link { to: destination, class: "dropdown-item",
-                        aria_label: "{label}", aria_describedby: "organize-description",
-                        strong { "{label}" }
-                        small { id: "organize-description", "{description}" }
+                        "{label}"
                     }
                 }
             }
