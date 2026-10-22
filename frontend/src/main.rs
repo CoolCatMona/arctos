@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 mod api;
+mod appearance;
 mod components;
 mod display;
 mod pages;

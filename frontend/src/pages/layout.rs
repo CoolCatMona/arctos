@@ -1,4 +1,6 @@
 use crate::api;
+use crate::appearance::{focus_control, use_appearance};
+use crate::components::AppearanceMenu;
 use crate::Route;
 use dioxus::prelude::*;
 
@@ -91,6 +93,10 @@ pub fn Layout() -> Element {
         async move { api::me().await }
     });
     let mut account_open = use_signal(|| false);
+    let mut appearance_open = use_signal(|| false);
+    let appearance = use_appearance();
+    let palette = appearance.preferences().palette.id();
+    let color_scheme = appearance.scheme();
     let mut logging_out = use_signal(|| false);
     let mut auth_error = use_signal(|| None::<String>);
     let navigator = use_navigator();
@@ -99,6 +105,7 @@ pub fn Layout() -> Element {
     let path = route.to_string();
     use_effect(use_reactive(&route, move |_| {
         account_open.set(false);
+        appearance_open.set(false);
     }));
 
     // Exact-size offline frames and OBS overlays intentionally have no app theme.
@@ -120,7 +127,11 @@ pub fn Layout() -> Element {
             link { rel: "stylesheet", href: BOOTSTRAP }
             link { rel: "stylesheet", href: "{ICONS}/css/all.min.css" }
             style { {include_str!("../theme.css")} }
-            div { class: "arctos-app arctos-scoring-surface", Outlet::<Route> {} }
+            div {
+                class: "arctos-app arctos-scoring-surface",
+                "data-palette": palette, "data-bs-theme": color_scheme,
+                Outlet::<Route> {}
+            }
         };
     }
 
@@ -133,8 +144,19 @@ pub fn Layout() -> Element {
         style { {include_str!("operator.css")} }
         div {
             class: "arctos-app",
+            "data-palette": palette, "data-bs-theme": color_scheme,
             onkeydown: move |event| {
-                if event.key() == Key::Escape { account_open.set(false); }
+                if event.key() == Key::Escape {
+                    if appearance_open() {
+                        event.prevent_default();
+                        appearance_open.set(false);
+                        focus_control("appearance-trigger");
+                    } else if account_open() {
+                        event.prevent_default();
+                        account_open.set(false);
+                        focus_control("account-trigger");
+                    }
+                }
             },
             a { class: "skip-link", href: "#page-content", "Skip to content" }
             header { class: "app-header",
@@ -168,19 +190,24 @@ pub fn Layout() -> Element {
                         Link { to: Route::About {}, class: "app-icon-button app-about", aria_label: "About Arctos", title: "About Arctos",
                             i { class: "fa-solid fa-circle-info", aria_hidden: "true" }
                         }
+                        AppearanceMenu { open: appearance_open, account_open, appearance }
                         if let Some(Ok(u)) = user.read().as_ref() {
                             div { class: "account-menu",
                                 button {
                                     class: "app-icon-button account-trigger",
+                                    id: "account-trigger",
                                     r#type: "button",
                                     aria_label: "Account: {u.name} ({u.user_type})",
                                     aria_expanded: "{account_open()}",
                                     aria_controls: "account-options",
-                                    onclick: move |_| account_open.toggle(),
+                                    onclick: move |_| { appearance_open.set(false); account_open.toggle(); },
                                     i { class: "fa-regular fa-user", aria_hidden: "true" }
                                 }
                                 if account_open() {
-                                    button { class: "account-dismiss", aria_label: "Close account menu", onclick: move |_| account_open.set(false) }
+                                    button {
+                                        class: "account-dismiss", r#type: "button", tabindex: "-1", aria_label: "Close account menu",
+                                        onclick: move |_| { account_open.set(false); focus_control("account-trigger"); }
+                                    }
                                     div { class: "account-dropdown", id: "account-options",
                                         div { class: "account-identity",
                                             strong { "{u.name}" }

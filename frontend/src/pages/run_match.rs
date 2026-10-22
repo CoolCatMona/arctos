@@ -1266,7 +1266,7 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                     #quick-timer-scrim{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.6);pointer-events:none;display:flex;align-items:flex-start;justify-content:center}\
                     #quick-timer-scrim .qt-scrim-text{margin-top:20vh;color:#fff;text-align:center;font-size:1.5rem;line-height:1.5}\
                     #quick-timer-scrim .qt-scrim-title{font-size:2rem;font-weight:600}\
-                    @keyframes point-row-flash-kf{0%{background-color:#adb5bd}100%{background-color:transparent}}\
+                    @keyframes point-row-flash-kf{0%{background-color:var(--ui-accent-soft)}100%{background-color:transparent}}\
                     #points-table tbody tr.point-row-flash>td{animation:point-row-flash-kf 1.1s ease-out both}\
                     #point-button,.mobile-button-wrapper .btn{animation:none!important}\
                     #points-table tr.point-row-no-border>td{border-bottom-width:0}\
@@ -2357,7 +2357,7 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                                             rsx! {
                                                                 button {
                                                                     class: if selected { "btn btn-dark" } else { "btn btn-outline-dark" },
-                                                                    style: if selected { format!("background-color: #{}; border-color: #{};", pt.color, pt.color) } else { format!("color: black; border-color: #{}; background-color: white;", pt.color) },
+                                                                    style: if selected { format!("background-color: #{}; border-color: #{};", pt.color, pt.color) } else { format!("color: var(--ui-text); border-color: #{}; background-color: var(--ui-surface);", pt.color) },
                                                                     onclick: move |_| {
                                                                         if penalties_selected_type() == Some(pt_id) {
                                                                             penalties_selected_type.set(None);

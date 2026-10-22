@@ -1,43 +1,268 @@
-/* Arctos field-day design system. Scoped away from OBS/offline overlays.
-   Bootstrap supplies the existing layout utilities; these tokens style every
-   route, including organizer tools. */
+/* Shared appearance tokens stay on the app wrapper so OBS and offline frames
+   retain their independent colors. Status colors do not follow the palette. */
 .arctos-app {
-  --field-green: #16a34a;
-  --turf-teal: #0d9488;
-  --graphite: #374151;
-  --safety-orange: #f97316;
-  --electric-lime: #84cc16;
-  --bs-primary: #15803d;
-  --bs-primary-rgb: 21, 128, 61;
-  --bs-success: #15803d;
-  --bs-success-rgb: 21, 128, 61;
-  --bs-secondary: #647067;
-  --bs-secondary-rgb: 100, 112, 103;
-  --bs-danger: #b42318;
-  --bs-danger-rgb: 180, 35, 24;
-  --bs-info: #0369a1;
-  --bs-info-rgb: 3, 105, 161;
-  --bs-body-color: #202923;
-  --bs-body-bg: #fff;
-  --bs-secondary-color: #647067;
-  --bs-border-color: #e1e7e2;
+  color-scheme: light;
+  --ui-bg: #fafbf9;
+  --ui-surface: #ffffff;
+  --ui-surface-muted: #f2f5f2;
+  --ui-surface-hover: #f0f4f0;
+  --ui-border: #d8e0db;
+  --ui-control-border: #78867d;
+  --ui-text: #202923;
+  --ui-text-rgb: 32, 41, 35;
+  --ui-muted: #58685d;
+  --ui-muted-rgb: 88, 104, 93;
+  --ui-surface-rgb: 255, 255, 255;
+  --ui-shadow: #14291c18;
+  --ui-shadow-strong: #14291c30;
+  --ui-icon-filter: none;
+  --ui-success: #15803d;
+  --ui-success-rgb: 21, 128, 61;
+  --ui-success-hover: #166534;
+  --ui-success-active: #14532d;
+  --ui-success-text: #166534;
+  --ui-success-soft: #ecf8ee;
+  --ui-success-border: #83b795;
+  --ui-success-contrast: #ffffff;
+  --ui-warning: #fbbf24;
+  --ui-warning-rgb: 251, 191, 36;
+  --ui-warning-hover: #f59e0b;
+  --ui-warning-active: #d97706;
+  --ui-warning-text: #854d0e;
+  --ui-warning-soft: #fffaeb;
+  --ui-warning-border: #cc9c36;
+  --ui-warning-contrast: #362308;
+  --ui-danger: #b42318;
+  --ui-danger-rgb: 180, 35, 24;
+  --ui-danger-hover: #912018;
+  --ui-danger-active: #7a1b16;
+  --ui-danger-text: #991b1b;
+  --ui-danger-soft: #fff0ee;
+  --ui-danger-border: #d58f86;
+  --ui-danger-contrast: #ffffff;
+  --ui-info: #0369a1;
+  --ui-info-rgb: 3, 105, 161;
+  --ui-info-hover: #075985;
+  --ui-info-active: #0c4a6e;
+  --ui-info-text: #075985;
+  --ui-info-soft: #edf8fa;
+  --ui-info-border: #7eafbf;
+  --ui-info-contrast: #ffffff;
+  --ui-accent: #15803d;
+  --ui-accent-hover: #166534;
+  --ui-accent-active: #14532d;
+  --ui-accent-soft: #eaf5eb;
+  --ui-accent-text: #14532d;
+  --ui-accent-rgb: 21, 128, 61;
+  --ui-accent-contrast: #ffffff;
+  --ui-gradient-start: #15803d;
+  --ui-gradient-end: #0f766e;
+  --ui-gradient-contrast: #ffffff;
+  --ui-on-gradient-soft: #ffffff1a;
+  --ui-on-gradient-border: #ffffff80;
+  --ui-media-bg: #080b0d;
+  --ui-neutral-fill: #58685d;
+  --ui-success-fill: #15803d;
+  --ui-info-fill: #0369a1;
+  --ui-danger-fill: #b42318;
+  --ui-warning-fill: #fbbf24;
+  --ui-inverse-bg: #26343f;
+  --ui-inverse-text: #ffffff;
+  --field-green: var(--ui-accent);
+  --turf-teal: var(--ui-gradient-end);
+  --graphite: var(--ui-inverse-bg);
+  --safety-orange: var(--ui-warning);
+  --electric-lime: var(--ui-success);
+  --bs-primary: var(--ui-accent);
+  --bs-primary-rgb: var(--ui-accent-rgb);
+  --bs-secondary: var(--ui-muted);
+  --bs-secondary-rgb: var(--ui-muted-rgb);
+  --bs-body-color: var(--ui-text);
+  --bs-body-color-rgb: var(--ui-text-rgb);
+  --bs-emphasis-color: var(--ui-text);
+  --bs-emphasis-color-rgb: var(--ui-text-rgb);
+  --bs-body-bg: var(--ui-surface);
+  --bs-body-bg-rgb: var(--ui-surface-rgb);
+  --bs-secondary-color: var(--ui-muted);
+  --bs-tertiary-color: var(--ui-muted);
+  --bs-secondary-bg: var(--ui-surface-hover);
+  --bs-tertiary-bg: var(--ui-surface-muted);
+  --bs-border-color: var(--ui-border);
+  --bs-border-color-translucent: var(--ui-border);
   --bs-border-radius: .625rem;
-  --bs-link-color: #137b44;
-  --bs-link-color-rgb: 19, 123, 68;
-  --bs-link-hover-color: #0c5831;
-  --bs-link-hover-color-rgb: 12, 88, 49;
+  --bs-link-color: var(--ui-accent);
+  --bs-link-color-rgb: var(--ui-accent-rgb);
+  --bs-link-hover-color: var(--ui-accent-hover);
+  --bs-link-hover-color-rgb: var(--ui-accent-rgb);
+  --bs-primary-text-emphasis: var(--ui-accent-text);
+  --bs-primary-bg-subtle: var(--ui-accent-soft);
+  --bs-primary-border-subtle: var(--ui-accent);
+  --bs-secondary-text-emphasis: var(--ui-text);
+  --bs-secondary-bg-subtle: var(--ui-surface-muted);
+  --bs-secondary-border-subtle: var(--ui-border);
+  --bs-light-text-emphasis: var(--ui-text);
+  --bs-light-bg-subtle: var(--ui-surface-muted);
+  --bs-light-border-subtle: var(--ui-border);
+  --bs-dark-text-emphasis: var(--ui-text);
+  --bs-dark-bg-subtle: var(--ui-surface-hover);
+  --bs-dark-border-subtle: var(--ui-border);
+  --bs-code-color: var(--ui-accent-text);
+  --bs-success: var(--ui-success);
+  --bs-success-rgb: var(--ui-success-rgb);
+  --bs-success-text-emphasis: var(--ui-success-text);
+  --bs-success-bg-subtle: var(--ui-success-soft);
+  --bs-success-border-subtle: var(--ui-success-border);
+  --bs-warning: var(--ui-warning);
+  --bs-warning-rgb: var(--ui-warning-rgb);
+  --bs-warning-text-emphasis: var(--ui-warning-text);
+  --bs-warning-bg-subtle: var(--ui-warning-soft);
+  --bs-warning-border-subtle: var(--ui-warning-border);
+  --bs-danger: var(--ui-danger);
+  --bs-danger-rgb: var(--ui-danger-rgb);
+  --bs-danger-text-emphasis: var(--ui-danger-text);
+  --bs-danger-bg-subtle: var(--ui-danger-soft);
+  --bs-danger-border-subtle: var(--ui-danger-border);
+  --bs-info: var(--ui-info);
+  --bs-info-rgb: var(--ui-info-rgb);
+  --bs-info-text-emphasis: var(--ui-info-text);
+  --bs-info-bg-subtle: var(--ui-info-soft);
+  --bs-info-border-subtle: var(--ui-info-border);
   --header-height: 76px;
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
-  background: #fafbf9;
+  background: var(--ui-bg);
   color: var(--bs-body-color);
   font: 400 1rem/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-text-size-adjust: 100%;
   accent-color: var(--bs-primary);
 }
+.arctos-app[data-palette="ocean"] {
+  --ui-accent: #0369a1;
+  --ui-accent-hover: #075985;
+  --ui-accent-active: #0c4a6e;
+  --ui-accent-soft: #e8f4fc;
+  --ui-accent-text: #075985;
+  --ui-accent-rgb: 3, 105, 161;
+  --ui-accent-contrast: #ffffff;
+  --ui-gradient-start: #0369a1;
+  --ui-gradient-end: #0f766e;
+}
+.arctos-app[data-palette="plum"] {
+  --ui-accent: #7e22ce;
+  --ui-accent-hover: #6b21a8;
+  --ui-accent-active: #581c87;
+  --ui-accent-soft: #f5edfc;
+  --ui-accent-text: #6b21a8;
+  --ui-accent-rgb: 126, 34, 206;
+  --ui-accent-contrast: #ffffff;
+  --ui-gradient-start: #7e22ce;
+  --ui-gradient-end: #9d174d;
+}
+.arctos-app[data-palette="ember"] {
+  --ui-accent: #b45309;
+  --ui-accent-hover: #92400e;
+  --ui-accent-active: #78350f;
+  --ui-accent-soft: #fff4e5;
+  --ui-accent-text: #92400e;
+  --ui-accent-rgb: 180, 83, 9;
+  --ui-accent-contrast: #ffffff;
+  --ui-gradient-start: #b45309;
+  --ui-gradient-end: #c2410c;
+}
+.arctos-app[data-bs-theme="dark"] {
+  color-scheme: dark;
+  --ui-bg: #11161c;
+  --ui-surface: #1b232d;
+  --ui-surface-muted: #242f3b;
+  --ui-surface-hover: #2d3b49;
+  --ui-border: #465565;
+  --ui-control-border: #7b8c9f;
+  --ui-text: #edf2f7;
+  --ui-text-rgb: 237, 242, 247;
+  --ui-muted: #b3c0ce;
+  --ui-muted-rgb: 179, 192, 206;
+  --ui-surface-rgb: 27, 35, 45;
+  --ui-shadow: #00000040;
+  --ui-shadow-strong: #00000070;
+  --ui-icon-filter: brightness(0) invert(1);
+  --ui-success: #4ade80;
+  --ui-success-rgb: 74, 222, 128;
+  --ui-success-hover: #86efac;
+  --ui-success-active: #bbf7d0;
+  --ui-success-text: #86efac;
+  --ui-success-soft: #153326;
+  --ui-success-border: #328957;
+  --ui-success-contrast: #062713;
+  --ui-warning: #fbbf24;
+  --ui-warning-rgb: 251, 191, 36;
+  --ui-warning-hover: #fcd34d;
+  --ui-warning-active: #fde68a;
+  --ui-warning-text: #fcd34d;
+  --ui-warning-soft: #392d16;
+  --ui-warning-border: #a77a22;
+  --ui-warning-contrast: #362308;
+  --ui-danger: #fca5a5;
+  --ui-danger-rgb: 252, 165, 165;
+  --ui-danger-hover: #fecaca;
+  --ui-danger-active: #fee2e2;
+  --ui-danger-text: #fca5a5;
+  --ui-danger-soft: #3b2024;
+  --ui-danger-border: #a6464d;
+  --ui-danger-contrast: #3b1111;
+  --ui-info: #7dd3fc;
+  --ui-info-rgb: 125, 211, 252;
+  --ui-info-hover: #bae6fd;
+  --ui-info-active: #e0f2fe;
+  --ui-info-text: #7dd3fc;
+  --ui-info-soft: #143042;
+  --ui-info-border: #337d9a;
+  --ui-info-contrast: #082c40;
+  --ui-accent: #4ade80;
+  --ui-accent-hover: #86efac;
+  --ui-accent-active: #bbf7d0;
+  --ui-accent-soft: #153326;
+  --ui-accent-text: #86efac;
+  --ui-accent-rgb: 74, 222, 128;
+  --ui-accent-contrast: #062713;
+  --ui-gradient-start: #166534;
+  --ui-gradient-end: #115e59;
+}
+.arctos-app[data-bs-theme="dark"][data-palette="ocean"] {
+  --ui-accent: #7dd3fc;
+  --ui-accent-hover: #bae6fd;
+  --ui-accent-active: #e0f2fe;
+  --ui-accent-soft: #143042;
+  --ui-accent-text: #7dd3fc;
+  --ui-accent-rgb: 125, 211, 252;
+  --ui-accent-contrast: #082c40;
+  --ui-gradient-start: #075985;
+  --ui-gradient-end: #115e59;
+}
+.arctos-app[data-bs-theme="dark"][data-palette="plum"] {
+  --ui-accent: #d8b4fe;
+  --ui-accent-hover: #e9d5ff;
+  --ui-accent-active: #f3e8ff;
+  --ui-accent-soft: #30203f;
+  --ui-accent-text: #e9d5ff;
+  --ui-accent-rgb: 216, 180, 254;
+  --ui-accent-contrast: #29113d;
+  --ui-gradient-start: #6b21a8;
+  --ui-gradient-end: #831843;
+}
+.arctos-app[data-bs-theme="dark"][data-palette="ember"] {
+  --ui-accent: #fdba74;
+  --ui-accent-hover: #fed7aa;
+  --ui-accent-active: #ffedd5;
+  --ui-accent-soft: #3b291c;
+  --ui-accent-text: #fed7aa;
+  --ui-accent-rgb: 253, 186, 116;
+  --ui-accent-contrast: #3a1b06;
+  --ui-gradient-start: #92400e;
+  --ui-gradient-end: #9a3412;
+}
 .arctos-app *, .arctos-app *::before, .arctos-app *::after { box-sizing: border-box; }
-.arctos-app :focus-visible { outline: 3px solid #0d9488; outline-offset: 3px; }
+.arctos-app :focus-visible { outline: 3px solid var(--ui-accent); outline-offset: 3px; }
 .arctos-app [id] { scroll-margin-top: calc(var(--header-height) + 16px); }
 .arctos-app h1, .arctos-app h2, .arctos-app h3, .arctos-app h4, .arctos-app h5, .arctos-app h6 {
   color: inherit; font-weight: 650; line-height: 1.3; letter-spacing: -.025em; overflow-wrap: anywhere;
@@ -53,31 +278,60 @@
 .arctos-app .container-wide { width: 100%; max-width: 1440px; margin-inline: auto; padding-inline: max(24px, env(safe-area-inset-left)); }
 .arctos-app .app-main { flex: 1; padding-block: 32px 56px; min-width: 0; }
 .arctos-app .row > *, .arctos-app .flex-grow-1 { min-width: 0; }
-.arctos-app .skip-link { position: fixed; top: -100px; left: 16px; z-index: 2000; padding: 12px 20px; background: #fff; color: #14532d; border-radius: 8px; }
+.arctos-app .skip-link { position: fixed; top: -100px; left: 16px; z-index: 2000; padding: 12px 20px; background: var(--ui-surface); color: var(--ui-accent-text); border-radius: 8px; }
 .arctos-app .skip-link:focus { top: 8px; }
 /* Navigation: a stable, visible row on phones instead of hidden essentials. */
-.arctos-app .app-header { position: sticky; top: 0; z-index: 1030; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--bs-border-color); padding-top: env(safe-area-inset-top); }
+.arctos-app .app-header { position: sticky; top: 0; z-index: 1030; background: var(--ui-surface); border-bottom: 1px solid var(--bs-border-color); padding-top: env(safe-area-inset-top); }
 .arctos-app .app-header-inner { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 20px; max-width: 1440px; min-height: 76px; margin-inline: auto; padding-inline: 24px; }
-.arctos-app .app-brand { display: inline-flex; align-items: center; gap: 10px; width: fit-content; color: #202923; text-decoration: none; font-size: 1.25rem; font-weight: 700; letter-spacing: -.035em; }
-.arctos-app .brand-mark { width: 34px; height: 34px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #16a34a, #0d9488); color: #fff; border-radius: 9px; font-size: 16px; }
+.arctos-app .app-brand { display: inline-flex; align-items: center; gap: 10px; width: fit-content; color: var(--ui-text); text-decoration: none; font-size: 1.25rem; font-weight: 700; letter-spacing: -.035em; }
+.arctos-app .brand-mark { width: 34px; height: 34px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--ui-gradient-start), var(--ui-gradient-end)); color: var(--ui-gradient-contrast); border-radius: 9px; font-size: 16px; }
 .arctos-app .app-nav { display: flex; gap: 3px; align-items: center; min-width: 0; }
-.arctos-app .app-nav-link { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border-radius: 8px; color: #566159; text-decoration: none; font-size: .875rem; font-weight: 550; white-space: nowrap; }
-.arctos-app .app-nav-link:hover { background: #f3f6f2; color: #14532d; }
-.arctos-app .app-nav-link.active { background: #eaf5eb; color: #14532d; }
+.arctos-app .app-nav-link { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border-radius: 8px; color: var(--ui-muted); text-decoration: none; font-size: .875rem; font-weight: 550; white-space: nowrap; }
+.arctos-app .app-nav-link:hover { background: var(--ui-surface-hover); color: var(--ui-accent-text); }
+.arctos-app .app-nav-link.active { background: var(--ui-accent-soft); color: var(--ui-accent-text); }
 .arctos-app .app-header-actions { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
-.arctos-app .app-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 8px; border: 1px solid transparent; background: transparent; color: #445449; text-decoration: none; }
-.arctos-app .app-icon-button:hover { background: #edf4ed; }
+.arctos-app .app-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--ui-text); text-decoration: none; }
+.arctos-app .app-icon-button:hover { background: var(--ui-surface-hover); }
 .arctos-app .account-menu { position: relative; }
-.arctos-app .account-dropdown { position: absolute; z-index: 2; top: calc(100% + 12px); right: 0; width: min(310px, calc(100vw - 32px)); padding: 8px; background: #fff; border: 1px solid var(--bs-border-color); border-radius: 12px; box-shadow: 0 12px 40px #183c2420; }
+.arctos-app .account-dropdown { position: absolute; z-index: 2; top: calc(100% + 12px); right: 0; width: min(310px, calc(100vw - 32px)); padding: 8px; background: var(--ui-surface); border: 1px solid var(--bs-border-color); border-radius: 12px; box-shadow: 0 12px 40px var(--ui-shadow-strong); }
 .arctos-app .account-identity { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-bottom: 1px solid var(--bs-border-color); margin-bottom: 8px; overflow-wrap: anywhere; }
 .arctos-app .account-identity span { font-size: .8rem; }
 .arctos-app .account-dismiss { position: fixed; inset: 0; background: transparent; border: 0; z-index: 1; cursor: default; }
 .arctos-app .account-trigger { position: relative; z-index: 3; }
+/* Appearance is a small form, with native radios for keyboard and touch use. */
+.arctos-app .appearance-menu { position: relative; }
+.arctos-app .appearance-trigger { position: relative; z-index: 3; }
+.arctos-app .appearance-trigger[aria-expanded="true"] { background: var(--ui-accent-soft); color: var(--ui-accent-text); }
+.arctos-app .appearance-dismiss { position: fixed; inset: 0; background: transparent; border: 0; z-index: 1; }
+.arctos-app .appearance-dropdown { position: absolute; z-index: 2; top: calc(100% + 12px); right: 0; width: min(340px, calc(100vw - 32px)); max-height: calc(100dvh - 100px); overflow-y: auto; padding: 20px; border: 1px solid var(--ui-border); border-radius: 12px; background: var(--ui-surface); color: var(--ui-text); box-shadow: 0 12px 40px var(--ui-shadow-strong); }
+.arctos-app .appearance-dropdown h2, .arctos-app .appearance-dropdown h3 { font-size: 1.075rem; margin-bottom: 16px; }
+.arctos-app .appearance-note { margin: 16px 0 0; color: var(--ui-muted); font-size: .8125rem; line-height: 1.6; }
+.arctos-app .appearance-section { border: 0; padding: 0; margin: 0; min-width: 0; }
+.arctos-app .appearance-section + .appearance-section { margin-top: 20px; }
+.arctos-app .appearance-section legend { float: none; width: auto; font-size: .875rem; font-weight: 600; margin-bottom: 10px; }
+.arctos-app .appearance-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.arctos-app .appearance-option { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 44px; padding: 10px; border: 1px solid var(--ui-control-border); border-radius: 8px; background: var(--ui-surface); color: var(--ui-text); font-size: .875rem; cursor: pointer; }
+.arctos-app .appearance-option:hover { background: var(--ui-surface-hover); }
+.arctos-app .appearance-option.is-selected { background: var(--ui-accent-soft); color: var(--ui-accent-text); border-color: var(--ui-accent); }
+.arctos-app .appearance-option:focus-within { outline: 3px solid var(--ui-accent); outline-offset: 2px; }
+.arctos-app .appearance-option input { flex: 0 0 auto; width: 16px; height: 16px; margin: 0; accent-color: var(--ui-accent); }
+.arctos-app .appearance-swatch { width: 16px; height: 16px; border-radius: 50%; flex: 0 0 auto; border: 1px solid #ffffff80; }
+.arctos-app .appearance-swatch[data-palette="forest"] { background: #15803d; }
+.arctos-app .appearance-swatch[data-palette="ocean"] { background: #0369a1; }
+.arctos-app .appearance-swatch[data-palette="plum"] { background: #7e22ce; }
+.arctos-app .appearance-swatch[data-palette="ember"] { background: #b45309; }
+.arctos-app .appearance-mode-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.arctos-app .appearance-mode-options .appearance-option { flex: 1 1 auto; justify-content: center; }
+@media (max-width: 575.98px) {
+  .arctos-app .appearance-dropdown { position: fixed; top: calc(64px + env(safe-area-inset-top)); right: 16px; max-height: calc(100dvh - 80px - env(safe-area-inset-top)); }
+  .arctos-app .app-header-actions { gap: 4px; }
+  .arctos-app .app-header-actions .app-login { padding-inline: 10px; white-space: nowrap; flex-shrink: 0; }
+}
 /* Cards and controls are shared by discovery, registration and operations. */
-.arctos-app .card { --bs-card-border-color: var(--bs-border-color); --bs-card-border-radius: 12px; --bs-card-cap-bg: #f8faf7; box-shadow: 0 2px 3px #1b392305; overflow-wrap: anywhere; }
+.arctos-app .card { --bs-card-border-color: var(--bs-border-color); --bs-card-border-radius: 12px; --bs-card-cap-bg: var(--ui-surface-muted); box-shadow: 0 2px 3px var(--ui-shadow); overflow-wrap: anywhere; }
 .arctos-app .card-body { padding: 24px; }
 .arctos-app .card-header { padding: 18px 24px; border-bottom-color: var(--bs-border-color); }
-.arctos-app .card-footer { padding: 16px 24px; background: #fafcf9; border-top-color: var(--bs-border-color); }
+.arctos-app .card-footer { padding: 16px 24px; background: var(--ui-surface-muted); border-top-color: var(--bs-border-color); }
 .arctos-app .card-title { line-height: 1.4; }
 .arctos-app .btn {
   --bs-btn-border-radius: 8px; --bs-btn-font-weight: 600;
@@ -87,106 +341,200 @@
 }
 .arctos-app .btn-sm { min-height: 40px; padding: 7px 12px; font-size: .8125rem; }
 .arctos-app .btn-lg { min-height: 48px; padding: 12px 20px; font-size: 1rem; }
-.arctos-app .btn-primary, .arctos-app .btn-success {
-  --bs-btn-color: #fff; --bs-btn-bg: #15803d; --bs-btn-border-color: #15803d;
-  --bs-btn-hover-color: #fff; --bs-btn-hover-bg: #166534; --bs-btn-hover-border-color: #166534;
-  --bs-btn-active-color: #fff; --bs-btn-active-bg: #14532d; --bs-btn-active-border-color: #14532d;
-  --bs-btn-disabled-color: #fff; --bs-btn-disabled-bg: #15803d; --bs-btn-disabled-border-color: #15803d;
-  --bs-btn-focus-shadow-rgb: 21,128,61;
+.arctos-app .btn-primary {
+  --bs-btn-color: var(--ui-accent-contrast); --bs-btn-bg: var(--ui-accent); --bs-btn-border-color: var(--ui-accent);
+  --bs-btn-hover-color: var(--ui-accent-contrast); --bs-btn-hover-bg: var(--ui-accent-hover); --bs-btn-hover-border-color: var(--ui-accent-hover);
+  --bs-btn-active-color: var(--ui-accent-contrast); --bs-btn-active-bg: var(--ui-accent-active); --bs-btn-active-border-color: var(--ui-accent-active);
+  --bs-btn-disabled-color: var(--ui-accent-contrast); --bs-btn-disabled-bg: var(--ui-accent); --bs-btn-disabled-border-color: var(--ui-accent);
+  --bs-btn-focus-shadow-rgb: var(--ui-accent-rgb);
 }
-.arctos-app .btn-outline-primary, .arctos-app .btn-outline-success {
-  --bs-btn-color: #13703a; --bs-btn-border-color: #b4d6bd;
-  --bs-btn-hover-color: #14532d; --bs-btn-hover-bg: #eaf5eb; --bs-btn-hover-border-color: #15803d;
-  --bs-btn-active-color: #fff; --bs-btn-active-bg: #15803d; --bs-btn-active-border-color: #15803d;
-  --bs-btn-disabled-color: #13703a; --bs-btn-disabled-border-color: #b4d6bd;
+.arctos-app .btn-outline-primary {
+  --bs-btn-color: var(--ui-accent-text); --bs-btn-border-color: var(--ui-accent);
+  --bs-btn-hover-color: var(--ui-accent-text); --bs-btn-hover-bg: var(--ui-accent-soft); --bs-btn-hover-border-color: var(--ui-accent);
+  --bs-btn-active-color: var(--ui-accent-contrast); --bs-btn-active-bg: var(--ui-accent); --bs-btn-active-border-color: var(--ui-accent);
+  --bs-btn-disabled-color: var(--ui-accent-text); --bs-btn-disabled-border-color: var(--ui-accent);
 }
-.arctos-app .btn-outline-secondary { --bs-btn-color: #37483c; --bs-btn-border-color: #d8e0d9; --bs-btn-hover-color: #243b2a; --bs-btn-hover-bg: #eff5ed; --bs-btn-hover-border-color: #b6c9b9; --bs-btn-active-bg: #e2eddf; --bs-btn-active-color: #243b2a; background-color: #fff; }
-.arctos-app .btn-link { color: #13703a; }
+.arctos-app .btn-success {
+  --bs-btn-color: var(--ui-success-contrast); --bs-btn-bg: var(--ui-success); --bs-btn-border-color: var(--ui-success);
+  --bs-btn-hover-color: var(--ui-success-contrast); --bs-btn-hover-bg: var(--ui-success-hover); --bs-btn-hover-border-color: var(--ui-success-hover);
+  --bs-btn-active-color: var(--ui-success-contrast); --bs-btn-active-bg: var(--ui-success-active); --bs-btn-active-border-color: var(--ui-success-active);
+  --bs-btn-disabled-color: var(--ui-success-contrast); --bs-btn-disabled-bg: var(--ui-success); --bs-btn-disabled-border-color: var(--ui-success);
+  --bs-btn-focus-shadow-rgb: var(--ui-success-rgb);
+}
+.arctos-app .btn-outline-success {
+  --bs-btn-color: var(--ui-success-text); --bs-btn-border-color: var(--ui-success);
+  --bs-btn-hover-color: var(--ui-success-text); --bs-btn-hover-bg: var(--ui-success-soft); --bs-btn-hover-border-color: var(--ui-success);
+  --bs-btn-active-color: var(--ui-success-contrast); --bs-btn-active-bg: var(--ui-success); --bs-btn-active-border-color: var(--ui-success);
+  --bs-btn-disabled-color: var(--ui-success-text); --bs-btn-disabled-border-color: var(--ui-success);
+}
+.arctos-app .btn-danger {
+  --bs-btn-color: var(--ui-danger-contrast); --bs-btn-bg: var(--ui-danger); --bs-btn-border-color: var(--ui-danger);
+  --bs-btn-hover-color: var(--ui-danger-contrast); --bs-btn-hover-bg: var(--ui-danger-hover); --bs-btn-hover-border-color: var(--ui-danger-hover);
+  --bs-btn-active-color: var(--ui-danger-contrast); --bs-btn-active-bg: var(--ui-danger-active); --bs-btn-active-border-color: var(--ui-danger-active);
+  --bs-btn-disabled-color: var(--ui-danger-contrast); --bs-btn-disabled-bg: var(--ui-danger); --bs-btn-disabled-border-color: var(--ui-danger);
+  --bs-btn-focus-shadow-rgb: var(--ui-danger-rgb);
+}
+.arctos-app .btn-outline-danger {
+  --bs-btn-color: var(--ui-danger-text); --bs-btn-border-color: var(--ui-danger);
+  --bs-btn-hover-color: var(--ui-danger-text); --bs-btn-hover-bg: var(--ui-danger-soft); --bs-btn-hover-border-color: var(--ui-danger);
+  --bs-btn-active-color: var(--ui-danger-contrast); --bs-btn-active-bg: var(--ui-danger); --bs-btn-active-border-color: var(--ui-danger);
+  --bs-btn-disabled-color: var(--ui-danger-text); --bs-btn-disabled-border-color: var(--ui-danger);
+}
+.arctos-app .btn-warning {
+  --bs-btn-color: var(--ui-warning-contrast); --bs-btn-bg: var(--ui-warning); --bs-btn-border-color: var(--ui-warning);
+  --bs-btn-hover-color: var(--ui-warning-contrast); --bs-btn-hover-bg: var(--ui-warning-hover); --bs-btn-hover-border-color: var(--ui-warning-hover);
+  --bs-btn-active-color: var(--ui-warning-contrast); --bs-btn-active-bg: var(--ui-warning-active); --bs-btn-active-border-color: var(--ui-warning-active);
+  --bs-btn-disabled-color: var(--ui-warning-contrast); --bs-btn-disabled-bg: var(--ui-warning); --bs-btn-disabled-border-color: var(--ui-warning);
+  --bs-btn-focus-shadow-rgb: var(--ui-warning-rgb);
+}
+.arctos-app .btn-outline-warning {
+  --bs-btn-color: var(--ui-warning-text); --bs-btn-border-color: var(--ui-warning);
+  --bs-btn-hover-color: var(--ui-warning-text); --bs-btn-hover-bg: var(--ui-warning-soft); --bs-btn-hover-border-color: var(--ui-warning);
+  --bs-btn-active-color: var(--ui-warning-contrast); --bs-btn-active-bg: var(--ui-warning); --bs-btn-active-border-color: var(--ui-warning);
+  --bs-btn-disabled-color: var(--ui-warning-text); --bs-btn-disabled-border-color: var(--ui-warning);
+}
+.arctos-app .btn-info {
+  --bs-btn-color: var(--ui-info-contrast); --bs-btn-bg: var(--ui-info); --bs-btn-border-color: var(--ui-info);
+  --bs-btn-hover-color: var(--ui-info-contrast); --bs-btn-hover-bg: var(--ui-info-hover); --bs-btn-hover-border-color: var(--ui-info-hover);
+  --bs-btn-active-color: var(--ui-info-contrast); --bs-btn-active-bg: var(--ui-info-active); --bs-btn-active-border-color: var(--ui-info-active);
+  --bs-btn-disabled-color: var(--ui-info-contrast); --bs-btn-disabled-bg: var(--ui-info); --bs-btn-disabled-border-color: var(--ui-info);
+  --bs-btn-focus-shadow-rgb: var(--ui-info-rgb);
+}
+.arctos-app .btn-outline-info {
+  --bs-btn-color: var(--ui-info-text); --bs-btn-border-color: var(--ui-info);
+  --bs-btn-hover-color: var(--ui-info-text); --bs-btn-hover-bg: var(--ui-info-soft); --bs-btn-hover-border-color: var(--ui-info);
+  --bs-btn-active-color: var(--ui-info-contrast); --bs-btn-active-bg: var(--ui-info); --bs-btn-active-border-color: var(--ui-info);
+  --bs-btn-disabled-color: var(--ui-info-text); --bs-btn-disabled-border-color: var(--ui-info);
+}
+.arctos-app .btn-outline-secondary, .arctos-app .btn-outline-dark, .arctos-app .btn-light {
+  --bs-btn-color: var(--ui-text); --bs-btn-bg: var(--ui-surface); --bs-btn-border-color: var(--ui-control-border);
+  --bs-btn-hover-color: var(--ui-text); --bs-btn-hover-bg: var(--ui-surface-hover); --bs-btn-hover-border-color: var(--ui-control-border);
+  --bs-btn-active-bg: var(--ui-surface-hover); --bs-btn-active-color: var(--ui-text); --bs-btn-active-border-color: var(--ui-control-border);
+  --bs-btn-disabled-color: var(--ui-muted); --bs-btn-disabled-bg: var(--ui-surface-muted); --bs-btn-disabled-border-color: var(--ui-border);
+}
+.arctos-app .btn-link { color: var(--ui-accent); }
 .arctos-app .btn-close { min-width: 44px; min-height: 44px; padding: 0; background-position: center; flex-shrink: 0; }
 .arctos-app .form-label { font-size: .9375rem; font-weight: 600; margin-bottom: 7px; }
-.arctos-app .form-control, .arctos-app .form-select { min-height: 44px; border-color: #d8e0d9; border-radius: 8px; padding: 10px 12px; background-color: #fbfcfa; color: #25382b; }
+.arctos-app .form-control, .arctos-app .form-select { min-height: 44px; border-color: var(--ui-control-border); border-radius: 8px; padding: 10px 12px; background-color: var(--ui-surface); color: var(--ui-text); }
 .arctos-app .form-select { padding-right: 2.5rem; }
-.arctos-app .form-control:focus, .arctos-app .form-select:focus { background-color: #fff; border-color: #0d9488; box-shadow: 0 0 0 3px #0d948820; }
-.arctos-app .form-control:disabled, .arctos-app .form-select:disabled { background-color: #edf0ec; }
-.arctos-app .form-control::placeholder { color: #727d74; }
-.arctos-app .form-text { color: #647067; line-height: 1.6; font-size: .8125rem; }
+.arctos-app .form-control:focus, .arctos-app .form-select:focus { background-color: var(--ui-surface); border-color: var(--ui-accent); box-shadow: 0 0 0 3px var(--ui-shadow); }
+.arctos-app .form-control:disabled, .arctos-app .form-select:disabled { background-color: var(--ui-surface-muted); }
+.arctos-app .form-control::placeholder { color: var(--ui-muted); }
+.arctos-app .form-text { color: var(--ui-muted); line-height: 1.6; font-size: .8125rem; }
 .arctos-app textarea.form-control { min-height: 100px; }
 .arctos-app .form-check { min-height: 32px; padding-top: 4px; padding-bottom: 4px; }
-.arctos-app .form-check-input { width: 1.125em; height: 1.125em; margin-top: .25em; }
-.arctos-app .form-check-input:checked { background-color: #15803d; border-color: #15803d; }
+.arctos-app .form-check-input { border-color: var(--ui-control-border); width: 1.125em; height: 1.125em; margin-top: .25em; }
+.arctos-app .form-check-input:checked { background-color: var(--ui-accent); border-color: var(--ui-accent); }
+/* Bootstrap checkbox marks are white; dark palettes use a dark mark on bright accents. */
+.arctos-app[data-bs-theme="dark"] .form-check-input:checked[type="checkbox"] { --bs-form-check-bg-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%2311161c' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='m6 10 3 3 6-6'/%3e%3c/svg%3e"); }
+.arctos-app[data-bs-theme="dark"] .form-check-input:checked[type="radio"] { --bs-form-check-bg-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='2' fill='%2311161c'/%3e%3c/svg%3e"); }
+.arctos-app[data-bs-theme="dark"] .form-switch .form-check-input:checked { --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%2311161c'/%3e%3c/svg%3e"); }
 .arctos-app .form-switch .form-check-input { width: 2em; }
 .arctos-app .form-check-label { cursor: pointer; }
-.arctos-app .input-group-text { border-color: #d8e0d9; color: #647067; background: #f3f6f1; }
+.arctos-app .input-group-text { border-color: var(--ui-control-border); color: var(--ui-muted); background: var(--ui-surface-muted); }
 /* Text + color communicate status; badges remain readable in outdoor light. */
 .arctos-app .badge { font-weight: 600; font-size: .75rem; line-height: 1.4; padding: .3em .65em; border-radius: 6px; white-space: normal; }
-.arctos-app .badge.bg-success { background: #e6f5e9 !important; color: #166534 !important; }
-.arctos-app .badge.bg-warning { background: #fff3d6 !important; color: #854d0e !important; }
-.arctos-app .badge.bg-danger { background: #ffebe7 !important; color: #a1271b !important; }
-.arctos-app .badge.bg-primary, .arctos-app .badge.bg-info { background: #e4f2ff !important; color: #075985 !important; }
-.arctos-app .badge.bg-secondary { background: #edf1ec !important; color: #4b5b4e !important; }
+.arctos-app .badge.bg-success { background: var(--ui-success-soft) !important; color: var(--ui-success-text) !important; }
+.arctos-app .badge.bg-warning { background: var(--ui-warning-soft) !important; color: var(--ui-warning-text) !important; }
+.arctos-app .badge.bg-danger { background: var(--ui-danger-soft) !important; color: var(--ui-danger-text) !important; }
+.arctos-app .badge.bg-info { background: var(--ui-info-soft) !important; color: var(--ui-info-text) !important; }
+.arctos-app .badge.bg-primary { background: var(--ui-accent-soft) !important; color: var(--ui-accent-text) !important; }
+.arctos-app .badge.bg-secondary { background: var(--ui-surface-hover) !important; color: var(--ui-text) !important; }
 .arctos-app .alert { border-radius: 10px; border-width: 1px; padding: 16px 20px; overflow-wrap: anywhere; }
-.arctos-app .alert-success { --bs-alert-color: #166534; --bs-alert-bg: #ecf8ee; --bs-alert-border-color: #c7e7cd; }
-.arctos-app .alert-info { --bs-alert-color: #155e75; --bs-alert-bg: #edf8fa; --bs-alert-border-color: #c9e6eb; }
-.arctos-app .alert-warning { --bs-alert-color: #854d0e; --bs-alert-bg: #fffaeb; --bs-alert-border-color: #f5dfa0; }
-.arctos-app .alert-danger { --bs-alert-color: #991b1b; --bs-alert-bg: #fff0ee; --bs-alert-border-color: #f8cdc6; }
-.arctos-app .nav-tabs { gap: 4px; flex-wrap: nowrap; overflow-x: auto; border-bottom-color: #dce5dc; padding-bottom: 4px; scrollbar-width: thin; }
-.arctos-app .nav-tabs .nav-link { min-height: 44px; border-radius: 8px; white-space: nowrap; color: #647067; font-weight: 600; font-size: .875rem; padding: 10px 16px; border-color: transparent; }
-.arctos-app .nav-tabs .nav-link.active { color: #14532d; background: #eaf5eb; border-color: #d8e9da; }
+.arctos-app .alert-success { --bs-alert-color: var(--ui-success-text); --bs-alert-bg: var(--ui-success-soft); --bs-alert-border-color: var(--ui-success-border); }
+.arctos-app .alert-warning { --bs-alert-color: var(--ui-warning-text); --bs-alert-bg: var(--ui-warning-soft); --bs-alert-border-color: var(--ui-warning-border); }
+.arctos-app .alert-danger { --bs-alert-color: var(--ui-danger-text); --bs-alert-bg: var(--ui-danger-soft); --bs-alert-border-color: var(--ui-danger-border); }
+.arctos-app .alert-info { --bs-alert-color: var(--ui-info-text); --bs-alert-bg: var(--ui-info-soft); --bs-alert-border-color: var(--ui-info-border); }
+.arctos-app .nav-tabs { gap: 4px; flex-wrap: nowrap; overflow-x: auto; border-bottom-color: var(--ui-border); padding-bottom: 4px; scrollbar-width: thin; }
+.arctos-app .nav-tabs .nav-link { min-height: 44px; border-radius: 8px; white-space: nowrap; color: var(--ui-muted); font-weight: 600; font-size: .875rem; padding: 10px 16px; border-color: transparent; }
+.arctos-app .nav-tabs .nav-link.active { color: var(--ui-accent-text); background: var(--ui-accent-soft); border-color: var(--ui-accent); }
 .arctos-app .nav-tabs .nav-item { flex-shrink: 0; }
-.arctos-app .table { --bs-table-color: #304035; --bs-table-border-color: #e5eae3; --bs-table-striped-bg: #f8faf6; --bs-table-hover-bg: #f0f7ec; font-size: .875rem; vertical-align: middle; overflow-wrap: normal; }
+.arctos-app .table { --bs-table-bg: var(--ui-surface); --bs-table-color: var(--ui-text); --bs-table-striped-color: var(--ui-text); --bs-table-hover-color: var(--ui-text); --bs-table-active-color: var(--ui-text); --bs-table-active-bg: var(--ui-surface-hover); --bs-table-border-color: var(--ui-border); --bs-table-striped-bg: var(--ui-surface-muted); --bs-table-hover-bg: var(--ui-surface-hover); font-size: .875rem; vertical-align: middle; overflow-wrap: normal; }
 .arctos-app .table > :not(caption) > * > * { padding: 12px; }
-.arctos-app .table th { font-size: .8125rem; font-weight: 650; color: #526257; background: #f6f9f3; }
-.arctos-app .table-responsive { border: 1px solid #e1e7e2; border-radius: 10px; background: #fff; overscroll-behavior-x: contain; }
+.arctos-app .table th { font-size: .8125rem; font-weight: 650; color: var(--ui-muted); background: var(--ui-surface-muted); }
+.arctos-app .table-responsive { border: 1px solid var(--ui-border); border-radius: 10px; background: var(--ui-surface); overscroll-behavior-x: contain; }
 .arctos-app .table-responsive > .table { margin-bottom: 0; }
-.arctos-app .dropdown-menu { z-index: 1050; border-radius: 10px; border-color: var(--bs-border-color); box-shadow: 0 6px 24px #183c2414; }
+.arctos-app .dropdown-menu { z-index: 1050; border-radius: 10px; border-color: var(--bs-border-color); box-shadow: 0 6px 24px var(--ui-shadow); }
 .arctos-app .dropdown-item { min-height: 44px; padding: 10px 12px; border-radius: 7px; white-space: normal; }
-.arctos-app .dropdown-item:hover, .arctos-app .dropdown-item:focus { background: #eff6ec; }
-.arctos-app .list-group-item { border-color: var(--bs-border-color); padding: 14px 18px; }
-.arctos-app .page-link { min-height: 44px; min-width: 44px; display: grid; place-items: center; color: #166534; border-color: #dce5dc; }
-.arctos-app .active > .page-link { color: #fff; background: #15803d; border-color: #15803d; }
+.arctos-app .dropdown-item:hover, .arctos-app .dropdown-item:focus { background: var(--ui-surface-hover); }
+.arctos-app .list-group-item { --bs-list-group-active-bg: var(--ui-accent); --bs-list-group-active-color: var(--ui-accent-contrast); --bs-list-group-active-border-color: var(--ui-accent); border-color: var(--bs-border-color); padding: 14px 18px; }
+.arctos-app .page-link { min-height: 44px; min-width: 44px; display: grid; place-items: center; color: var(--ui-accent-hover); border-color: var(--ui-border); }
+.arctos-app .active > .page-link { color: var(--ui-accent-contrast); background: var(--ui-accent); border-color: var(--ui-accent); }
 .arctos-app .pagination { flex-wrap: wrap; row-gap: 8px; }
-.arctos-app .loading-state { padding: 64px 24px; text-align: center; color: #647067; }
+.arctos-app .loading-state { padding: 64px 24px; text-align: center; color: var(--ui-muted); }
 .arctos-app .modal-dialog { margin-block: max(16px, env(safe-area-inset-top)); }
-.arctos-app .modal-content { border-radius: 14px; border-color: #d9e3d8; box-shadow: 0 24px 80px #12321c30; max-height: calc(100dvh - 32px); overflow-y: auto; }
+.arctos-app .modal-content { border-radius: 14px; border-color: var(--ui-border); box-shadow: 0 24px 80px var(--ui-shadow-strong); max-height: calc(100dvh - 32px); overflow-y: auto; }
 .arctos-app .modal-header, .arctos-app .modal-footer { padding: 16px 24px; gap: 12px; border-color: var(--bs-border-color); }
 .arctos-app .modal-body { padding: 24px; }
 .arctos-app .modal-footer { flex-wrap: wrap; }
 .arctos-app .event-actions { padding-block: 8px; }
 .arctos-app .event-actions > .col-12 { gap: 8px; }
+/* Existing Bootstrap utility classes use the same app surfaces and status hues. */
+.arctos-app .bg-white, .arctos-app .text-bg-light { background-color: var(--ui-surface) !important; }
+.arctos-app .bg-light { background-color: var(--ui-surface-muted) !important; }
+.arctos-app .text-dark, .arctos-app .text-black, .arctos-app .text-bg-light { color: var(--ui-text) !important; }
+.arctos-app .text-warning { color: var(--ui-warning-text) !important; }
+.arctos-app .text-bg-secondary { background-color: var(--ui-surface-hover) !important; color: var(--ui-text) !important; }
+.arctos-app .bg-secondary:not(.badge) { background-color: var(--ui-neutral-fill) !important; color: var(--ui-inverse-text) !important; }
+.arctos-app .text-bg-primary { background-color: var(--ui-accent) !important; color: var(--ui-accent-contrast) !important; }
+.arctos-app .bg-dark, .arctos-app .text-bg-dark { background-color: var(--ui-inverse-bg) !important; color: var(--ui-inverse-text) !important; }
+/* Solid status utility backgrounds retain contrast for legacy white icon labels. */
+.arctos-app .bg-primary:not(.badge) { background-color: var(--ui-gradient-start) !important; color: var(--ui-gradient-contrast) !important; }
+.arctos-app .bg-primary:not(.badge).text-dark, .arctos-app .bg-primary:not(.badge).text-black { color: var(--ui-gradient-contrast) !important; }
+.arctos-app .bg-success:not(.badge) { background-color: var(--ui-success-fill) !important; color: var(--ui-inverse-text) !important; }
+.arctos-app .bg-success:not(.badge).text-dark, .arctos-app .bg-success:not(.badge).text-black, .arctos-app .bg-success:not(.badge) .text-dark, .arctos-app .bg-success:not(.badge) .text-black { color: var(--ui-inverse-text) !important; }
+.arctos-app .bg-danger:not(.badge) { background-color: var(--ui-danger-fill) !important; color: var(--ui-inverse-text) !important; }
+.arctos-app .bg-danger:not(.badge).text-dark, .arctos-app .bg-danger:not(.badge).text-black, .arctos-app .bg-danger:not(.badge) .text-dark, .arctos-app .bg-danger:not(.badge) .text-black { color: var(--ui-inverse-text) !important; }
+.arctos-app .bg-info:not(.badge) { background-color: var(--ui-info-fill) !important; color: var(--ui-inverse-text) !important; }
+.arctos-app .bg-info:not(.badge).text-dark, .arctos-app .bg-info:not(.badge).text-black, .arctos-app .bg-info:not(.badge) .text-dark, .arctos-app .bg-info:not(.badge) .text-black { color: var(--ui-inverse-text) !important; }
+.arctos-app .bg-warning:not(.badge) { background-color: var(--ui-warning-fill) !important; color: var(--ui-warning-contrast) !important; }
+.arctos-app .bg-warning:not(.badge).text-dark, .arctos-app .bg-warning:not(.badge).text-black, .arctos-app .bg-warning:not(.badge) .text-dark, .arctos-app .bg-warning:not(.badge) .text-black { color: var(--ui-warning-contrast) !important; }
+.arctos-app .table-primary { --bs-table-bg: var(--ui-accent-soft); --bs-table-color: var(--ui-accent-text); --bs-table-striped-bg: var(--ui-accent-soft); --bs-table-striped-color: var(--ui-accent-text); --bs-table-hover-bg: var(--ui-accent-soft); --bs-table-hover-color: var(--ui-accent-text); }
+.arctos-app .table-secondary { --bs-table-bg: var(--ui-surface-hover); --bs-table-color: var(--ui-text); --bs-table-striped-bg: var(--ui-surface-hover); --bs-table-striped-color: var(--ui-text); --bs-table-hover-bg: var(--ui-surface-hover); --bs-table-hover-color: var(--ui-text); }
+.arctos-app .table-light { --bs-table-bg: var(--ui-surface-muted); --bs-table-color: var(--ui-text); --bs-table-striped-bg: var(--ui-surface-hover); --bs-table-hover-bg: var(--ui-surface-hover); }
+.arctos-app .table-dark { --bs-table-bg: var(--ui-inverse-bg); --bs-table-color: var(--ui-inverse-text); --bs-table-striped-color: var(--ui-inverse-text); --bs-table-hover-color: var(--ui-inverse-text); --bs-table-striped-bg: var(--ui-inverse-bg); --bs-table-hover-bg: var(--ui-inverse-bg); }
+.arctos-app .text-bg-success { background-color: var(--ui-success-soft) !important; color: var(--ui-success-text) !important; }
+.arctos-app .table-success { --bs-table-bg: var(--ui-success-soft); --bs-table-color: var(--ui-success-text); --bs-table-striped-bg: var(--ui-success-soft); --bs-table-striped-color: var(--ui-success-text); --bs-table-hover-bg: var(--ui-success-soft); --bs-table-hover-color: var(--ui-success-text); }
+.arctos-app .text-bg-warning { background-color: var(--ui-warning-soft) !important; color: var(--ui-warning-text) !important; }
+.arctos-app .table-warning { --bs-table-bg: var(--ui-warning-soft); --bs-table-color: var(--ui-warning-text); --bs-table-striped-bg: var(--ui-warning-soft); --bs-table-striped-color: var(--ui-warning-text); --bs-table-hover-bg: var(--ui-warning-soft); --bs-table-hover-color: var(--ui-warning-text); }
+.arctos-app .text-bg-danger { background-color: var(--ui-danger-soft) !important; color: var(--ui-danger-text) !important; }
+.arctos-app .table-danger { --bs-table-bg: var(--ui-danger-soft); --bs-table-color: var(--ui-danger-text); --bs-table-striped-bg: var(--ui-danger-soft); --bs-table-striped-color: var(--ui-danger-text); --bs-table-hover-bg: var(--ui-danger-soft); --bs-table-hover-color: var(--ui-danger-text); }
+.arctos-app .text-bg-info { background-color: var(--ui-info-soft) !important; color: var(--ui-info-text) !important; }
+.arctos-app .table-info { --bs-table-bg: var(--ui-info-soft); --bs-table-color: var(--ui-info-text); --bs-table-striped-bg: var(--ui-info-soft); --bs-table-striped-color: var(--ui-info-text); --bs-table-hover-bg: var(--ui-info-soft); --bs-table-hover-color: var(--ui-info-text); }
 /* Authentication and creation use the same comfortable reading width. */
 .arctos-app .auth-page, .arctos-app .form-page { margin-inline: auto; }
 .arctos-app .auth-column { width: 100%; max-width: 520px; }
 .arctos-app .form-column { width: 100%; max-width: 760px; }
 .arctos-app .auth-card { overflow: hidden; }
-.arctos-app .auth-card .card-header { background: #fff; padding-top: 28px; text-align: center; }
-.arctos-app .auth-eyebrow { color: #15803d; font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.arctos-app .auth-card .card-header { background: var(--ui-surface); padding-top: 28px; text-align: center; }
+.arctos-app .auth-eyebrow { color: var(--ui-accent); font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .arctos-app .account-type-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
-.arctos-app .account-type-option { border: 1px solid #d8e0d9; border-radius: 10px; background: #fff; padding: 16px; color: #304035; text-decoration: none; display: flex; flex-direction: column; text-align: left; gap: 6px; }
-.arctos-app .account-type-option.is-selected, .arctos-app .account-type-option:hover { background: #edf8ee; border-color: #15803d; color: #14532d; }
-.arctos-app .account-type-option small { color: #647067; line-height: 1.6; }
+.arctos-app .account-type-option { border: 1px solid var(--ui-control-border); border-radius: 10px; background: var(--ui-surface); padding: 16px; color: var(--ui-text); text-decoration: none; display: flex; flex-direction: column; text-align: left; gap: 6px; }
+.arctos-app .account-type-option.is-selected, .arctos-app .account-type-option:hover { background: var(--ui-accent-soft); border-color: var(--ui-accent); color: var(--ui-accent-text); }
+.arctos-app .account-type-option small { color: var(--ui-muted); line-height: 1.6; }
 /* Documentation stays legible, including long code samples and tables. */
 .arctos-app .markdown-content { line-height: 1.8; overflow-wrap: anywhere; }
 .arctos-app .markdown-content h1, .arctos-app .markdown-content h2, .arctos-app .markdown-content h3 { margin-top: 1.5em; margin-bottom: .6em; }
 .arctos-app .markdown-content p, .arctos-app .markdown-content ul, .arctos-app .markdown-content ol { margin-bottom: 1em; }
 .arctos-app .markdown-content img { max-width: 100%; height: auto; }
-.arctos-app .markdown-content blockquote { border-left: 3px solid #0d9488; padding-left: 20px; color: #647067; }
-.arctos-app .markdown-content code { background: #edf3e9; padding: .15em .35em; border-radius: 4px; color: #305b3d; }
-.arctos-app .markdown-content pre { padding: 20px; overflow-x: auto; background: #f1f5ee; border-radius: 10px; }
+.arctos-app .markdown-content blockquote { border-left: 3px solid var(--ui-accent); padding-left: 20px; color: var(--ui-muted); }
+.arctos-app .markdown-content code { background: var(--ui-surface-muted); padding: .15em .35em; border-radius: 4px; color: var(--ui-accent-text); }
+.arctos-app .markdown-content pre { padding: 20px; overflow-x: auto; background: var(--ui-surface-muted); border-radius: 10px; }
 .arctos-app .markdown-content pre code { padding: 0; }
 .arctos-app .markdown-content table { display: block; overflow-x: auto; border-collapse: collapse; }
-.arctos-app .markdown-content th, .arctos-app .markdown-content td { border: 1px solid #dce5dc; padding: 10px 14px; }
-.arctos-app .markdown-content .admonition { border: 1px solid #c9e6d0; background: #f1f8ee; border-radius: 10px; padding: 16px; margin-block: 20px; }
+.arctos-app .markdown-content th, .arctos-app .markdown-content td { border: 1px solid var(--ui-border); padding: 10px 14px; }
+.arctos-app .markdown-content .admonition { border: 1px solid var(--ui-info-border); background: var(--ui-info-soft); border-radius: 10px; padding: 16px; margin-block: 20px; }
 .arctos-app .markdown-content .admonition-title { font-weight: 700; }
-.arctos-app .markdown-content .warning, .arctos-app .markdown-content .caution, .arctos-app .markdown-content .attention { background: #fffaeb; border-color: #f5dfa0; }
-.arctos-app .markdown-content .danger { background: #fff0ee; border-color: #f8cdc6; }
-.arctos-app .app-footer { background: #f2f5ef; border-top: 1px solid #e1e7df; color: #647067; padding: 28px 0 max(24px, env(safe-area-inset-bottom)); font-size: .8125rem; }
+.arctos-app .markdown-content .warning, .arctos-app .markdown-content .caution, .arctos-app .markdown-content .attention { background: var(--ui-warning-soft); border-color: var(--ui-warning-border); }
+.arctos-app .markdown-content .danger { background: var(--ui-danger-soft); border-color: var(--ui-danger-border); }
+.arctos-app .app-footer { background: var(--ui-surface-muted); border-top: 1px solid var(--ui-border); color: var(--ui-muted); padding: 28px 0 max(24px, env(safe-area-inset-bottom)); font-size: .8125rem; }
 .arctos-app .footer-top, .arctos-app .footer-bottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
 .arctos-app .footer-brand { display: flex; align-items: center; gap: 10px; }
 .arctos-app .footer-brand .brand-mark { width: 28px; height: 28px; font-size: 13px; border-radius: 7px; }
 .arctos-app .footer-links { display: flex; flex-wrap: wrap; gap: 4px 18px; }
-.arctos-app .footer-links a { display: inline-flex; align-items: center; min-height: 44px; color: #526257; text-decoration: none; }
+.arctos-app .footer-links a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ui-muted); text-decoration: none; }
 .arctos-app .footer-links a:hover { text-decoration: underline; }
-.arctos-app .footer-bottom { border-top: 1px solid #dfe6db; padding-top: 20px; margin-top: 20px; gap: 8px 24px; }
+.arctos-app .footer-bottom { border-top: 1px solid var(--ui-border); padding-top: 20px; margin-top: 20px; gap: 8px 24px; }
 .arctos-app .footer-bottom p { margin: 0; }
 @media (max-width: 1100px) {
   .arctos-app .app-header-inner { gap: 12px; }
@@ -206,7 +554,7 @@
   .arctos-app .app-main { padding-block: 24px 36px; }
   .arctos-app .app-header-inner { padding-inline: max(16px, env(safe-area-inset-left)); }
   .arctos-app .app-create span { display: none; }
-  .arctos-app .app-create { width: 44px; padding-inline: 0; }
+  .arctos-app .app-create { width: 44px; min-width: 44px; flex-shrink: 0; padding-inline: 0; }
   .arctos-app .app-nav-link { gap: 5px; padding-inline: 8px; font-size: .78rem; }
   .arctos-app .card-body { padding: 20px; }
   .arctos-app .card-header, .arctos-app .card-footer { padding: 16px 20px; }
@@ -226,7 +574,7 @@
   .arctos-app *, .arctos-app *::before, .arctos-app *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
 
-.arctos-app .btn-check:focus-visible + .account-type-option { outline: 3px solid #0d9488; outline-offset: 3px; }
+.arctos-app .btn-check:focus-visible + .account-type-option { outline: 3px solid var(--ui-accent); outline-offset: 3px; }
 .arctos-app .arctos-event-search input { padding-left: 2.5rem; }
 
 /* Keep every primary destination visible at phone widths. */
@@ -239,7 +587,7 @@
   .arctos-app .roster-table thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
   .arctos-app .roster-table tr { display: flex; flex-direction: column; border-bottom: 1px solid var(--bs-border-color); padding: 12px 0; }
   .arctos-app .roster-table tr:last-child { border-bottom: 0; }
-  .arctos-app .roster-table td { display: block; border: 0; padding: 6px 14px; background: #fff; box-shadow: none; }
-  .arctos-app .roster-table td[data-label]::before { content: attr(data-label) ": "; color: #647067; font-weight: 500; }
+  .arctos-app .roster-table td { display: block; border: 0; padding: 6px 14px; background: var(--ui-surface); box-shadow: none; }
+  .arctos-app .roster-table td[data-label]::before { content: attr(data-label) ": "; color: var(--ui-muted); font-weight: 500; }
   .arctos-app .roster-table td:first-child { padding-bottom: 10px; font-size: 1rem; }
 }

@@ -446,8 +446,8 @@ async def api_json(context: BrowserContext, base_url: str, path: str):
     return await response.json()
 
 
-def arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+def arguments(description: str | None = __doc__) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--base-url", default="http://127.0.0.1:8080", help="Loopback Dioxus/proxy origin serving the demo"
     )

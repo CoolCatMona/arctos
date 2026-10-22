@@ -4194,9 +4194,9 @@ fn TableView(
                         let structural = is_structural_match(m);
                         // Editor table: structural rows show real statuses like matches.
                         let (status_color, status_label) = if structural && !edit_mode {
-                            ("#e9ecef".to_string(), "—".to_string())
+                            ("var(--ui-surface-hover)".to_string(), "—".to_string())
                         } else if m.status.is_empty() {
-                            ("#e9ecef".to_string(), "-".to_string())
+                            ("var(--ui-surface-hover)".to_string(), "-".to_string())
                         } else {
                             status_color_and_label(&m.status)
                         };
@@ -4765,14 +4765,14 @@ fn ref_token_match_name(token: &str) -> Option<&str> {
 /// kind: 0 = chain (blue), 1 = team supplier (green), 2 = ref supplier (orange).
 fn dep_edge_color(kind: u8) -> &'static str {
     match kind {
-        0 => "#0d6efd",
-        1 => "#198754",
-        _ => "#fd7e14",
+        0 => "var(--schedule-dep-chain)",
+        1 => "var(--schedule-dep-team)",
+        _ => "var(--schedule-dep-ref)",
     }
 }
 
 /// Stacked outline rings for a block in the alt-dependency view: one 3px ring
-/// per edge (in order), colored like its line, with 1px translucent-white
+/// per edge (in order), colored like its line, with 1px surface-colored
 /// separators so adjacent same-color rings stay countable. Returns an inline
 /// `box-shadow: …;` declaration.
 fn dep_ring_shadow(kinds: &[u8]) -> String {
@@ -4782,7 +4782,7 @@ fn dep_ring_shadow(kinds: &[u8]) -> String {
         .map(|(i, kind)| {
             let inner = (i as u32) * 4;
             format!(
-                "0 0 0 {}px {}, 0 0 0 {}px rgba(255,255,255,0.9)",
+                "0 0 0 {}px {}, 0 0 0 {}px var(--ui-surface)",
                 inner + 3,
                 dep_edge_color(*kind),
                 inner + 4
@@ -4901,11 +4901,11 @@ mod dep_geometry_tests {
     fn ring_shadow_one_ring_per_distinct_edge_in_order() {
         let css = dep_ring_shadow(&[0, 1, 2]);
         assert!(css.starts_with("box-shadow: "));
-        assert_eq!(css.matches("rgba(255,255,255,0.9)").count(), 3);
+        assert_eq!(css.matches("var(--ui-surface)").count(), 3);
         // Ring order (inner→outer) follows edge order; colors match the lines.
-        let chain = css.find("#0d6efd").unwrap();
-        let team = css.find("#198754").unwrap();
-        let refc = css.find("#fd7e14").unwrap();
+        let chain = css.find("var(--schedule-dep-chain)").unwrap();
+        let team = css.find("var(--schedule-dep-team)").unwrap();
+        let refc = css.find("var(--schedule-dep-ref)").unwrap();
         assert!(chain < team && team < refc);
     }
 }
@@ -5491,7 +5491,7 @@ fn ScheduleTimeline(
             // Status tag palette only (never overwritten for highlight; highlight is on the block).
             // Editor: structural blocks (breaks/joins) show real statuses like matches.
             let (color, _) = if is_structural_match(m) && !editor {
-                ("#e9ecef".to_string(), "—".to_string())
+                ("var(--ui-surface-hover)".to_string(), "—".to_string())
             } else {
                 status_color_and_label(&m.status)
             };
@@ -6696,7 +6696,7 @@ fn ScheduleTimeline(
                             geom_by_id.insert(e.id.clone(), (left, width, start_slots, duration_slots));
                             let is_structural = is_structural_type(e.schedule_type.as_deref());
                             // Editor: structural blocks look like matches (statuses shown).
-                            let bg = if is_structural && !editor { "#f1f3f5" } else { "#ffffff" };
+                            let bg = if is_structural && !editor { "var(--ui-surface-muted)" } else { "var(--ui-surface)" };
                             let style = format!(
                                 "background-color: {bg}; position: absolute; box-sizing: border-box; \
                                  left: calc({left}% + 1px); width: calc({width}% - 2px); \
@@ -6937,15 +6937,15 @@ fn ScheduleTimeline(
                                 }
                                 div { class: "schedule-dep-legend",
                                     span { class: "schedule-dep-legend-item",
-                                        span { class: "schedule-dep-legend-swatch", style: "background:#0d6efd;" }
+                                        span { class: "schedule-dep-legend-swatch", style: "background:var(--schedule-dep-chain);" }
                                         "previous match"
                                     }
                                     span { class: "schedule-dep-legend-item",
-                                        span { class: "schedule-dep-legend-swatch", style: "background:#198754;" }
+                                        span { class: "schedule-dep-legend-swatch", style: "background:var(--schedule-dep-team);" }
                                         "supplies a team"
                                     }
                                     span { class: "schedule-dep-legend-item",
-                                        span { class: "schedule-dep-legend-swatch", style: "background:#fd7e14;" }
+                                        span { class: "schedule-dep-legend-swatch", style: "background:var(--schedule-dep-ref);" }
                                         "supplies a ref"
                                     }
                                 }
@@ -7494,12 +7494,12 @@ fn EditMatchModal(
 /// Status color and label for timeline blocks and table status column (same logic in both places).
 fn status_color_and_label(status: &str) -> (String, String) {
     let color = match status {
-        "COMPLETED" => "#7acb8b",
-        "IN_PROGRESS" => "#ffd666",
-        "TIME_FINALIZED" => "#a5adb5",
-        "READY_TO_START" => "#82b1ff",
-        "SKIPPED" => "#adb5bd",
-        _ => "#6cc5d4",
+        "COMPLETED" => "var(--bs-success-bg-subtle)",
+        "IN_PROGRESS" => "var(--bs-warning-bg-subtle)",
+        "TIME_FINALIZED" => "var(--ui-surface-hover)",
+        "READY_TO_START" => "var(--bs-info-bg-subtle)",
+        "SKIPPED" => "var(--ui-surface-hover)",
+        _ => "var(--ui-surface-muted)",
     };
     let label: String = match status {
         "COMPLETED" => "Completed".to_string(),

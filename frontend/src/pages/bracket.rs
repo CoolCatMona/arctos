@@ -35,13 +35,30 @@ const MIN_ZOOM: f64 = 0.02;
 const MAX_ZOOM: f64 = 3.0;
 /// Minimum on-screen spacing between grid dots before we thin the lattice.
 const MIN_GRID_SCREEN_PX: f64 = 10.0;
-const REF_AIRWIRE_COLOR: &str = "#e6c200";
-const REF_AIRWIRE_RTL_COLOR: &str = "#e6194b";
-/// Distinguishable field colors (yellow #ffe119 + red #e6194b reserved for refs).
+const REF_AIRWIRE_COLOR: &str = "var(--bs-warning-text-emphasis)";
+const REF_AIRWIRE_RTL_COLOR: &str = "var(--bs-danger-text-emphasis)";
+/// Categorical field colors resolve per appearance mode; warning/danger colors are reserved for refs.
 const FIELD_AIRWIRE_COLORS: &[&str] = &[
-    "#3cb44b", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6", "#bcf60c", "#fabebe",
-    "#008080", "#e6beff", "#9a6324", "#fffac8", "#800000", "#aaffc3", "#808000", "#ffd8b1",
-    "#000075", "#808080", "#ffffff", "#000000",
+    "var(--bracket-field-0)",
+    "var(--bracket-field-1)",
+    "var(--bracket-field-2)",
+    "var(--bracket-field-3)",
+    "var(--bracket-field-4)",
+    "var(--bracket-field-5)",
+    "var(--bracket-field-6)",
+    "var(--bracket-field-7)",
+    "var(--bracket-field-8)",
+    "var(--bracket-field-9)",
+    "var(--bracket-field-10)",
+    "var(--bracket-field-11)",
+    "var(--bracket-field-12)",
+    "var(--bracket-field-13)",
+    "var(--bracket-field-14)",
+    "var(--bracket-field-15)",
+    "var(--bracket-field-16)",
+    "var(--bracket-field-17)",
+    "var(--bracket-field-18)",
+    "var(--bracket-field-19)",
 ];
 /// Available snap-grid densities (world px). 0 = off.
 #[allow(dead_code)]
@@ -4103,7 +4120,7 @@ pub fn Bracket(url: String) -> Element {
                                                                     img {
                                                                         src: "{backend}/static/{bimg}",
                                                                         alt: "{bname}",
-                                                                        style: "width: 64px; height: 40px; object-fit: cover; border-radius: 4px; background: #eee;"
+                                                                        style: "width: 64px; height: 40px; object-fit: cover; border-radius: 4px; background: var(--ui-surface-muted);"
                                                                     }
                                                                     div { class: "text-truncate",
                                                                         strong { "{bname}" }

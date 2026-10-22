@@ -220,6 +220,18 @@ finalization without changing a real match. Phone runs exercise bracket
 dragging, pointer capture, cancellation, and panning against a browser-only
 fixture; no layout is saved to the backend.
 
+Check appearance preferences separately with the same running demo:
+
+```bash
+uv run python scripts/check_appearance_ui.py --screenshots /tmp/arctos-appearance
+```
+
+This covers the four palettes in light and dark modes, mobile menu sizing,
+keyboard controls, browser persistence, live system-mode changes, cross-tab
+updates, and unavailable storage. It accepts the same `--base-url` and
+`--browser-executable` options. OBS and exact-size render routes retain their
+independent presentation.
+
 Camera/audio device behavior and external Google/YouTube integrations still
 need real devices and configured credentials. Browser rendering alone cannot
 verify Bluetooth delay, actual recording, or third-party account flows.

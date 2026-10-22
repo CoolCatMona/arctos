@@ -1,5 +1,6 @@
 //! Reusable UI components.
 
+mod appearance_menu;
 mod ass_entry;
 mod change_password_card;
 mod connected_apps_card;
@@ -18,6 +19,7 @@ mod team_label;
 mod team_token_input;
 
 pub use ass_entry::AssEntry;
+pub use appearance_menu::AppearanceMenu;
 pub use change_password_card::ChangePasswordCard;
 pub use connected_apps_card::ConnectedAppsCard;
 pub use edit_registration_modal::{EditRegistrationContext, EditRegistrationModal};

@@ -39,6 +39,7 @@ web-sys = { version = "0.3", features = [
     "Storage",
     "StorageManager",
     "StorageEvent",
+    "MediaQueryList", "MediaQueryListEvent",
 ] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 dioxus-web = "0.7"
