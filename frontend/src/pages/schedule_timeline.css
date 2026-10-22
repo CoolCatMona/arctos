@@ -589,7 +589,7 @@
 }
 
 .team-token-chip-focused {
-    border-color: var(--ui-accent);
+    border-color: var(--ui-link);
     box-shadow: 0 0 0 0.2rem rgba(var(--ui-accent-rgb), 0.25);
 }
 
@@ -608,7 +608,7 @@
 
 .team-token-chip-tag {
     background: var(--ui-accent-soft);
-    border-color: var(--ui-accent);
+    border-color: var(--ui-link);
 }
 
 .team-token-chip-tag .team-token-icon,
@@ -1059,7 +1059,7 @@
     border: 2px dashed var(--ui-accent);
     border-radius: 6px;
     background: rgba(var(--ui-accent-rgb), 0.12);
-    color: var(--ui-accent);
+    color: var(--ui-link);
     font-size: 0.85em;
     font-weight: 600;
     padding: 0.25rem 0.4rem;
@@ -1105,7 +1105,7 @@
 
 /* Bulk-length tool: selected blocks. */
 .schedule-timeline-event--bulk-selected {
-    outline: 3px solid var(--ui-accent);
+    outline: 3px solid var(--ui-link);
     outline-offset: -1px;
     background-color: rgba(var(--ui-accent-rgb), 0.10) !important;
     box-shadow: 0 0 0 3px rgba(var(--ui-accent-rgb), 0.25);
@@ -1241,9 +1241,9 @@
 
 /* Pending-create placeholder: stays visible while the create card is open. */
 .schedule-drag-ghost--pending {
-    border-color: var(--ui-accent);
+    border-color: var(--ui-link);
     background: rgba(var(--ui-accent-rgb), 0.10);
-    color: var(--ui-accent);
+    color: var(--ui-link);
 }
 
 /* Winner/Loser insertion chips: shown on block hover while an editor card has
@@ -1290,7 +1290,7 @@
 .schedule-timeline-nav { border-bottom-color: var(--ui-border); padding: .75rem; gap: .65rem; }
 .schedule-timeline-nav > * { max-width: 100%; }
 .schedule-timeline-date { overflow-wrap: anywhere; }
-.schedule-keyboard-focus:focus-visible { outline: 3px solid var(--ui-accent); outline-offset: 4px; }
+.schedule-keyboard-focus:focus-visible { outline: 3px solid var(--ui-link); outline-offset: 4px; }
 @media (max-width: 991.98px) {
     /* 100vw includes scrollbar width; contained mobile tools avoid page overflow. */
     .schedule-editor-fullbleed { width: 100%; max-width: 100%; margin-inline: 0; padding-inline: 0; }

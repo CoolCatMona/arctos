@@ -138,7 +138,7 @@
 }
 
 .bracket-match.selected {
-    border-color: var(--ui-accent);
+    border-color: var(--ui-link);
     box-shadow: 0 0 0 2px rgba(var(--ui-accent-rgb), 0.35);
 }
 
@@ -344,7 +344,7 @@
 }
 
 .bracket-net-label.editable:hover {
-    border-color: var(--ui-accent);
+    border-color: var(--ui-link);
     background: var(--ui-accent-soft);
 }
 
@@ -418,7 +418,7 @@
 }
 
 .bracket-text.selected {
-    outline: 2px solid var(--ui-accent);
+    outline: 2px solid var(--ui-link);
     background: rgba(var(--ui-accent-rgb), 0.08);
 }
 
@@ -441,7 +441,7 @@
 }
 
 .bracket-labeled-team.selected {
-    border-color: var(--ui-accent);
+    border-color: var(--ui-link);
     box-shadow: 0 0 0 2px rgba(var(--ui-accent-rgb), 0.35);
 }
 
@@ -477,7 +477,7 @@
 }
 
 .bracket-image.selected {
-    border-color: var(--ui-accent);
+    border-color: var(--ui-link);
     box-shadow: 0 0 0 2px rgba(var(--ui-accent-rgb), 0.35);
 }
 
@@ -677,7 +677,7 @@
 .bracket-canvas-wrap.field-hovering .bracket-match.field-hot {
     opacity: 1;
     filter: none;
-    border-color: var(--ui-accent);
+    border-color: var(--ui-link);
     box-shadow: 0 0 0 3px rgba(var(--ui-accent-rgb), 0.45), 0 4px 14px rgba(var(--ui-accent-rgb), 0.2);
     z-index: 8;
 }
@@ -737,7 +737,7 @@
 .bracket-view-controls .btn { min-width: 44px; min-height: 44px; }
 .bracket-zoom-value { min-width: 4rem; text-align: center; font-variant-numeric: tabular-nums; }
 .bracket-mobile-hint { display: none; }
-.bracket-keyboard-focus:focus-visible { outline: 3px solid var(--ui-accent); outline-offset: 4px; }
+.bracket-keyboard-focus:focus-visible { outline: 3px solid var(--ui-link); outline-offset: 4px; }
 .bracket-add-modal { border: 1px solid var(--ui-border); border-radius: .9rem; }
 @media (max-width: 767.98px) {
     .bracket-page-toolbar { align-items: center; gap: .6rem; }

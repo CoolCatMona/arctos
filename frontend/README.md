@@ -42,20 +42,26 @@ path reported by Dioxus and the repository deployment guide.
 
 ## Design system
 
-The header's Appearance menu offers Forest, Ocean, Plum, and Ember palettes,
-each with Light, Dark, or System display mode. Forest and System are the
-defaults. Preferences stay in this browser and apply across routes; System
-tracks changes to the device's color scheme. The menu works without an
-account. If browser storage is unavailable, changes still apply for the visit.
+Open Appearance from the account menu, or from More when signed out. Display
+mode offers Light, Dark, and System. California Jugger, Field Chalk, and
+Neutral Ops each coordinate page backgrounds, cards, navigation, and controls;
+Forest, Ocean, Plum, and Ember remain under Additional themes. California
+Jugger and System are the defaults; existing saved choices remain selected.
+Preferences stay in this browser and apply across routes. System tracks
+changes to the device's color scheme. If browser storage is unavailable,
+changes still apply for the visit.
 
 `src/theme.css` styles the shared shell and existing Bootstrap components on
 all routes. `src/pages/public_pages.css` contains event/discovery layouts;
 `src/pages/operator.css` contains match and stones refinements. Colors, focus,
 touch spacing, safe areas, forms, cards, tables, and dialogs share the same
 mobile-first system. Use the `--ui-*` semantic color variables for app surfaces,
-text, and accents; status colors retain their meaning across palettes.
+text, and accents; use `--ui-link` for text and focus indicators, and
+`--ui-accent` with `--ui-accent-contrast` for filled actions. Status colors
+retain their meaning across palettes.
 `src/appearance.rs` owns browser preferences and system-mode listeners;
-`src/components/appearance_menu.rs` provides the controls. The app wrapper
+`src/components/appearance_menu.rs` and its adjacent stylesheet provide the
+controls and previews. The app wrapper
 sets `data-palette` and Bootstrap's `data-bs-theme` without changing the
 document's global theme. Keep canvas node/port geometry in the dedicated bracket
 and schedule stylesheets. Scoreboard/OBS and exact-size offline frame routes

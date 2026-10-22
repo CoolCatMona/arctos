@@ -226,9 +226,10 @@ Check appearance preferences separately with the same running demo:
 uv run python scripts/check_appearance_ui.py --screenshots /tmp/arctos-appearance
 ```
 
-This covers the four palettes in light and dark modes, mobile menu sizing,
-keyboard controls, browser persistence, live system-mode changes, cross-tab
-updates, and unavailable storage. It accepts the same `--base-url` and
+This covers all seven themes in light and dark modes, distinct page/card
+backgrounds, text contrast, mobile menu sizing, guest/player/team menu access,
+keyboard controls, unsaved form preservation, browser persistence, live
+system-mode changes, cross-tab updates, and unavailable storage. It accepts the same `--base-url` and
 `--browser-executable` options. OBS and exact-size render routes retain their
 independent presentation.
 

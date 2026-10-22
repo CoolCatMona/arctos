@@ -20,7 +20,7 @@
 .arctos-app .arctos-card-statuses { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: .85rem; }
 .arctos-app .arctos-card-title { font-size: 1.15rem; line-height: 1.4; letter-spacing: -.015em; overflow-wrap: anywhere; margin-bottom: .65rem; }
 .arctos-app .arctos-card-title a { color: var(--ui-text); text-decoration: none; }
-.arctos-app .arctos-card-title a:hover { color: var(--ui-accent); text-decoration: underline; }
+.arctos-app .arctos-card-title a:hover { color: var(--ui-link-hover); text-decoration: underline; }
 .arctos-app .arctos-league-link { display: inline-flex; align-items: center; gap: .45rem; border: 1px solid var(--ui-border); border-radius: .4rem; padding: .3rem .5rem; color: var(--ui-accent-text); font-size: .8rem; margin-bottom: .75rem; text-decoration: none; max-width: 100%; overflow-wrap: anywhere; }
 .arctos-app .arctos-league-link:hover { background: var(--ui-surface-hover); }
 .arctos-app .arctos-meta-list { list-style: none; padding: 0; margin: .4rem 0 0; display: grid; gap: .8rem; color: var(--ui-muted); font-size: .9rem; width: 100%; }
@@ -56,7 +56,7 @@
 .arctos-app .arctos-directory-name p { color: var(--ui-muted); font-size: .875rem; margin-bottom: 0; overflow-wrap: anywhere; }
 .arctos-app .arctos-directory-location { color: var(--ui-muted); font-size: .9rem; margin: 1rem 0 0; display: flex; align-items: flex-start; gap: .6rem; overflow-wrap: anywhere; }
 .arctos-app .arctos-directory-location i { margin-top: .2rem; }
-.arctos-app .arctos-directory-action { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 1.25rem; color: var(--ui-accent); font-size: .85rem; font-weight: 600; }
+.arctos-app .arctos-directory-action { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 1.25rem; color: var(--ui-link); font-size: .85rem; font-weight: 600; }
 .arctos-app .arctos-pagination { margin: 1.75rem 0 0; display: flex; align-items: center; justify-content: center; gap: .75rem; flex-wrap: wrap; }
 .arctos-app .arctos-pagination .btn, .arctos-app .arctos-pagination .form-select { min-height: 44px; }
 .arctos-app .arctos-page-position { font-size: .875rem; color: var(--ui-muted); }

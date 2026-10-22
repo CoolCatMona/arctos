@@ -103,6 +103,15 @@ pub fn Layout() -> Element {
     let route = use_route::<Route>();
     let page_title = format!("{} | Arctos", page_title_for_route(&route));
     let path = route.to_string();
+    let current_user = user
+        .read()
+        .as_ref()
+        .and_then(|result| result.as_ref().ok())
+        .cloned();
+    let menu_label = current_user.as_ref().map_or_else(
+        || "More options".to_string(),
+        |user| format!("Account: {} ({})", user.name, user.user_type),
+    );
     use_effect(use_reactive(&route, move |_| {
         account_open.set(false);
         appearance_open.set(false);
@@ -146,16 +155,11 @@ pub fn Layout() -> Element {
             class: "arctos-app",
             "data-palette": palette, "data-bs-theme": color_scheme,
             onkeydown: move |event| {
-                if event.key() == Key::Escape {
-                    if appearance_open() {
-                        event.prevent_default();
-                        appearance_open.set(false);
-                        focus_control("appearance-trigger");
-                    } else if account_open() {
-                        event.prevent_default();
-                        account_open.set(false);
-                        focus_control("account-trigger");
-                    }
+                if event.key() == Key::Escape && (account_open() || appearance_open()) {
+                    event.prevent_default();
+                    appearance_open.set(false);
+                    account_open.set(false);
+                    focus_control("account-trigger");
                 }
             },
             a { class: "skip-link", href: "#page-content", "Skip to content" }
@@ -187,28 +191,43 @@ pub fn Layout() -> Element {
                             i { class: "fa-solid fa-circle-plus", aria_hidden: "true" }
                             span { "Create event" }
                         }
-                        Link { to: Route::About {}, class: "app-icon-button app-about", aria_label: "About Arctos", title: "About Arctos",
-                            i { class: "fa-solid fa-circle-info", aria_hidden: "true" }
+                        if current_user.is_none() {
+                            Link { to: Route::Login {}, class: "btn btn-outline-secondary app-login", "Log in" }
                         }
-                        AppearanceMenu { open: appearance_open, account_open, appearance }
-                        if let Some(Ok(u)) = user.read().as_ref() {
-                            div { class: "account-menu",
-                                button {
-                                    class: "app-icon-button account-trigger",
-                                    id: "account-trigger",
-                                    r#type: "button",
-                                    aria_label: "Account: {u.name} ({u.user_type})",
-                                    aria_expanded: "{account_open()}",
-                                    aria_controls: "account-options",
-                                    onclick: move |_| { appearance_open.set(false); account_open.toggle(); },
+                        div { class: "account-menu",
+                            button {
+                                class: "app-icon-button account-trigger",
+                                id: "account-trigger",
+                                r#type: "button",
+                                aria_label: "{menu_label}",
+                                aria_expanded: "{account_open() || appearance_open()}",
+                                aria_controls: if appearance_open() { "appearance-options" } else { "account-options" },
+                                onclick: move |_| {
+                                    let was_open = account_open() || appearance_open();
+                                    appearance_open.set(false);
+                                    account_open.set(!was_open);
+                                },
+                                if current_user.is_some() {
                                     i { class: "fa-regular fa-user", aria_hidden: "true" }
+                                } else {
+                                    i { class: "fa-solid fa-ellipsis", aria_hidden: "true" }
                                 }
-                                if account_open() {
-                                    button {
-                                        class: "account-dismiss", r#type: "button", tabindex: "-1", aria_label: "Close account menu",
-                                        onclick: move |_| { account_open.set(false); focus_control("account-trigger"); }
+                            }
+                            if account_open() || appearance_open() {
+                                button {
+                                    class: "account-dismiss", r#type: "button", tabindex: "-1", aria_label: "Dismiss menu",
+                                    onclick: move |_| {
+                                        account_open.set(false);
+                                        appearance_open.set(false);
+                                        focus_control("account-trigger");
                                     }
-                                    div { class: "account-dropdown", id: "account-options",
+                                }
+                            }
+                            if account_open() {
+                                div {
+                                    class: "account-dropdown", id: "account-options",
+                                    onmounted: move |_| focus_control("appearance-menu-item"),
+                                    if let Some(u) = current_user.as_ref() {
                                         div { class: "account-identity",
                                             strong { "{u.name}" }
                                             span { class: "text-muted", "{u.user_type} account · @{u.id}" }
@@ -219,7 +238,18 @@ pub fn Layout() -> Element {
                                             Link { to: Route::TeamProfilePage { id: u.id.clone() }, class: "dropdown-item", "Team profile" }
                                         }
                                         Link { to: Route::DeveloperApps {}, class: "dropdown-item", "Developer apps" }
-                                        Link { to: Route::Docs {}, class: "dropdown-item", "Help & documentation" }
+                                    }
+                                    button {
+                                        id: "appearance-menu-item", r#type: "button", class: "dropdown-item utility-menu-row",
+                                        aria_haspopup: "dialog", aria_controls: "appearance-options",
+                                        onclick: move |_| { account_open.set(false); appearance_open.set(true); },
+                                        i { class: "fa-solid fa-palette", aria_hidden: "true" }
+                                        span { "Appearance" }
+                                        i { class: "fa-solid fa-chevron-right menu-chevron", aria_hidden: "true" }
+                                    }
+                                    Link { to: Route::Docs {}, class: "dropdown-item", "Help & documentation" }
+                                    Link { to: Route::About {}, class: "dropdown-item", "About Arctos" }
+                                    if current_user.is_some() {
                                         button {
                                             r#type: "button", class: "dropdown-item", disabled: logging_out(),
                                             onclick: move |_| {
@@ -245,8 +275,7 @@ pub fn Layout() -> Element {
                                     }
                                 }
                             }
-                        } else {
-                            Link { to: Route::Login {}, class: "btn btn-outline-secondary app-login", "Log in" }
+                            AppearanceMenu { open: appearance_open, account_open, appearance }
                         }
                     }
                 }

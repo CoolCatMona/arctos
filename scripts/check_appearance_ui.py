@@ -3,9 +3,11 @@
     uv run python scripts/check_appearance_ui.py --base-url http://127.0.0.1:8444 \
         --browser-executable /usr/bin/google-chrome --screenshots /tmp/arctos-appearance
 
-Checks all four palettes in light/dark at phone width, representative custom
-surfaces, persistence, live System changes, explicit overrides, cross-tab
-changes/removal, blocked browser storage, keyboard focus, and overlay isolation.
+Checks all seven themes in light/dark at phone width, actual surface/label
+contrast and distinct backgrounds, nested menu keyboard/focus behavior, guest,
+player and team access, unsaved form retention, existing preferences, persistence,
+live System changes, explicit overrides, cross-tab changes/removal, blocked
+browser storage, representative custom surfaces, and overlay isolation.
 Shares the demo marker, loopback restriction, asset checks, and mutation guard
 with check_mobile_ui.py. No server data is changed except signing into the demo.
 """
@@ -13,6 +15,7 @@ with check_mobile_ui.py. No server data is changed except signing into the demo.
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 import json
 import sys
 
@@ -22,7 +25,23 @@ from check_mobile_ui import DEMO_USER, TIMEOUT_MS, Screen, SmokeCheck, api_json,
 
 STORAGE_KEY = "arctos.appearance.v1"
 WIDTH = 360
-PALETTES = ("forest", "ocean", "plum", "ember")
+PALETTES = {
+    "california": "California Jugger",
+    "field-chalk": "Field Chalk",
+    "neutral": "Neutral Ops",
+    "forest": "Forest",
+    "ocean": "Ocean",
+    "plum": "Plum",
+    "ember": "Ember",
+}
+LEGACY_PALETTES = ("forest", "ocean", "plum", "ember")
+CONTEXT_OPTIONS = {
+    "viewport": {"width": WIDTH, "height": 900},
+    "color_scheme": "light",
+    "has_touch": True,
+    "is_mobile": True,
+    "reduced_motion": "reduce",
+}
 
 
 async def preference(page: Page, palette: str, resolved_mode: str) -> None:
@@ -31,22 +50,39 @@ async def preference(page: Page, palette: str, resolved_mode: str) -> None:
     await expect(app).to_have_attribute("data-bs-theme", resolved_mode)
 
 
-async def choose(page: Page, palette: str, mode: str) -> None:
-    trigger = page.get_by_role("button", name="Appearance", exact=True)
+async def open_menu(page: Page) -> None:
+    """Use the guest More options or authenticated Account menu, never a shortcut."""
     if not await page.locator("#appearance-options").is_visible():
-        await trigger.click()
-    await page.get_by_role("radio", name=f"{palette.title()} palette", exact=True).check()
+        if not await page.locator("#appearance-menu-item").is_visible():
+            await page.locator("#account-trigger").click()
+        await page.get_by_role("button", name="Appearance", exact=True).click()
+    await expect(page.locator("#appearance-options")).to_be_visible()
+
+
+async def choose(page: Page, palette: str, mode: str) -> None:
+    await open_menu(page)
+    radio = page.get_by_role("radio", name=f"{PALETTES[palette]} theme", exact=True)
+    if palette in LEGACY_PALETTES and not await radio.is_visible():
+        await page.locator("summary").filter(has_text="Additional themes").click()
+    await radio.check()
     await page.get_by_role("radio", name=f"{mode.title()} mode", exact=True).check()
+    await page.mouse.move(0, 0)
+
+
+async def closed_menu(page: Page) -> None:
+    await expect(page.locator("#appearance-options")).to_be_hidden()
+    await expect(page.locator("#account-options")).to_be_hidden()
+    await expect(page.locator("#account-trigger")).to_be_focused()
+    await expect(page.locator("#account-trigger")).to_have_attribute("aria-expanded", "false")
 
 
 async def close_menu(page: Page) -> None:
     await page.keyboard.press("Escape")
-    await expect(page.locator("#appearance-options")).to_be_hidden()
-    await expect(page.locator("#appearance-trigger")).to_be_focused()
+    await closed_menu(page)
 
 
 async def check_contrast(page: Page, selector: str, minimum: float = 4.5) -> None:
-    """Check actual text against its composited ancestor backgrounds."""
+    """Check actual solid-surface text against its composited ancestor backgrounds."""
     await expect(page.locator(selector).first).to_be_visible()
     failures = await page.locator(selector).evaluate_all(
         """(elements, minimum) => {
@@ -64,7 +100,8 @@ async def check_contrast(page: Page, selector: str, minimum: float = 4.5) -> Non
                 const color = rgba(getComputedStyle(ancestor).backgroundColor);
                 bg = bg.map((v, i) => color[i] * color[3] + v * (1 - color[3]));
             }
-            const fg = rgba(getComputedStyle(el).color).slice(0, 3);
+            const color = rgba(getComputedStyle(el).color);
+            const fg = bg.map((v, i) => color[i] * color[3] + v * (1 - color[3]));
             const a = luminance(fg), b = luminance(bg);
             const ratio = (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
             return ratio + .01 >= minimum ? [] : [{selector: el.className, fg, bg, ratio}];
@@ -76,42 +113,87 @@ async def check_contrast(page: Page, selector: str, minimum: float = 4.5) -> Non
 
 
 async def palette_matrix(check: SmokeCheck, page: Page) -> None:
-    accents: dict[str, set[str]] = {"light": set(), "dark": set()}
+    surfaces: dict[str, dict[str, dict[str, str]]] = {"light": {}, "dark": {}}
     for mode in ("light", "dark"):
         for palette in PALETTES:
             await page.goto(check.base_url, wait_until="domcontentloaded")
+            await expect(page.locator(".arctos-event-card").first).to_be_visible()
             await choose(page, palette, mode)
             await preference(page, palette, mode)
             await check.check_layout(page, f"appearance-menu-{palette}-{mode}", WIDTH)
+            panel = await page.locator("#appearance-options").bounding_box()
+            assert panel and panel["y"] >= 0 and panel["y"] + panel["height"] <= 901, (
+                f"Theme panel escapes the phone viewport: {panel}"
+            )
+            await check_contrast(
+                page,
+                ".appearance-panel h2, .appearance-panel legend, .appearance-mode-option, "
+                ".appearance-theme-copy strong, .appearance-theme-copy > span, "
+                ".appearance-additional summary, .appearance-note, .appearance-back",
+            )
             await close_menu(page)
             await check.check_layout(page, f"appearance-home-{palette}-{mode}", WIDTH)
             await check_contrast(
                 page,
-                ".arctos-discovery-hero > p, .arctos-hero-actions .btn-primary, .arctos-event-card .btn, .arctos-card-title a",
+                ".arctos-app, .arctos-event-card, .arctos-discovery-hero > p, "
+                ".arctos-hero-actions .btn-primary, .arctos-event-card .btn, .arctos-card-title a, "
+                ".arctos-meta-list li, .arctos-league-link",
             )
-            accents[mode].add(
-                await page.locator(".arctos-app").evaluate(
-                    "el => getComputedStyle(el).getPropertyValue('--ui-accent').trim()"
-                )
-            )
+            surfaces[mode][palette] = await page.evaluate("""() => {
+                const app = getComputedStyle(document.querySelector('.arctos-app'));
+                const card = getComputedStyle(document.querySelector('.arctos-event-card'));
+                const action = getComputedStyle(document.querySelector('.arctos-hero-actions .btn-primary'));
+                return {page: app.backgroundColor, card: card.backgroundColor, accent: action.backgroundColor,
+                    text: app.color, border: card.borderTopColor};
+            }""")
             check.visited += 1
-    assert all(len(colors) == 4 for colors in accents.values()), f"Palettes did not produce distinct accents: {accents}"
+    # Check rendered surfaces, not merely the selected ID or CSS variable text.
+    # All seven themes intentionally have their own page and card backgrounds.
+    for mode, themes in surfaces.items():
+        for surface in ("page", "card", "accent"):
+            colors = {name: values[surface] for name, values in themes.items()}
+            assert len(set(colors.values())) == len(PALETTES), (
+                f"{mode} themes did not render distinct {surface} colors: {colors}"
+            )
+    print(f"Rendered theme colors: {json.dumps(surfaces, sort_keys=True)}", flush=True)
 
 
 async def keyboard_and_persistence(check: SmokeCheck, page: Page) -> None:
     await page.goto(check.base_url, wait_until="domcontentloaded")
-    await choose(page, "forest", "light")
+    await choose(page, "california", "light")
     await close_menu(page)
-    trigger = page.get_by_role("button", name="Appearance", exact=True)
+    trigger = page.locator("#account-trigger")
+    await expect(trigger).to_have_attribute("aria-label", "More options")
+    # No dedicated theme control remains in the main header.
+    await expect(page.locator("#appearance-trigger")).to_have_count(0)
     await trigger.focus()
     await page.keyboard.press("Enter")
-    forest = page.get_by_role("radio", name="Forest palette", exact=True)
-    await expect(forest).to_be_focused()
+    appearance = page.get_by_role("button", name="Appearance", exact=True)
+    await appearance.focus()
+    await page.keyboard.press("Enter")
+    await expect(page.get_by_role("radio", name="Light mode", exact=True)).to_be_focused()
+    await expect(page.locator("#appearance-options legend").first).to_have_text("Display mode")
     await page.keyboard.press("ArrowRight")
-    await expect(page.get_by_role("radio", name="Ocean palette", exact=True)).to_be_checked()
-    await page.get_by_role("radio", name="Dark mode", exact=True).check()
+    await expect(page.get_by_role("radio", name="Dark mode", exact=True)).to_be_checked()
+    await preference(page, "california", "dark")
+    await page.get_by_role("button", name="Back to menu", exact=True).click()
+    await expect(page.locator("#appearance-options")).to_be_hidden()
+    await expect(page.locator("#appearance-menu-item")).to_be_focused()
+    await page.keyboard.press("Enter")
+    await expect(page.get_by_role("radio", name="Dark mode", exact=True)).to_be_focused()
+    await page.get_by_role("button", name="Close appearance settings", exact=True).click()
+    await closed_menu(page)
+    await open_menu(page)
+    # A genuine outside pointer click should dismiss the panel and restore focus.
+    await page.mouse.click(2, 300)
+    await closed_menu(page)
+    await open_menu(page)
     await close_menu(page)
-    await preference(page, "ocean", "dark")
+    await trigger.click()
+    await page.keyboard.press("Escape")
+    await closed_menu(page)
+    await choose(page, "ocean", "dark")
+    await close_menu(page)
     saved = await page.evaluate("key => JSON.parse(localStorage.getItem(key))", STORAGE_KEY)
     assert saved == {"palette": "ocean", "mode": "dark"}, f"Unexpected stored preference: {saved}"
     await page.reload(wait_until="domcontentloaded")
@@ -119,6 +201,20 @@ async def keyboard_and_persistence(check: SmokeCheck, page: Page) -> None:
     await page.get_by_role("navigation", name="Main navigation").get_by_role("link", name="Teams", exact=True).click()
     await expect(page).to_have_url(check.base_url + "/teams")
     await preference(page, "ocean", "dark")
+
+
+async def retain_registration(check: SmokeCheck, page: Page) -> None:
+    await page.goto(check.base_url + "/register/player", wait_until="domcontentloaded")
+    values = {"username": "demo-unsaved-only", "name": "Keep my unsaved entry", "password": "not-submitted"}
+    for field, value in values.items():
+        await page.locator(f"#{field}").fill(value)
+    await choose(page, "field-chalk", "light")
+    await close_menu(page)
+    await preference(page, "field-chalk", "light")
+    await expect(page).to_have_url(check.base_url + "/register/player")
+    for field, value in values.items():
+        await expect(page.locator(f"#{field}")).to_have_value(value)
+    await check_contrast(page, ".auth-card, .auth-card .form-label, .auth-card .form-control, .auth-card .form-text")
 
 
 async def system_changes(check: SmokeCheck, page: Page) -> None:
@@ -151,9 +247,9 @@ async def cross_tab(check: SmokeCheck, page: Page) -> None:
         await choose(other, "ember", "dark")
         await preference(page, "ember", "dark")
         await other.evaluate("key => localStorage.removeItem(key)", STORAGE_KEY)
-        await preference(page, "forest", "dark")  # System follows page's dark media setting.
+        await preference(page, "california", "dark")  # System follows page's dark media setting.
         await page.emulate_media(color_scheme="light")
-        await preference(page, "forest", "light")
+        await preference(page, "california", "light")
     finally:
         await other.close()
 
@@ -161,41 +257,44 @@ async def cross_tab(check: SmokeCheck, page: Page) -> None:
 async def custom_surfaces(check: SmokeCheck, page: Page) -> None:
     await check.login(page)
     sidecomps = await api_json(page.context, check.base_url, "/_api/demo-open/sidecomps")
-    comp_id = next(comp["id"] for comp in sidecomps if comp["name"] == "Sideline Dueling — Demo")
-    for mode in ("light", "dark"):
-        await page.goto(check.base_url, wait_until="domcontentloaded")
-        await choose(page, "ocean", mode)
-        await close_menu(page)
-        for name, path, ready, contrast in (
-            (
-                "schedule",
-                "/demo-open/schedule?view=field",
-                ".schedule-timeline-event",
-                ".schedule-timeline-event-name, .schedule-timeline-status-tag--corner",
-            ),
-            (
-                "bracket",
-                "/demo-open/bracket",
-                "#bracket-canvas-wrap",
-                ".bracket-canvas-wrap, .bracket-empty-hint, .bracket-match-name, .bracket-text",
-            ),
-            (
-                "scoring",
-                f"/demo-open/sidecomps/{comp_id}/enter-results",
-                ".sc-numpad",
-                ".sc-num-btn, .sc-search-display, .sc-display-name, .sc-meta",
-            ),
-        ):
-            await check.visit(page, Screen(f"appearance-{name}-ocean-{mode}", path, ready), WIDTH)
-            await preference(page, "ocean", mode)
-            if name == "schedule":
-                # Demo matches may be above the current-time scroll position
-                # when the fixture has been running for a while.
-                await page.locator(".schedule-timeline-event").first.scroll_into_view_if_needed()
-                await check.check_layout(page, f"appearance-{name}-ocean-{mode}", WIDTH)
-            await check_contrast(page, contrast)
-        await page.goto(check.base_url, wait_until="domcontentloaded")
-        await expect(page.locator("#event-search")).to_be_visible()
+    # Discover a usable existing competition without depending on its editable name.
+    comp_id = next((comp["id"] for comp in sidecomps if comp["type"] == "DUELING"), None)
+    assert comp_id is not None, "Demo needs an existing dueling side competition for keypad checks"
+    for palette in ("california", "field-chalk", "neutral"):
+        for mode in ("light", "dark"):
+            await page.goto(check.base_url, wait_until="domcontentloaded")
+            await choose(page, palette, mode)
+            await close_menu(page)
+            for name, path, ready, contrast in (
+                (
+                    "schedule",
+                    "/demo-open/schedule?view=field",
+                    ".schedule-timeline-event",
+                    ".schedule-timeline-event-name, .schedule-timeline-status-tag--corner",
+                ),
+                (
+                    "bracket",
+                    "/demo-open/bracket",
+                    "#bracket-canvas-wrap",
+                    ".bracket-canvas-wrap, .bracket-empty-hint, .bracket-match-name, .bracket-text",
+                ),
+                (
+                    "scoring",
+                    f"/demo-open/sidecomps/{comp_id}/enter-results",
+                    ".sc-numpad",
+                    ".sc-num-btn, .sc-search-display, .sc-display-name, .sc-meta",
+                ),
+            ):
+                await check.visit(page, Screen(f"appearance-{name}-{palette}-{mode}", path, ready), WIDTH)
+                await preference(page, palette, mode)
+                if name == "schedule":
+                    # Demo matches may be above the current-time scroll position
+                    # when the fixture has been running for a while.
+                    await page.locator(".schedule-timeline-event").first.scroll_into_view_if_needed()
+                    await check.check_layout(page, f"appearance-{name}-{palette}-{mode}", WIDTH)
+                await check_contrast(page, contrast)
+            await page.goto(check.base_url, wait_until="domcontentloaded")
+            await expect(page.locator("#event-search")).to_be_visible()
 
 
 async def overlay_isolation(check: SmokeCheck, page: Page) -> None:
@@ -208,40 +307,89 @@ async def overlay_isolation(check: SmokeCheck, page: Page) -> None:
             await expect(page.locator(ready)).to_be_visible()
         else:
             await page.wait_for_function("() => typeof window.arctosRenderScoreboard === 'function'")
-        await expect(page.locator(".arctos-app, #appearance-trigger, [data-palette], [data-bs-theme]")).to_have_count(0)
+        await expect(page.locator(".arctos-app, #account-trigger, [data-palette], [data-bs-theme]")).to_have_count(0)
     # Return to the regular shell for shared layout/error checks.
     await page.goto(check.base_url, wait_until="domcontentloaded")
     await expect(page.locator("#event-search")).to_be_visible()
 
 
-async def storage_disabled(check: SmokeCheck, browser) -> None:
-    context = await browser.new_context(
-        viewport={"width": WIDTH, "height": 900},
-        color_scheme="light",
-        has_touch=True,
-        is_mobile=True,
-        reduced_motion="reduce",
-    )
+@asynccontextmanager
+async def isolated_page(check: SmokeCheck, browser, init_script: str | None = None):
+    """Keep anonymous, legacy-preference, and account checks independent."""
+    context = await browser.new_context(**CONTEXT_OPTIONS)
     context.set_default_timeout(TIMEOUT_MS)
-    await context.add_init_script("""Object.defineProperty(window, 'localStorage', {
-        configurable: true, get() { throw new DOMException('Storage blocked by smoke check', 'SecurityError'); }
-    });""")
+    if init_script:
+        await context.add_init_script(init_script)
     await context.route("**/*", check.guard_requests)
     page = await context.new_page()
+    was_authenticated = check.authenticated
     check.authenticated = False
     check.observe(page)
     try:
+        yield page
+    finally:
+        await context.close()
+        check.authenticated = was_authenticated
+
+
+async def legacy_preferences(check: SmokeCheck, browser) -> None:
+    for palette in LEGACY_PALETTES:
+        stored = json.dumps({"palette": palette, "mode": "dark"}, separators=(",", ":"))
+        async with isolated_page(check, browser) as page:
+            # Establish the origin, seed only browser storage, then let the app
+            # read the old value. No init script can mask an accidental rewrite.
+            await page.goto(check.base_url + "/_api/demo-info", wait_until="domcontentloaded")
+            await page.evaluate("([key, value]) => localStorage.setItem(key, value)", [STORAGE_KEY, stored])
+            await page.goto(check.base_url, wait_until="domcontentloaded")
+            await preference(page, palette, "dark")
+            await open_menu(page)
+            radio = page.get_by_role("radio", name=f"{PALETTES[palette]} theme", exact=True)
+            if not await radio.is_visible():
+                await page.locator("summary").filter(has_text="Additional themes").click()
+            await expect(radio).to_be_checked()
+            await expect(page.get_by_role("radio", name="Dark mode", exact=True)).to_be_checked()
+            await close_menu(page)
+            await page.reload(wait_until="domcontentloaded")
+            await preference(page, palette, "dark")
+            actual = await page.evaluate("key => localStorage.getItem(key)", STORAGE_KEY)
+            assert actual == stored, f"Existing {palette} preference changed merely by opening settings: {actual}"
+            await check.check_layout(page, f"appearance-preserved-{palette}", WIDTH)
+
+
+async def account_access(check: SmokeCheck, browser) -> None:
+    for username, account_type in (("demo-player", "player"), ("demo-team", "team")):
+        async with isolated_page(check, browser) as page:
+            await check.login(page, username)
+            await expect(page.locator("#account-trigger")).to_have_attribute(
+                "aria-label",
+                f"Account: {(await api_json(page.context, check.base_url, '/_api/me'))['name']} ({account_type})",
+            )
+            await choose(page, "neutral", "dark")
+            await preference(page, "neutral", "dark")
+            await check.check_layout(page, f"appearance-{account_type}-menu", WIDTH)
+            await close_menu(page)
+            await page.reload(wait_until="domcontentloaded")
+            await preference(page, "neutral", "dark")
+            await open_menu(page)
+            await expect(page.get_by_role("radio", name="Dark mode", exact=True)).to_be_focused()
+            await close_menu(page)
+            await check.check_layout(page, f"appearance-{account_type}-access", WIDTH)
+
+
+async def storage_disabled(check: SmokeCheck, browser) -> None:
+    script = """Object.defineProperty(window, 'localStorage', {
+        configurable: true, get() { throw new DOMException('Storage blocked by smoke check', 'SecurityError'); }
+    });"""
+    async with isolated_page(check, browser, script) as page:
         await page.goto(check.base_url, wait_until="domcontentloaded")
-        await preference(page, "forest", "light")
+        await preference(page, "california", "light")
         await choose(page, "ember", "dark")
         await expect(page.locator(".appearance-note")).to_contain_text("storage is unavailable")
         await preference(page, "ember", "dark")
         await close_menu(page)
         await check.check_layout(page, "appearance-storage-unavailable", WIDTH)
         await page.reload(wait_until="domcontentloaded")
-        await preference(page, "forest", "light")
-    finally:
-        await context.close()
+        await preference(page, "california", "light")
 
 
 async def run(args) -> int:
@@ -258,25 +406,26 @@ async def run(args) -> int:
         if args.browser_executable:
             launch["executable_path"] = str(args.browser_executable)
         browser = await playwright.chromium.launch(**launch)
-        context = await browser.new_context(
-            viewport={"width": WIDTH, "height": 900},
-            color_scheme="light",
-            has_touch=True,
-            is_mobile=True,
-            reduced_motion="reduce",
-        )
+        context = await browser.new_context(**CONTEXT_OPTIONS)
         context.set_default_timeout(TIMEOUT_MS)
         await context.route("**/*", check.guard_requests)
         page = await context.new_page()
         check.observe(page)
         try:
             await page.goto(args.base_url, wait_until="domcontentloaded")
-            await preference(page, "forest", "light")
+            await preference(page, "california", "light")
+            await open_menu(page)
+            await expect(page.get_by_role("radio", name="System mode", exact=True)).to_be_checked()
+            await expect(page.get_by_role("radio", name="California Jugger theme", exact=True)).to_be_checked()
+            await close_menu(page)
             for name, action in (
                 ("palette-mode-matrix", lambda: palette_matrix(check, page)),
-                ("keyboard-and-persistence", lambda: keyboard_and_persistence(check, page)),
+                ("nested-menu-and-persistence", lambda: keyboard_and_persistence(check, page)),
+                ("unsaved-registration", lambda: retain_registration(check, page)),
                 ("system-and-overrides", lambda: system_changes(check, page)),
                 ("cross-tab-and-removal", lambda: cross_tab(check, page)),
+                ("legacy-preferences", lambda: legacy_preferences(check, browser)),
+                ("player-and-team-access", lambda: account_access(check, browser)),
                 ("custom-surfaces", lambda: custom_surfaces(check, page)),
                 ("overlay-isolation", lambda: overlay_isolation(check, page)),
                 ("storage-unavailable", lambda: storage_disabled(check, browser)),

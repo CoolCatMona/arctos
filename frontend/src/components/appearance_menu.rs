@@ -1,6 +1,7 @@
 use crate::appearance::{focus_control, Appearance, ColorMode, Palette};
 use dioxus::prelude::*;
 
+/// The Appearance form shares the account/More menu's anchor and dismiss control.
 #[component]
 pub fn AppearanceMenu(
     mut open: Signal<bool>,
@@ -9,55 +10,60 @@ pub fn AppearanceMenu(
 ) -> Element {
     let preferences = appearance.preferences();
     rsx! {
-        div { class: "appearance-menu",
-            button {
-                id: "appearance-trigger", class: "app-icon-button appearance-trigger",
-                r#type: "button", aria_label: "Appearance", title: "Appearance",
-                aria_expanded: "{open()}", aria_controls: "appearance-options", aria_haspopup: "dialog",
-                onclick: move |_| {
-                    account_open.set(false);
-                    open.toggle();
-                },
-                i { class: "fa-solid fa-palette", aria_hidden: "true" }
-            }
-            if open() {
-                button {
-                    class: "appearance-dismiss", r#type: "button", tabindex: "-1",
-                    aria_label: "Close appearance settings",
-                    onclick: move |_| { open.set(false); focus_control("appearance-trigger"); }
-                }
-                div {
-                    class: "appearance-dropdown", id: "appearance-options", role: "dialog",
-                    aria_labelledby: "appearance-heading",
-                    onmounted: move |_| focus_control(&format!("appearance-palette-{}", preferences.palette.id())),
+        style { {include_str!("appearance_menu.css")} }
+        if open() {
+            div {
+                class: "appearance-panel", id: "appearance-options", role: "dialog",
+                aria_labelledby: "appearance-heading",
+                onmounted: move |_| focus_control(&format!("appearance-mode-{}", preferences.mode.id())),
+                div { class: "appearance-panel-header",
+                    button {
+                        class: "appearance-back", r#type: "button", aria_label: "Back to menu",
+                        onclick: move |_| { open.set(false); account_open.set(true); },
+                        i { class: "fa-solid fa-chevron-left", aria_hidden: "true" }
+                        span { "Menu" }
+                    }
                     h2 { id: "appearance-heading", "Appearance" }
+                    button {
+                        class: "app-icon-button appearance-close", r#type: "button",
+                        aria_label: "Close appearance settings",
+                        onclick: move |_| {
+                            open.set(false);
+                            account_open.set(false);
+                            focus_control("account-trigger");
+                        },
+                        i { class: "fa-solid fa-xmark", aria_hidden: "true" }
+                    }
+                }
+                div { class: "appearance-panel-body",
                     fieldset { class: "appearance-section",
-                        legend { "Color palette" }
-                        div { class: "appearance-options",
-                            for palette in Palette::ALL {
-                                label { class: if preferences.palette == palette { "appearance-option is-selected" } else { "appearance-option" },
+                        legend { "Display mode" }
+                        div { class: "appearance-mode-options",
+                            for mode in ColorMode::ALL {
+                                label { class: if preferences.mode == mode { "appearance-mode-option is-selected" } else { "appearance-mode-option" },
                                     input {
-                                        id: "appearance-palette-{palette.id()}", r#type: "radio", name: "arctos-palette",
-                                        value: palette.id(), aria_label: "{palette.name()} palette", checked: preferences.palette == palette,
-                                        onchange: move |_| appearance.set_palette(palette),
+                                        id: "appearance-mode-{mode.id()}", r#type: "radio",
+                                        name: "arctos-color-mode", value: mode.id(),
+                                        aria_label: "{mode.name()} mode", checked: preferences.mode == mode,
+                                        onchange: move |_| appearance.set_mode(mode),
                                     }
-                                    span { class: "appearance-swatch", "data-palette": palette.id(), aria_hidden: "true" }
-                                    span { "{palette.name()}" }
+                                    span { "{mode.name()}" }
                                 }
                             }
                         }
                     }
                     fieldset { class: "appearance-section",
-                        legend { "Display mode" }
-                        div { class: "appearance-mode-options",
-                            for mode in ColorMode::ALL {
-                                label { class: if preferences.mode == mode { "appearance-option is-selected" } else { "appearance-option" },
-                                    input {
-                                        r#type: "radio", name: "arctos-color-mode", value: mode.id(),
-                                        aria_label: "{mode.name()} mode", checked: preferences.mode == mode,
-                                        onchange: move |_| appearance.set_mode(mode),
-                                    }
-                                    span { "{mode.name()}" }
+                        legend { "Theme" }
+                        div { class: "appearance-theme-options",
+                            for palette in Palette::PRIMARY {
+                                ThemeOption { palette, appearance }
+                            }
+                        }
+                        details { class: "appearance-additional", open: preferences.palette.is_additional(),
+                            summary { "Additional themes" }
+                            div { class: "appearance-theme-options",
+                                for palette in Palette::ADDITIONAL {
+                                    ThemeOption { palette, appearance }
                                 }
                             }
                         }
@@ -67,6 +73,33 @@ pub fn AppearanceMenu(
                         else { "Browser storage is unavailable. Changes apply for this visit. System follows your device’s light or dark setting." }
                     }
                 }
+            }
+        }
+    }
+}
+
+#[component]
+fn ThemeOption(palette: Palette, appearance: Appearance) -> Element {
+    let selected = appearance.preferences().palette == palette;
+    let scheme = appearance.scheme();
+    rsx! {
+        label { class: if selected { "appearance-theme-option is-selected" } else { "appearance-theme-option" },
+            input {
+                id: "appearance-palette-{palette.id()}", r#type: "radio", name: "arctos-palette",
+                value: palette.id(), aria_label: "{palette.name()} theme", checked: selected,
+                onchange: move |_| appearance.set_palette(palette),
+            }
+            span { class: "appearance-theme-copy",
+                strong { "{palette.name()}" }
+                span { "{palette.description()}" }
+            }
+            span {
+                class: "theme-preview", "data-palette": palette.id(), "data-bs-theme": scheme,
+                aria_hidden: "true",
+                span { class: "theme-preview-page" }
+                span { class: "theme-preview-surface" }
+                span { class: "theme-preview-accent" }
+                span { class: "theme-preview-secondary" }
             }
         }
     }

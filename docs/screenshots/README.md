@@ -1,13 +1,16 @@
 # Mobile redesign previews
 
 Captured from the optimized Rust/Dioxus bundle with isolated demo data.
+California Jugger/Light is used unless noted otherwise.
 
 - `home-mobile.png`: 360px viewport, with every primary navigation item visible.
 - `home-desktop.png`: 1280px full page.
 - `event-mobile.png`: 360px full page, including labeled roster entries.
 - `match-mobile.png`: 360px full page, including point controls and fixed match actions.
-- `appearance-mobile.png`: 360px viewport with the Appearance menu open in Plum/Dark.
-- `home-dark-mobile.png`: 360px viewport showing discovery in Plum/Dark.
+- `appearance-mobile.png`: 360px viewport with the Appearance panel open in California Jugger/Light.
+- `home-dark-mobile.png`: 360px viewport showing discovery in California Jugger/Dark.
+- `home-field-chalk-mobile.png`: 360px viewport showing discovery in Field Chalk/Light.
+- `home-neutral-mobile.png`: 360px viewport showing discovery in Neutral Ops/Light.
 
 To reproduce all screens, run the browser verification described in
 [`TESTING.md`](../../TESTING.md#mobile-browser-verification). Demo dates and

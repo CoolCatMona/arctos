@@ -9,6 +9,10 @@ pub const STORAGE_KEY: &str = "arctos.appearance.v1";
 #[serde(rename_all = "lowercase")]
 pub enum Palette {
     #[default]
+    California,
+    #[serde(rename = "field-chalk")]
+    FieldChalk,
+    Neutral,
     Forest,
     Ocean,
     Plum,
@@ -16,10 +20,23 @@ pub enum Palette {
 }
 
 impl Palette {
-    pub const ALL: [Self; 4] = [Self::Forest, Self::Ocean, Self::Plum, Self::Ember];
+    pub const PRIMARY: [Self; 3] = [Self::California, Self::FieldChalk, Self::Neutral];
+    pub const ADDITIONAL: [Self; 4] = [Self::Forest, Self::Ocean, Self::Plum, Self::Ember];
+    pub const ALL: [Self; 7] = [
+        Self::California,
+        Self::FieldChalk,
+        Self::Neutral,
+        Self::Forest,
+        Self::Ocean,
+        Self::Plum,
+        Self::Ember,
+    ];
 
     pub fn id(self) -> &'static str {
         match self {
+            Self::California => "california",
+            Self::FieldChalk => "field-chalk",
+            Self::Neutral => "neutral",
             Self::Forest => "forest",
             Self::Ocean => "ocean",
             Self::Plum => "plum",
@@ -29,11 +46,30 @@ impl Palette {
 
     pub fn name(self) -> &'static str {
         match self {
+            Self::California => "California Jugger",
+            Self::FieldChalk => "Field Chalk",
+            Self::Neutral => "Neutral Ops",
             Self::Forest => "Forest",
             Self::Ocean => "Ocean",
             Self::Plum => "Plum",
             Self::Ember => "Ember",
         }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::California => "Warm sand · poppy · pacific",
+            Self::FieldChalk => "Canvas · tape red · chalk",
+            Self::Neutral => "Mist · copper · graphite",
+            Self::Forest => "Leaf green · soft neutrals",
+            Self::Ocean => "Ocean blue · cool teal",
+            Self::Plum => "Violet · soft lavender",
+            Self::Ember => "Warm orange · earth tones",
+        }
+    }
+
+    pub fn is_additional(self) -> bool {
+        Self::ADDITIONAL.contains(&self)
     }
 
     fn parse(value: &str) -> Option<Self> {
@@ -295,6 +331,13 @@ mod tests {
 
     #[test]
     fn missing_or_malformed_preferences_use_defaults() {
+        assert_eq!(
+            Preferences::default(),
+            Preferences {
+                palette: Palette::California,
+                mode: ColorMode::System
+            }
+        );
         for raw in [
             None,
             Some(""),
@@ -319,7 +362,7 @@ mod tests {
         assert_eq!(
             Preferences::from_storage(Some(r#"{"palette":"old-palette","mode":"dark"}"#)),
             Preferences {
-                palette: Palette::Forest,
+                palette: Palette::California,
                 mode: ColorMode::Dark
             }
         );
@@ -330,6 +373,14 @@ mod tests {
                 mode: ColorMode::System
             }
         );
+        // Keep the public hyphenated ID stable rather than serializing fieldchalk.
+        let field_chalk = Preferences {
+            palette: Palette::FieldChalk,
+            mode: ColorMode::Light,
+        };
+        let raw = serde_json::to_string(&field_chalk).unwrap();
+        assert_eq!(raw, r#"{"palette":"field-chalk","mode":"light"}"#);
+        assert_eq!(Preferences::from_storage(Some(&raw)), field_chalk);
     }
 
     #[test]
