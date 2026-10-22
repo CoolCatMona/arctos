@@ -183,11 +183,16 @@ async def custom_surfaces(check: SmokeCheck, page: Page) -> None:
                 "scoring",
                 f"/demo-open/sidecomps/{comp_id}/enter-results",
                 ".sc-numpad",
-                ".sc-num-btn, .sc-display-name, .sc-meta",
+                ".sc-num-btn, .sc-search-display, .sc-display-name, .sc-meta",
             ),
         ):
             await check.visit(page, Screen(f"appearance-{name}-ocean-{mode}", path, ready), WIDTH)
             await preference(page, "ocean", mode)
+            if name == "schedule":
+                # Demo matches may be above the current-time scroll position
+                # when the fixture has been running for a while.
+                await page.locator(".schedule-timeline-event").first.scroll_into_view_if_needed()
+                await check.check_layout(page, f"appearance-{name}-ocean-{mode}", WIDTH)
             await check_contrast(page, contrast)
         await page.goto(check.base_url, wait_until="domcontentloaded")
         await expect(page.locator("#event-search")).to_be_visible()

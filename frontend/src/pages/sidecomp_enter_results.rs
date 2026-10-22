@@ -134,7 +134,7 @@ pub fn SideCompEnterResults(url: String, comp_id: i32) -> Element {
                 min-height: 2.2rem;
                 color: var(--ui-text);
             }}
-            .sc-search-display.placeholder {{
+            .sc-search-display.is-placeholder {{
                 color: var(--ui-muted);
                 font-weight: 500;
             }}
@@ -309,7 +309,7 @@ pub fn SideCompEnterResults(url: String, comp_id: i32) -> Element {
                     "Back"
                 }
                 div {
-                    class: if query().is_empty() { "sc-search-display placeholder flex-grow-1 text-center" } else { "sc-search-display flex-grow-1 text-center" },
+                    class: if query().is_empty() { "sc-search-display is-placeholder flex-grow-1 text-center" } else { "sc-search-display flex-grow-1 text-center" },
                     if query().is_empty() { "type to search" } else { "{query}" }
                 }
                 button {
