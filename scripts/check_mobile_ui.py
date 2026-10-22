@@ -188,6 +188,14 @@ class SmokeCheck:
         layout = await page.evaluate(LAYOUT_DIAGNOSTICS)
         if layout["documentWidth"] > layout["width"] + 1:
             raise AssertionError(f"document horizontal overflow: {json.dumps(layout)}")
+        if await page.locator(".event-detail-hero").count():
+            banner = await page.locator(".event-detail-hero").evaluate("""el => {
+                const r = el.getBoundingClientRect();
+                return {left: r.left, right: r.right, viewport: document.documentElement.clientWidth};
+            }""")
+            assert abs(banner["left"]) <= 1 and abs(banner["right"] - banner["viewport"]) <= 1, (
+                f"Event banner does not span the viewport: {banner}"
+            )
         if name == "run-match" and width < 576:
             await expect(page.locator("#points-table .winner-option").first).to_be_visible()
             points = await page.locator("#points-table").evaluate("""table => ({
@@ -332,9 +340,12 @@ class SmokeCheck:
 
         await context.route("**/_api/**", fixture)
         try:
-            await page.goto(self.base_url + "/demo-open", wait_until="domcontentloaded")
-            await expect(page.get_by_role("button", name="Schedule not posted", exact=True)).to_be_disabled()
-            await expect(page.locator('.event-actions a[href^="/demo-open/schedule"]')).to_have_count(0)
+            for path in ("/demo-open", "/demo-open/results"):
+                await page.goto(self.base_url + path, wait_until="domcontentloaded")
+                unavailable_tab = page.locator("#event-tab-schedule")
+                await expect(unavailable_tab).to_have_text("Schedule not posted")
+                await expect(unavailable_tab).to_be_disabled()
+                await expect(page.locator('.event-route-tabs a[href^="/demo-open/schedule"]')).to_have_count(0)
             await page.goto(self.base_url + match_path, wait_until="domcontentloaded")
             crumb = page.get_by_role("navigation", name="breadcrumb")
             unavailable = crumb.get_by_text("Schedule not posted", exact=True)
@@ -344,14 +355,26 @@ class SmokeCheck:
             published, allowed = True, True
             for path in ("/demo-open", match_path):
                 await page.goto(self.base_url + path, wait_until="domcontentloaded")
-                await page.get_by_role("link", name="Schedule", exact=True).click()
+                scope = (
+                    page.locator(".event-route-tabs")
+                    if path == "/demo-open"
+                    else page.get_by_role("navigation", name="breadcrumb")
+                )
+                await scope.get_by_role("link", name="Schedule", exact=True).click()
                 await expect(page.locator(".schedule-keyboard-focus")).to_be_visible()
+                await expect(page.locator("#event-tab-schedule")).to_have_attribute("aria-current", "page")
             await self.login(page)
             published = False
             for path in ("/demo-open", match_path):
                 await page.goto(self.base_url + path, wait_until="domcontentloaded")
-                await page.get_by_role("link", name="Preview schedule", exact=True).click()
+                scope = (
+                    page.locator(".event-route-tabs")
+                    if path == "/demo-open"
+                    else page.get_by_role("navigation", name="breadcrumb")
+                )
+                await scope.get_by_role("link", name="Preview schedule", exact=True).click()
                 await expect(page.locator(".schedule-keyboard-focus")).to_be_visible()
+                await expect(page.locator("#event-tab-schedule")).to_have_attribute("aria-current", "page")
             await page.goto(self.base_url + "/demo-open", wait_until="domcontentloaded")
             await page.get_by_role("link", name="Edit Schedule", exact=True).click()
             await expect(page.locator(".schedule-editor-split")).to_be_visible()
@@ -463,9 +486,21 @@ class SmokeCheck:
             })""")
             assert not clipped, f"Profile fields or actions require horizontal scrolling: {clipped}"
 
+    async def profile_event_count(self, page: Page, account_type: str, account_id: str) -> None:
+        path = f"/{account_type}s/{account_id}"
+        profile = await api_json(page.context, self.base_url, "/_api" + path)
+        count = profile["past_event_count"]
+        assert isinstance(count, int) and count >= 0, "Invalid public past-event count"
+        await page.goto(self.base_url + f"/{account_type}s", wait_until="domcontentloaded")
+        card = page.locator(f'.arctos-directory-card[href="{path}"]')
+        await expect(card.locator(".arctos-directory-event-count strong")).to_have_text(str(count))
+        await card.click()
+        await expect(page.locator(".profile-event-stat dt")).to_have_text("Past events")
+        await expect(page.locator(".profile-event-stat dd")).to_have_text(str(count))
+
     async def player_disclosures(self, page: Page) -> None:
         await self.login(page, "demo-player")
-        await page.goto(self.base_url + "/players/demo-player", wait_until="domcontentloaded")
+        await self.profile_event_count(page, "player", "demo-player")
         history = page.locator("#player-tournament-history")
         await expect(history).to_be_visible()
         await expect(history).to_have_js_property("open", False)
@@ -501,7 +536,7 @@ class SmokeCheck:
             assert box and box["height"] >= 44, "Disclosure target is too small"
 
     async def team_disclosures(self, page: Page) -> None:
-        await page.goto(self.base_url + "/teams/demo-team", wait_until="domcontentloaded")
+        await self.profile_event_count(page, "team", "demo-team")
         registrations = page.locator("#team-tournament-registrations")
         await expect(registrations).to_have_js_property("open", True)
         row = registrations.locator("tbody > tr").filter(has=page.locator('a[href="/demo-open"]')).first
@@ -720,7 +755,7 @@ async def run(args: argparse.Namespace) -> int:
                 raise RuntimeError("Refusing to run: backend is missing the scripts.dev_demo demo-only marker.")
         finally:
             await preflight.dispose()
-        launch = {"headless": True}
+        launch = {"headless": True, "args": ["--mute-audio"]}
         if args.browser_executable:
             launch["executable_path"] = str(args.browser_executable)
         browser = await playwright.chromium.launch(**launch)

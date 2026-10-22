@@ -82,7 +82,7 @@ pub use oauth_authorize::OAuthAuthorize;
 pub use manage::Manage;
 pub use manage_footage::ManageFootage;
 pub use match_page::{MatchPage, MatchPageById};
-pub use league_home::LeagueHome;
+pub use league_home::{LeagueHome, LeagueHomeWithTab};
 pub use league_register::LeagueRegister;
 pub use league_results::LeagueResults;
 pub use league_new_tournament::LeagueNewTournament;

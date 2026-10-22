@@ -1,4 +1,5 @@
 use super::TeamSelectionField;
+use super::tournament_home::TournamentHomeContent;
 use crate::Route;
 use crate::api;
 use crate::components::{AssEntry, TeamLabel, TeamLabelStyle, TeamSlot};
@@ -504,6 +505,23 @@ fn apply_scroll_top(scroll_el_id: &str, scroll_top: i32) {
     }
 }
 
+fn focus_schedule_root() {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+            return;
+        };
+        let Ok(Some(element)) = document.query_selector(".schedule-keyboard-focus") else {
+            return;
+        };
+        if let Some(element) = element.dyn_ref::<web_sys::HtmlElement>() {
+            let options = web_sys::FocusOptions::new();
+            options.set_prevent_scroll(true);
+            let _ = element.focus_with_options(&options);
+        }
+    }
+}
+
 /// Scroll the timeline body so the match block's vertical midpoint sits in the
 /// middle of the visible schedule. Returns false when the block is not in the DOM yet.
 fn scroll_match_to_center(scroll_el_id: &str, match_id: &str) -> bool {
@@ -657,12 +675,20 @@ pub(crate) struct MoveCommitPayload {
 #[component]
 pub fn Schedule(url: String, view: String, team: String, field: String) -> Element {
     rsx! {
-        SchedulePage {
-            url,
-            view,
-            team,
-            field,
-            editor: false,
+        TournamentHomeContent {
+            key: "{url}",
+            url: url.clone(),
+            initial_tab: Some("schedule".to_string()),
+            content: Some(rsx! {
+                SchedulePage {
+                    url,
+                    view,
+                    team,
+                    field,
+                    editor: false,
+                    embedded: true,
+                }
+            }),
         }
     }
 }
@@ -684,7 +710,14 @@ pub fn ScheduleEdit(url: String) -> Element {
 }
 
 #[component]
-fn SchedulePage(url: String, view: String, team: String, field: String, editor: bool) -> Element {
+fn SchedulePage(
+    url: String,
+    view: String,
+    team: String,
+    field: String,
+    editor: bool,
+    #[props(default)] embedded: bool,
+) -> Element {
     let url_data = url.clone();
     let mut setup_data = use_resource(move || {
         let u = url_data.clone();
@@ -982,15 +1015,7 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
         if active_modal() == "none" {
             spawn(async move {
                 gloo_timers::future::TimeoutFuture::new(0).await;
-                if let Some(window) = web_sys::window() {
-                    if let Some(doc) = window.document() {
-                        if let Ok(Some(el)) = doc.query_selector(".schedule-keyboard-focus") {
-                            if let Some(html_el) = el.dyn_ref::<web_sys::HtmlElement>() {
-                                let _ = html_el.focus();
-                            }
-                        }
-                    }
-                }
+                focus_schedule_root();
             });
         }
     });
@@ -1138,31 +1163,29 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
                 div {
                     // The editor gets the full viewport width (escapes the layout's
                     // centered max-width container via the full-bleed class).
-                    class: if editor { "container-fluid mt-3 position-relative schedule-keyboard-focus schedule-editor-fullbleed" } else { "container-fluid mt-3 position-relative schedule-keyboard-focus" },
+                    class: if editor { "container-fluid mt-3 position-relative schedule-keyboard-focus schedule-editor-fullbleed" } else if embedded { "mt-3 position-relative schedule-keyboard-focus" } else { "container-fluid mt-3 position-relative schedule-keyboard-focus" },
                     tabindex: 0,
                     onkeydown: handle_keydown,
-                    onmounted: move |ev| {
-                        spawn(async move {
-                            let _ = ev.data().set_focus(true).await;
-                        });
-                    },
+                    onmounted: move |_| focus_schedule_root(),
                     role: "application",
                     aria_label: "Schedule",
-                    div { class: "row mb-3",
-                        div { class: "col",
-                            h1 { "{data.tournament.name}" }
-                            nav { "aria-label": "breadcrumb",
-                                ol { class: "breadcrumb",
-                                    li { class: "breadcrumb-item",
-                                        Link { to: Route::TournamentHome { url: url.clone() }, "{data.tournament.name}" }
-                                    }
-                                    if editor {
+                    if !embedded {
+                        div { class: "row mb-3",
+                            div { class: "col",
+                                h1 { "{data.tournament.name}" }
+                                nav { "aria-label": "breadcrumb",
+                                    ol { class: "breadcrumb",
                                         li { class: "breadcrumb-item",
-                                            Link { to: Route::Schedule { url: url.clone(), view: String::new(), team: String::new(), field: String::new() }, "Schedule" }
+                                            Link { to: Route::TournamentHome { url: url.clone() }, "{data.tournament.name}" }
                                         }
-                                        li { class: "breadcrumb-item active", "Edit" }
-                                    } else {
-                                        li { class: "breadcrumb-item active", "Schedule" }
+                                        if editor {
+                                            li { class: "breadcrumb-item",
+                                                Link { to: Route::Schedule { url: url.clone(), view: String::new(), team: String::new(), field: String::new() }, "Schedule" }
+                                            }
+                                            li { class: "breadcrumb-item active", "Edit" }
+                                        } else {
+                                            li { class: "breadcrumb-item active", "Schedule" }
+                                        }
                                     }
                                 }
                             }
@@ -1959,9 +1982,11 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
                 Some(Err(e)) if e == "Schedule not published" => rsx! {
                     div { class: "card",
                         div { class: "card-body",
-                            h1 { "Schedule" }
+                            if !embedded { h1 { "Schedule" } }
                             p { "The schedule has not been posted yet." }
-                            Link { to: Route::TournamentHome { url: url.clone() }, class: "btn btn-outline-primary", "Back to event" }
+                            if !embedded {
+                                Link { to: Route::TournamentHome { url: url.clone() }, class: "btn btn-outline-primary", "Back to event" }
+                            }
                         }
                     }
                 },

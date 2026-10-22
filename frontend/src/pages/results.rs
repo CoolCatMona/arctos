@@ -1,3 +1,4 @@
+use super::tournament_home::TournamentHomeContent;
 use crate::api;
 use crate::components::{ResultsGamesTable, rows_for_team};
 use crate::Route;
@@ -7,6 +8,18 @@ use std::collections::HashMap;
 
 #[component]
 pub fn Results(url: String) -> Element {
+    rsx! {
+        TournamentHomeContent {
+            key: "{url}",
+            url: url.clone(),
+            initial_tab: Some("results".to_string()),
+            content: Some(rsx! { ResultsContent { url } }),
+        }
+    }
+}
+
+#[component]
+fn ResultsContent(url: String) -> Element {
     let url_for_data = url.clone();
     let mut include_ribbon = use_signal(|| false);
     let data = use_resource(use_reactive(&(url_for_data, include_ribbon), |(u, inc_sig)| {
@@ -23,19 +36,6 @@ pub fn Results(url: String) -> Element {
     let val = data.value();
     rsx! {
         if let Some(Ok(results_data)) = val.read().as_ref() {
-            div { class: "row",
-                div { class: "col-12",
-                    h1 { "{results_data.tournament.name} - Results" }
-                    nav { aria_label: "breadcrumb",
-                        ol { class: "breadcrumb",
-                            li { class: "breadcrumb-item",
-                                Link { to: Route::TournamentHome { url: url.clone() }, "{results_data.tournament.name}" }
-                            }
-                            li { class: "breadcrumb-item active", "Results" }
-                        }
-                    }
-                }
-            }
             div { class: "d-flex align-items-center gap-2 mt-2 mb-2",
                 label { class: "form-check-label d-flex align-items-center gap-1 user-select-none",
                     input {
@@ -176,7 +176,7 @@ pub fn Results(url: String) -> Element {
                                                 onclick: move |ev: Event<MouseData>| { ev.stop_propagation(); },
                                                 button {
                                                     r#type: "button",
-                                                    class: "btn btn-lg p-0 text-secondary",
+                                                    class: "btn btn-lg p-0 text-secondary results-expand-toggle",
                                                     "aria-label": if is_expanded { "Collapse" } else { "Expand" },
                                                     onclick: move |ev: Event<MouseData>| {
                                                         ev.stop_propagation();

@@ -24,7 +24,7 @@ pub use change_password_card::ChangePasswordCard;
 pub use connected_apps_card::ConnectedAppsCard;
 pub use edit_registration_modal::{EditRegistrationContext, EditRegistrationModal};
 pub use event_about::EventAbout;
-pub use event_header::EventHeader;
+pub use event_header::{EventHeader, EventTab, EventTabs};
 pub use team_registration_help_modal::TeamRegistrationHelpModal;
 pub use event_teams_list::EventTeamsList;
 pub use league_penalty_types_table::LeaguePenaltyTypesTable;

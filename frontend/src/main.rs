@@ -49,6 +49,9 @@ enum Route {
     #[route("/leagues/new")]
     NewLeague {},
 
+    #[route("/leagues/:league_url?:tab")]
+    LeagueHomeWithTab { league_url: String, tab: String },
+
     #[route("/leagues/:league_url")]
     LeagueHome { league_url: String },
 

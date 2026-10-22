@@ -12,6 +12,7 @@ use dioxus::prelude::*;
 use wasm_bindgen::{JsCast, JsValue};
 
 use super::legacy_bracket::LegacyBracketDiagrams;
+use super::tournament_home::TournamentHomeContent;
 use crate::display::short_or_truncate;
 use crate::pages::TeamSelectionField;
 use crate::types::{
@@ -1163,8 +1164,10 @@ fn focus_bracket_root() {
             if let Some(doc) = window.document() {
                 if let Some(el) = doc.get_element_by_id("bracket-keyboard-focus") {
                     if let Some(html_el) = el.dyn_ref::<web_sys::HtmlElement>() {
-                        // preventScroll so refocus on window-return doesn't jump the page.
-                        let _ = html_el.focus();
+                        // Keep the event banner and current viewport in place when restoring hotkeys.
+                        let options = web_sys::FocusOptions::new();
+                        options.set_prevent_scroll(true);
+                        let _ = html_el.focus_with_options(&options);
                     }
                 }
             }
@@ -1438,6 +1441,18 @@ fn resolve_label(
 
 #[component]
 pub fn Bracket(url: String) -> Element {
+    rsx! {
+        TournamentHomeContent {
+            key: "{url}",
+            url: url.clone(),
+            initial_tab: Some("bracket".to_string()),
+            content: Some(rsx! { BracketContent { url } }),
+        }
+    }
+}
+
+#[component]
+fn BracketContent(url: String) -> Element {
     let url_for_data = url.clone();
     let mut data = use_resource(move || {
         let u = url_for_data.clone();
@@ -1461,7 +1476,6 @@ pub fn Bracket(url: String) -> Element {
     let mut bracket_published = use_signal(|| false);
     let mut team_options_sig = use_signal(|| Vec::<TeamOption>::new());
     let mut tags_sig = use_signal(|| Vec::<TagSetupData>::new());
-    let mut tournament_name_sig = use_signal(|| String::new());
     let mut is_to_sig = use_signal(|| false);
     let mut interaction = use_signal(Interaction::default);
     // Hold-H hand tool: pointer motion pans without a button (trackpad-friendly).
@@ -1559,7 +1573,6 @@ pub fn Bracket(url: String) -> Element {
             drop(borrow);
             team_options_sig.set(matches_resp.team_options.clone());
             tags_sig.set(matches_resp.tags.clone());
-            tournament_name_sig.set(layout.tournament.name.clone());
             is_to_sig.set(layout.is_to);
             legacy_brackets.set(layout.legacy_brackets.clone());
             bracket_published.set(layout.bracket_published || layout.tournament.bracket_published);
@@ -1712,7 +1725,6 @@ pub fn Bracket(url: String) -> Element {
                 let is_to = is_to_sig();
                 let team_options = team_options_sig();
                 let tags = tags_sig();
-                let tournament_name = tournament_name_sig();
                 let tournament_url = url.clone();
 
                 let matches_snap = local_matches();
@@ -2124,19 +2136,11 @@ pub fn Bracket(url: String) -> Element {
                         onclick: move |_| {
                             focus_bracket_root();
                         },
-                        onmounted: move |ev| {
-                            spawn(async move { let _ = ev.data().set_focus(true).await; });
-                        },
+                        onmounted: move |_| focus_bracket_root(),
 
                         div { class: "row",
                             div { class: "col-12",
-                                h1 { "{tournament_name} - Bracket" }
                                 div { class: "bracket-page-toolbar",
-                                    Link {
-                                        to: Route::TournamentHome { url: tournament_url.clone() },
-                                        class: "btn btn-outline-secondary btn-sm",
-                                        "Back to Tournament"
-                                    }
                                     if is_to {
                                         div { class: "form-check form-switch mb-0 ms-2",
                                             input {
@@ -4209,8 +4213,6 @@ pub fn Bracket(url: String) -> Element {
         } else if let Some(Err(e)) = val.read().as_ref() {
             div { class: "row",
                 div { class: "col-12",
-                    h1 { "Bracket" }
-                    Link { to: Route::TournamentHome { url: url.clone() }, class: "btn btn-outline-secondary mb-3", "Back to Tournament" }
                     p { class: "text-danger", "{e}" }
                 }
             }

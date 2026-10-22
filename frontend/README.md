@@ -64,12 +64,35 @@ Personal registration summaries use icons and outlined badges for pending
 approval, unpaid registrations, and missing or outdated waivers. Keep status
 labels explicit: team approval and recorded payment are independent states.
 
+Player and team profiles and directory cards show a shared “Past events” count.
+The API counts unique published events with confirmed registrations after their
+end date, using the start date when no end is set. League registrations expand
+to eligible rounds without counting the league itself. This is a registration
+history statistic, not verified attendance; upcoming and cancelled
+registrations are excluded.
+
+Event and league detail pages share `EventHeader`, `EventAbout`, and `EventTabs`.
+The banner spans the viewport, with registration actions beside event details.
+Navigation tabs link to information, rosters, schedules, results, brackets,
+league rounds, and side events using real URLs. The selected link uses
+`aria-current="page"`; unpublished schedules remain disabled. Native links
+preserve keyboard access, bookmarks, and browser history
+([W3C link guidance](https://www.w3.org/WAI/ARIA/apg/patterns/link/)).
+
 Use `data-section` on cards containing tables or lists to keep one shared frame
 and compact rows. Use native `details.section-disclosure` for secondary records
 and settings, with a labeled summary and a count where useful. Keep current
 event information and essential actions visible. Collapsing a section keeps its
 form state intact. The home banner can be dismissed and restored from More;
 its visibility is saved separately from appearance preferences.
+
+The Stones page keeps playback controls beside the local stone count. Pause
+retains the count; Reset stops playback and clears it without changing clock
+calibration. The count follows the synchronized 1.5-second beat grid and
+continues past each 100-stone progress block. Sound previews play one clip
+without advancing the count. Built-in audio is cached for the current visit;
+custom MP3s must be shorter than one stone. Manual calibration and sync
+diagnostics remain available below the main controls.
 
 These choices follow [NN/g's progressive disclosure guidance](https://www.nngroup.com/articles/progressive-disclosure/):
 keep frequent tasks visible and reveal secondary details on request. Icon

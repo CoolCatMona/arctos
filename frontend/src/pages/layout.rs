@@ -102,7 +102,7 @@ fn page_title_for_route(route: &Route) -> String {
         Route::LeaguesIndex { .. } => "Leagues".into(),
         Route::CreateEvent { .. } => "Create event".into(),
         Route::NewLeague { .. } => "Create League".into(),
-        Route::LeagueHome { league_url } => league_url.clone(),
+        Route::LeagueHome { league_url } | Route::LeagueHomeWithTab { league_url, .. } => league_url.clone(),
         Route::LeagueRegister { .. } => "Register".into(),
         Route::LeagueResults { .. } => "Results".into(),
         Route::LeagueSettings { .. } => "Settings".into(),
@@ -154,6 +154,9 @@ pub fn Layout() -> Element {
     let route = use_route::<Route>();
     let page_title = format!("{} | Arctos", page_title_for_route(&route));
     let path = route.to_string();
+    let event_page = matches!(route, Route::TournamentHome { .. } | Route::TournamentHomeWithTab { .. }
+        | Route::Schedule { .. } | Route::Results { .. } | Route::Bracket { .. }
+        | Route::LeagueHome { .. } | Route::LeagueHomeWithTab { .. } | Route::LeagueResults { .. });
     let current_user = user
         .read()
         .as_ref()
@@ -367,7 +370,7 @@ pub fn Layout() -> Element {
                     }
                 }
             }
-            main { class: "container-wide app-main", id: "page-content", tabindex: "-1",
+            main { class: if event_page { "app-main event-full-width" } else { "container-wide app-main" }, id: "page-content", tabindex: "-1",
                 if let Some(error) = auth_error() {
                     div { class: "alert alert-danger", role: "alert", "Could not log out. {error}" }
                 }

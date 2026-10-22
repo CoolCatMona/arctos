@@ -243,6 +243,32 @@ theme, including approval, payment, and waiver states. It accepts the same
 `--browser-executable` options. OBS and exact-size render routes retain their
 independent presentation.
 
+Check event sections and profile counts with:
+
+```bash
+uv run python scripts/check_event_ui.py --screenshots /tmp/arctos-events
+```
+
+This checks tournament, league, and league-event tabs, keyboard navigation,
+registration and schedule destinations, roster details, and theme contrast at
+320px and 360px. Direct Schedule, Results, and Bracket views keep the shared
+banner visible; keyboard focus reveals offscreen navigation links without
+scrolling the page. Browser history preserves schedule filters. It compares player/team profile and directory counts with the
+API, including zero and nonzero values supplied through GET-only browser
+fixtures. Desktop views are checked at 1280px.
+
+Check the Stones controls against the same demo:
+
+```bash
+uv run python scripts/check_stones_ui.py --screenshots /tmp/arctos-stones
+```
+
+This exercises Start, Pause, Reset, mute, sound previews, cached sounds while
+offline, custom-file validation, and calibration controls. It observes real
+Web Audio scheduling with Chromium output muted, including cancellation of a
+pending start. It also checks all themes at 320px and 360px. The script accepts
+the same browser and base-URL options as the other checks.
+
 Camera/audio device behavior and external Google/YouTube integrations still
 need real devices and configured credentials. Browser rendering alone cannot
 verify Bluetooth delay, actual recording, or third-party account flows.
