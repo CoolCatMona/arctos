@@ -17,9 +17,6 @@ pub fn LeagueRegistrationButtons(
     use_edit_modal: bool,
     /// Callback to open the Edit Registration modal. Used when use_edit_modal is true.
     on_edit_registration: EventHandler<()>,
-    /// Label for the register button when not registered. Default "Register".
-    #[props(default = String::from("Register"))]
-    register_label: String,
     #[props(default = false)] show_edit_warning: bool,
     /// Per-role toggles; when provided, override the aggregate flag.
     #[props(default = None)]
@@ -76,7 +73,7 @@ pub fn LeagueRegistrationButtons(
                     Link {
                         to: Route::LeagueRegister { league_url: league_url.clone() },
                         class: "btn btn-success",
-                        "{register_label}"
+                        "Register"
                     }
                 } else {
                     button {
@@ -106,7 +103,7 @@ pub fn LeagueRegistrationButtons(
                     Link {
                         to: Route::LeagueRegister { league_url: league_url.clone() },
                         class: "btn btn-success",
-                        "{register_label}"
+                        "Register"
                     }
                 } else {
                     button {
@@ -121,7 +118,7 @@ pub fn LeagueRegistrationButtons(
                     Link {
                         to: Route::LeagueRegister { league_url: league_url.clone() },
                         class: "btn btn-success",
-                        "{register_label}"
+                        "Register"
                     }
                 } else {
                     button {

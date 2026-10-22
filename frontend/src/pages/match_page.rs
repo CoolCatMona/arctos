@@ -1749,14 +1749,20 @@ fn match_page_inner(url: String, match_id: Option<String>, match_name: Option<St
                                 }
                             }
                             li { class: "breadcrumb-item",
-                                Link {
-                                    to: Route::Schedule {
-                                        url: url.clone(),
-                                        view: String::new(),
-                                        team: String::new(),
-                                        field: String::new(),
-                                    },
-                                    "Schedule"
+                                if d.can_view_schedule {
+                                    Link {
+                                        to: Route::Schedule {
+                                            url: url.clone(),
+                                            view: String::new(),
+                                            team: String::new(),
+                                            field: String::new(),
+                                        },
+                                        if d.schedule_published { "Schedule" } else { "Preview schedule" }
+                                    }
+                                } else {
+                                    span { class: "text-muted",
+                                        if d.schedule_published { "Schedule unavailable" } else { "Schedule not posted" }
+                                    }
                                 }
                             }
                             li { class: "breadcrumb-item active", "{d.match_data.name}" }

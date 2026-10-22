@@ -292,6 +292,108 @@ class SmokeCheck:
         await expect(page.locator(".arctos-event-card")).to_have_count(1)
         await expect(page.locator('.arctos-event-card a[href="/demo-summer-cup"]').first).to_be_visible()
 
+    async def registration_and_schedule(self, page: Page) -> None:
+        """Exercise navigation using GET-only draft/unregistered browser fixtures."""
+        context = page.context
+        event = await api_json(context, self.base_url, "/_api/tournaments/demo-league-round-one")
+        league = event["tournament"]["league"]["league_url"]
+        schedule = await api_json(context, self.base_url, "/_api/tournaments/demo-open/schedule-setup")
+        match_id = schedule["matches"][0]["uuid"]
+        competitions = await api_json(context, self.base_url, "/_api/demo-open/sidecomps")
+        comp_id = competitions[0]["id"]
+        league_path = f"/leagues/{league}"
+        match_path = f"/demo-open/match/{match_id}"
+        published, allowed = False, False
+        paths = {
+            "/_api/tournaments/demo-open",
+            "/_api/tournaments/demo-open/match",
+            "/_api/tournaments/demo-league-round-one",
+            f"/_api{league_path}",
+            f"/_api/sidecomps/{comp_id}",
+        }
+
+        async def fixture(route: Route) -> None:
+            parsed = urlsplit(route.request.url)
+            path = parsed.path
+            if route.request.method != "GET" or parsed.netloc != self.origin or path not in paths:
+                await route.fallback()
+                return
+            response = await route.fetch()
+            data = await response.json()
+            if path.startswith("/_api/tournaments/demo-open"):
+                data["can_view_schedule"] = allowed
+                data.get("tournament", data)["schedule_published"] = published
+            data.update(is_current_player_registered=False, is_current_team_registered=False)
+            if path == f"/_api/sidecomps/{comp_id}":
+                data.update(
+                    viewer_can_register=True, viewer_is_registered_in_comp=False, viewer_registration_incomplete=False
+                )
+            await route.fulfill(response=response, json=data)
+
+        await context.route("**/_api/**", fixture)
+        try:
+            await page.goto(self.base_url + "/demo-open", wait_until="domcontentloaded")
+            await expect(page.get_by_role("button", name="Schedule not posted", exact=True)).to_be_disabled()
+            await expect(page.locator('.event-actions a[href^="/demo-open/schedule"]')).to_have_count(0)
+            await page.goto(self.base_url + match_path, wait_until="domcontentloaded")
+            crumb = page.get_by_role("navigation", name="breadcrumb")
+            unavailable = crumb.get_by_text("Schedule not posted", exact=True)
+            await expect(unavailable).to_be_visible()
+            assert await unavailable.evaluate("el => el.tagName === 'SPAN' && !el.hasAttribute('href')")
+            await expect(crumb.locator('a[href^="/demo-open/schedule"]')).to_have_count(0)
+            published, allowed = True, True
+            for path in ("/demo-open", match_path):
+                await page.goto(self.base_url + path, wait_until="domcontentloaded")
+                await page.get_by_role("link", name="Schedule", exact=True).click()
+                await expect(page.locator(".schedule-keyboard-focus")).to_be_visible()
+            await self.login(page)
+            published = False
+            for path in ("/demo-open", match_path):
+                await page.goto(self.base_url + path, wait_until="domcontentloaded")
+                await page.get_by_role("link", name="Preview schedule", exact=True).click()
+                await expect(page.locator(".schedule-keyboard-focus")).to_be_visible()
+            await page.goto(self.base_url + "/demo-open", wait_until="domcontentloaded")
+            await page.get_by_role("link", name="Edit Schedule", exact=True).click()
+            await expect(page.locator(".schedule-editor-split")).to_be_visible()
+            for path, destination in (
+                ("/demo-open", "/demo-open/register"),
+                ("/demo-league-round-one", league_path + "/register"),
+                (league_path, league_path + "/register"),
+            ):
+                await page.goto(self.base_url + path, wait_until="domcontentloaded")
+                register = page.get_by_role("link", name="Register", exact=True)
+                await expect(register).to_have_attribute("href", destination)
+                await register.click()
+                await expect(page).to_have_url(self.base_url + destination)
+                await expect(page.get_by_role("button", name="Register", exact=True)).to_be_visible()
+            # Observe even briefly mounted standalone forms during a direct league-event visit.
+            await page.add_init_script("""window.eventRegistrationFormSeen = false;
+                const direct = location.pathname === '/demo-league-round-one/register';
+                const forms = '#player-register-form, #team-register-form';
+                new MutationObserver(records => {
+                    if (direct && records.some(r => [...r.addedNodes].some(n => n.nodeType === 1 &&
+                        (n.matches(forms) || n.querySelector(forms)))))
+                        window.eventRegistrationFormSeen = true;
+                }).observe(document, {childList: true, subtree: true});""")
+            await page.goto(self.base_url + "/about", wait_until="domcontentloaded")
+            await page.goto(self.base_url + "/demo-league-round-one/register", wait_until="domcontentloaded")
+            await expect(page).to_have_url(self.base_url + league_path + "/register")
+            await expect(page.get_by_role("button", name="Register", exact=True)).to_be_visible()
+            assert not await page.evaluate("window.eventRegistrationFormSeen"), (
+                "Standalone form flashed before redirect"
+            )
+            await page.go_back(wait_until="domcontentloaded")
+            await expect(page).to_have_url(self.base_url + "/about")
+            await page.go_forward(wait_until="domcontentloaded")
+            await expect(page).to_have_url(self.base_url + league_path + "/register")
+            await page.goto(self.base_url + f"/demo-open/sidecomps/{comp_id}", wait_until="domcontentloaded")
+            await page.get_by_role("button", name="Register", exact=True).click()
+            dialog = page.get_by_role("dialog")
+            await expect(dialog.get_by_role("button", name="Register", exact=True)).to_be_visible()
+            await dialog.get_by_role("button", name="Close", exact=True).click()
+        finally:
+            await context.unroute("**/_api/**", fixture)
+
     async def introduction_visibility(self, page: Page) -> None:
         await page.goto(self.base_url, wait_until="domcontentloaded")
         dismiss = page.locator("#arctos-introduction-dismiss")
@@ -585,6 +687,7 @@ def arguments(description: str | None = __doc__) -> argparse.Namespace:
         "--browser-executable", type=Path, help="Installed Chromium executable, e.g. /usr/bin/google-chrome"
     )
     parser.add_argument("--screenshots", type=Path, help="Optional output directory for deterministic full-page PNGs")
+    parser.add_argument("--workflow", choices=("registration-and-schedule",), help="Run only this workflow at 360px")
     args = parser.parse_args()
     parsed = urlsplit(args.base_url)
     if (
@@ -622,7 +725,8 @@ async def run(args: argparse.Namespace) -> int:
             launch["executable_path"] = str(args.browser_executable)
         browser = await playwright.chromium.launch(**launch)
         try:
-            for width in WIDTHS:
+            widths = (360,) if args.workflow else WIDTHS
+            for width in widths:
                 check.authenticated = False
                 context = await browser.new_context(
                     viewport={"width": width, "height": 900}, has_touch=width < 768, is_mobile=width < 768
@@ -632,6 +736,15 @@ async def run(args: argparse.Namespace) -> int:
                 page = await context.new_page()
                 check.observe(page)
                 try:
+                    if args.workflow:
+                        await check.workflow(page, args.workflow, width, lambda: check.registration_and_schedule(page))
+                        continue
+                    if width == 360:
+                        await check.workflow(
+                            page, "registration-and-schedule", width, lambda: check.registration_and_schedule(page)
+                        )
+                        await context.clear_cookies()
+                        check.authenticated = False
                     for screen in PUBLIC_SCREENS:
                         await check.visit(page, screen, width)
                     await check.workflow(page, "event-search-and-dates", width, lambda: check.discover_events(page))
@@ -696,7 +809,7 @@ async def run(args: argparse.Namespace) -> int:
             await browser.close()
     print(
         f"\n{check.visited} screen checks and {check.workflows} workflows passed; "
-        f"{len(check.failures)} failures across widths {WIDTHS}."
+        f"{len(check.failures)} failures across widths {widths}."
     )
     if check.failures:
         print("\n".join(f"- {failure}" for failure in check.failures), file=sys.stderr)

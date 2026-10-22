@@ -34,6 +34,25 @@ pub fn TournamentRegister(url: String) -> Element {
     let mut register_error = use_signal(|| None::<String>);
     let mut busy = use_signal(|| false);
     let login_url = format!("/login?next={}", urlencoding::encode(&format!("/{url}/register")));
+    let league_url = use_memo(move || {
+        val.read()
+            .as_ref()
+            .and_then(|result| result.as_ref().ok())
+            .and_then(|detail| detail.tournament.league.as_ref())
+            .map(|league| league.league_url.clone())
+    });
+    use_effect(move || {
+        if let Some(league_url) = league_url() {
+            navigator.replace(Route::LeagueRegister { league_url });
+        }
+    });
+
+    // League events share registration, fees, and rosters with their league.
+    // Keep the standalone form unmounted while replacing a direct event URL.
+    if league_url().is_some() {
+        return rsx! { p { role: "status", "Loading registration…" } };
+    }
+
     rsx! {
         if let Some(Ok(d)) = val.read().as_ref() {
             div { class: "row",
@@ -169,7 +188,7 @@ pub fn TournamentRegister(url: String) -> Element {
                                             if !d.tournament.player_registration_open {
                                                 p { class: "alert alert-warning", "Player registration is currently closed. Contact an organizer if you need help." }
                                             }
-                                            button { r#type: "submit", class: "btn btn-primary", disabled: busy() || !d.tournament.player_registration_open, if busy() { "Registering…" } else { "Register as Player" } }
+                                            button { r#type: "submit", class: "btn btn-primary", disabled: busy() || !d.tournament.player_registration_open, if busy() { "Registering…" } else { "Register" } }
                                         }
                                     }
                                 }
@@ -238,7 +257,7 @@ pub fn TournamentRegister(url: String) -> Element {
                                             if !d.tournament.team_registration_open {
                                                 p { class: "alert alert-warning", "Team registration is currently closed. Contact an organizer if you need help." }
                                             }
-                                            button { r#type: "submit", class: "btn btn-primary", disabled: busy() || !d.tournament.team_registration_open, if busy() { "Registering…" } else { "Register Team" } }
+                                            button { r#type: "submit", class: "btn btn-primary", disabled: busy() || !d.tournament.team_registration_open, if busy() { "Registering…" } else { "Register" } }
                                         }
                                     }
                                 }

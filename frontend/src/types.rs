@@ -168,6 +168,8 @@ pub struct LeagueResultsResponse {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TournamentDetailResponse {
     pub tournament: Tournament,
+    #[serde(default)]
+    pub can_view_schedule: bool,
     pub teams_with_counts: Vec<TeamWithCount>,
     pub unattached_players: Vec<UnattachedPlayer>,
     pub to_entries: Vec<ToEntry>,
@@ -893,6 +895,10 @@ pub struct MatchDetailResponse {
     pub point_notes_map: std::collections::HashMap<String, Vec<MatchNoteData>>,
     pub is_head_ref: bool,
     #[serde(default)]
+    pub can_view_schedule: bool,
+    #[serde(default)]
+    pub schedule_published: bool,
+    #[serde(default)]
     pub can_start: bool,
     #[serde(default)]
     pub block_reasons: Vec<String>,
@@ -962,6 +968,8 @@ pub struct RefPermissionsSection {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StartMatchResponse {
     pub tournament: Tournament,
+    #[serde(default)]
+    pub can_view_schedule: bool,
     pub match_info: StartMatchInfo,
     pub team1_players: Vec<StartMatchPlayer>,
     pub team2_players: Vec<StartMatchPlayer>,
@@ -1008,6 +1016,8 @@ pub struct StartMatchPostResponse {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FinalizeMatchResponse {
     pub tournament: Tournament,
+    #[serde(default)]
+    pub can_view_schedule: bool,
     pub match_info: FinalizeMatchInfo,
     pub points: Vec<FinalizePoint>,
     pub point_notes_map: std::collections::HashMap<String, Vec<FinalizeNote>>,

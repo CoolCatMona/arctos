@@ -1956,6 +1956,15 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
         None => {
             // Check if it was an error or loading
             match val.read().as_ref() {
+                Some(Err(e)) if e == "Schedule not published" => rsx! {
+                    div { class: "card",
+                        div { class: "card-body",
+                            h1 { "Schedule" }
+                            p { "The schedule has not been posted yet." }
+                            Link { to: Route::TournamentHome { url: url.clone() }, class: "btn btn-outline-primary", "Back to event" }
+                        }
+                    }
+                },
                 Some(Err(e)) => rsx! { div { class: "alert alert-danger", "Error: {e}" } },
                 _ => rsx! { div { class: "text-center mt-5", "Loading..." } },
             }

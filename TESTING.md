@@ -222,6 +222,11 @@ finalization without changing a real match. Phone runs exercise bracket
 dragging, pointer capture, cancellation, and panning against a browser-only
 fixture; no layout is saved to the backend.
 
+Run `uv run python scripts/check_mobile_ui.py --workflow registration-and-schedule`
+for registration destinations, league-event redirects, and schedule availability.
+These checks use browser-only responses to cover unpublished schedules and
+unregistered accounts without changing demo records.
+
 Check appearance preferences separately with the same running demo:
 
 ```bash

@@ -129,7 +129,6 @@ pub fn LeagueHome(league_url: String) -> Element {
                             is_player_registered: d.is_current_player_registered,
                             use_edit_modal: true,
                             on_edit_registration: move |_| show_edit_modal.set(true),
-                            register_label: String::from("Register"),
                             show_edit_warning: waiver_warning
                                 .value()
                                 .read()

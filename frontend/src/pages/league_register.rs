@@ -161,7 +161,7 @@ pub fn LeagueRegister(league_url: String) -> Element {
                                                 if busy() {
                                                     "Registering…"
                                                 } else {
-                                                    "Register Team"
+                                                    "Register"
                                                 }
                                             }
                                         }
@@ -330,7 +330,7 @@ pub fn LeagueRegister(league_url: String) -> Element {
                                                 if busy() {
                                                     "Registering…"
                                                 } else {
-                                                    "Register Player"
+                                                    "Register"
                                                 }
                                             }
                                         }

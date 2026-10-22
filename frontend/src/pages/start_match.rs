@@ -107,14 +107,20 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                                     }
                                 }
                                 li { class: "breadcrumb-item",
-                                    Link {
-                                        to: Route::Schedule {
-                                            url: schedule_url.clone(),
-                                            view: String::new(),
-                                            team: String::new(),
-                                            field: String::new(),
-                                        },
-                                        "Schedule"
+                                    if d.can_view_schedule {
+                                        Link {
+                                            to: Route::Schedule {
+                                                url: schedule_url.clone(),
+                                                view: String::new(),
+                                                team: String::new(),
+                                                field: String::new(),
+                                            },
+                                            if d.tournament.schedule_published { "Schedule" } else { "Preview schedule" }
+                                        }
+                                    } else {
+                                        span { class: "text-muted",
+                                            if d.tournament.schedule_published { "Schedule unavailable" } else { "Schedule not posted" }
+                                        }
                                     }
                                 }
                                 li { class: "breadcrumb-item active", "Start Match" }

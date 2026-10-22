@@ -107,10 +107,19 @@ fn TournamentHomeContent(url: String, initial_tab: Option<String>) -> Element {
 
             div { class: "row mb-3 event-actions",
                 div { class: "col-12 d-flex flex-wrap gap-2",
-                    if d.tournament.schedule_published {
-                        Link { to: Route::Schedule { url: url.clone(), view: String::new(), team: String::new(), field: String::new() }, class: "btn btn-primary", "Schedule" }
+                    if d.can_view_schedule {
+                        Link {
+                            to: Route::Schedule { url: url.clone(), view: String::new(), team: String::new(), field: String::new() },
+                            class: if d.tournament.schedule_published { "btn btn-primary" } else { "btn btn-outline-secondary" },
+                            if d.tournament.schedule_published { "Schedule" } else { "Preview schedule" }
+                        }
                     } else {
-                        Link { to: Route::Schedule { url: url.clone(), view: String::new(), team: String::new(), field: String::new() }, class: "btn btn-outline-secondary", "Schedule (Not Published)" }
+                        button {
+                            r#type: "button",
+                            class: "btn btn-outline-secondary",
+                            disabled: true,
+                            if d.tournament.schedule_published { "Schedule unavailable" } else { "Schedule not posted" }
+                        }
                     }
                     Link { to: Route::Results { url: url.clone() }, class: "btn btn-outline-primary", "Results" }
                     if d.tournament.bracket_published {
@@ -129,7 +138,6 @@ fn TournamentHomeContent(url: String, initial_tab: Option<String>) -> Element {
                             is_player_registered: d.is_current_player_registered,
                             use_edit_modal: true,
                             on_edit_registration: move |_| show_league_edit_modal.set(true),
-                            register_label: String::from("Register (league)"),
                         }
                     } else {
                         if let Some(current_user) = me_res.read().as_ref().and_then(|r| r.as_ref().ok()) {

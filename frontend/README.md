@@ -107,6 +107,12 @@ Note the order - the catch-all `/:url` for tournaments comes after all
 the more specific paths. Adding a new top-level page means adding a
 new route entry and a matching file in `src/pages/`.
 
+League events use the league registration page. Direct event registration URLs
+replace their history entry with that page before rendering a form. Schedule
+links use the backend's `can_view_schedule` flag; authorized viewers see
+“Preview schedule” before publication, while other visitors see an unavailable
+control. Organizer schedule editing remains separate.
+
 ## Talking to the backend
 
 [`src/api.rs`](src/api.rs) wraps `reqwest` with credentials and base

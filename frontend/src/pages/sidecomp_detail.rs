@@ -84,7 +84,7 @@ pub fn SideCompDetail(url: String, comp_id: i32) -> Element {
                                     button {
                                         class: "btn btn-success",
                                         onclick: move |_| show_register_modal.set(true),
-                                        "Register me"
+                                        "Register"
                                     }
                                 }
                                 if viewer_registration_incomplete {
