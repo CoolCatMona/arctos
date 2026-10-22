@@ -1,6 +1,6 @@
 /* Arctos field-day design system. Scoped away from OBS/offline overlays.
    Bootstrap supplies the existing layout utilities; these tokens style every
-   route, including organizer tools not present in the design reference. */
+   route, including organizer tools. */
 .arctos-app {
   --field-green: #16a34a;
   --turf-teal: #0d9488;

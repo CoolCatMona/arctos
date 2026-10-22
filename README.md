@@ -96,8 +96,7 @@ Top-level files:
 
 ## Running the app locally
 
-The frontend is Rust/Dioxus; the design reference does not introduce a Node,
-TypeScript, or Tailwind dependency. Python packages are locked in `uv.lock` and
+The frontend uses Rust and Dioxus. Python packages are locked in `uv.lock` and
 Rust packages in `frontend/Cargo.lock`. Bootstrap 5.3.3 and Font Awesome 6.0.0
 are bundled locally with their licenses, so styling does not require a CDN.
 
