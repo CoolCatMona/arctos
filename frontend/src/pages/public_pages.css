@@ -181,12 +181,12 @@
 }
 
 /* Public registration counts share a compact treatment on profiles and directories. */
-.arctos-app .profile-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.arctos-app .profile-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; margin-bottom: 1rem; }
 .arctos-app .profile-heading h1 { min-width: 0; margin: 0; overflow-wrap: anywhere; }
-.arctos-app .profile-event-stat { display: flex; flex-direction: column; flex: 0 0 auto; align-items: center; min-width: 5.25rem; margin: 0; }
-.arctos-app .profile-event-stat dt { order: 1; color: var(--ui-muted); font-size: .8125rem; font-weight: 500; }
-.arctos-app .profile-event-stat dd { margin: 0; color: var(--ui-link); font-size: clamp(2rem, 5vw, 2.75rem); font-weight: 750; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.arctos-app .profile-event-stat { display: inline-flex; flex: 0 0 auto; align-items: baseline; gap: .35rem; min-width: 0; margin: 0; font-size: .875rem; line-height: 1.5; }
+.arctos-app .profile-event-stat dt { color: var(--ui-muted); font-size: inherit; font-weight: 400; }
+.arctos-app .profile-event-stat dd { margin: 0; color: var(--ui-text); font-size: inherit; font-weight: 500; line-height: inherit; font-variant-numeric: tabular-nums; }
 .arctos-app .arctos-directory-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; margin-top: auto; padding-top: 1rem; }
-.arctos-app .arctos-directory-event-count { display: flex; align-items: baseline; gap: .4rem; color: var(--ui-muted); font-size: .8125rem; }
-.arctos-app .arctos-directory-event-count strong { color: var(--ui-link); font-size: 1.5rem; font-weight: 750; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.arctos-app .arctos-directory-event-count { display: inline-flex; align-items: baseline; gap: .35rem; color: var(--ui-muted); font-size: .875rem; line-height: 1.5; }
+.arctos-app .arctos-directory-event-count strong { color: var(--ui-text); font-size: inherit; font-weight: 500; line-height: inherit; font-variant-numeric: tabular-nums; }
 .arctos-app .arctos-directory-footer .arctos-directory-action { gap: .65rem; margin: 0; padding: 0; min-height: 44px; }
