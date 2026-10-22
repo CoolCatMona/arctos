@@ -1073,6 +1073,8 @@ pub struct PlayerListItem {
     pub name: String,
     pub profile_photo: Option<String>,
     pub location: Option<String>,
+    #[serde(default)]
+    pub past_event_count: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1105,6 +1107,8 @@ pub struct PlayerInjury {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PlayerProfileResponse {
     pub player: PlayerProfileData,
+    #[serde(default)]
+    pub past_event_count: u32,
     pub registrations: Vec<PlayerRegItem>,
     #[serde(default)]
     pub injuries: Vec<PlayerInjury>,
@@ -1160,6 +1164,8 @@ pub struct TeamListItem {
     pub name: String,
     pub profile_photo: Option<String>,
     pub location: Option<String>,
+    #[serde(default)]
+    pub past_event_count: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1181,6 +1187,8 @@ pub struct TeamProfileData {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TeamProfileResponse {
     pub team: TeamProfileData,
+    #[serde(default)]
+    pub past_event_count: u32,
     pub registrations: Vec<TeamRegItem>,
     #[serde(default)]
     pub team_notes: Vec<TeamNoteItem>,

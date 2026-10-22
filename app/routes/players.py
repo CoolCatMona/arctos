@@ -21,6 +21,7 @@ from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
 from app.serializers.registration_serializer import player_reg_waiver_api
+from app.services.profile_stats_service import past_event_counts
 from app.utils.datetime_helpers import dt_iso
 from app.utils.helpers import can_head_ref_match, get_registrable_config
 from app.utils.profile_photo_helpers import (
@@ -68,6 +69,7 @@ def players_list():
     total = q.count()
     total_pages = (total + per_page - 1) // per_page
     players = q.order_by(Player.name.asc()).offset((page - 1) * per_page).limit(per_page).all()
+    event_counts = past_event_counts("player", (player.id for player in players))
     return jsonify(
         {
             "players": [
@@ -76,6 +78,7 @@ def players_list():
                     "name": p.name,
                     "profile_photo": p.profile_photo,
                     "location": p.location,
+                    "past_event_count": event_counts[p.id],
                 }
                 for p in players
             ],
@@ -275,6 +278,7 @@ def player_profile(player_id):
                 "bio": player.bio,
             },
             "registrations": registration_rows,
+            "past_event_count": past_event_counts("player", [player_id])[player_id],
             "injuries": [
                 {
                     "id": inj.id,

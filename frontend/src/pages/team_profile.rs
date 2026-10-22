@@ -226,7 +226,13 @@ pub fn TeamProfile(id: Signal<String>) -> Element {
         if let Some(Ok(d)) = val.read().as_ref() {
             div { class: "row",
                 div { class: "col-12",
-                    h1 { "{d.team.name}" }
+                    header { class: "profile-heading",
+                        h1 { "{d.team.name}" }
+                        dl { class: "profile-event-stat", title: "Confirmed past registrations",
+                            dt { "Past events" }
+                            dd { "{d.past_event_count}" }
+                        }
+                    }
                     nav { aria_label: "breadcrumb",
                         ol { class: "breadcrumb",
                             li { class: "breadcrumb-item", Link { to: Route::TeamsList {}, "Teams" } }

@@ -53,7 +53,13 @@ pub fn TeamsList() -> Element {
                             if let Some(location) = team.location.as_ref().filter(|location| !location.trim().is_empty()) {
                                 p { class: "arctos-directory-location", i { class: "fas fa-map-marker-alt", aria_hidden: "true" } "{location}" }
                             }
-                            span { class: "arctos-directory-action", "View team" i { class: "fas fa-arrow-right", aria_hidden: "true" } }
+                            div { class: "arctos-directory-footer",
+                                span { class: "arctos-directory-event-count", title: "Confirmed past registrations",
+                                    strong { "{team.past_event_count}" }
+                                    span { "Past events" }
+                                }
+                                span { class: "arctos-directory-action", "View team" i { class: "fas fa-arrow-right", aria_hidden: "true" } }
+                            }
                         }
                     }
                 }

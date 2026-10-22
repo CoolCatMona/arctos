@@ -18,6 +18,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import and_, or_
 
 from app.domain.enums import RegistrationStatus
+from app.services.profile_stats_service import past_event_counts
 from app.utils.datetime_helpers import dt_iso
 from app.utils.helpers import can_head_ref_match
 from app.utils.profile_photo_helpers import (
@@ -48,6 +49,7 @@ def teams_list():
         teams = Team.query.filter(Team.name.contains(search) | Team.id.contains(search)).all()
     else:
         teams = Team.query.all()
+    event_counts = past_event_counts("team", (team.id for team in teams))
     return jsonify(
         {
             "teams": [
@@ -56,6 +58,7 @@ def teams_list():
                     "name": t.name,
                     "profile_photo": t.profile_photo,
                     "location": t.location,
+                    "past_event_count": event_counts[t.id],
                 }
                 for t in teams
             ]
@@ -260,6 +263,7 @@ def team_profile(team_id):
                 "website": team.website,
                 "about": team.about,
             },
+            "past_event_count": past_event_counts("team", [team_id])[team_id],
             "registrations": [
                 {
                     "event": r.event or (f"league:{r.league_id}" if r.league_id else ""),
