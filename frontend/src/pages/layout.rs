@@ -60,7 +60,7 @@ fn focus_restored_home_banner() {
 /// Returns a short page name for the tab title: "Page Name | Arctos".
 fn page_title_for_route(route: &Route) -> String {
     match route {
-        Route::Index { .. } => "Home".into(),
+        Route::Index { .. } => "Events".into(),
         Route::NotFound { .. } => "Page not found".into(),
         Route::Login { .. } => "Login".into(),
         Route::Register { .. } => "Register".into(),
@@ -221,17 +221,17 @@ pub fn Layout() -> Element {
             a { class: "skip-link", href: "#page-content", "Skip to content" }
             header { class: "app-header",
                 div { class: "app-header-inner",
-                    Link { to: Route::Index {}, class: "app-brand", aria_label: "Arctos home",
+                    Link { to: Route::Index {}, class: "app-brand", aria_label: "Arctos events",
                         span { class: "brand-mark", aria_hidden: "true", i { class: "fa-solid fa-trophy" } }
                         span { "Arctos" }
                     }
                     nav { class: "app-nav", aria_label: "Main navigation",
                         for (to, label, icon, active) in [
-                            (Route::Index {}, "Home", "fa-house", path == "/"),
+                            (Route::Index {}, "Events", "fa-calendar-days", path == "/"),
+                            (Route::LeaguesIndex {}, "Leagues", "fa-trophy", path.starts_with("/leagues")),
                             (Route::TeamsList {}, "Teams", "fa-users", path.starts_with("/teams")),
                             (Route::PlayersList {}, "Players", "fa-user-group", path.starts_with("/players")),
                             (Route::Stones {}, "Stones", "fa-stopwatch", path == "/stones"),
-                            (Route::LeaguesIndex {}, "Leagues", "fa-trophy", path.starts_with("/leagues")),
                         ] {
                             Link {
                                 to,
@@ -243,10 +243,6 @@ pub fn Layout() -> Element {
                         }
                     }
                     div { class: "app-header-actions",
-                        Link { to: Route::CreateEvent {}, class: "btn btn-primary app-create", aria_label: "Create event",
-                            i { class: "fa-solid fa-circle-plus", aria_hidden: "true" }
-                            span { "Create event" }
-                        }
                         if let Some(u) = current_user.as_ref() {
                             div { class: "account-menu",
                                 button {
@@ -340,14 +336,11 @@ pub fn Layout() -> Element {
                             if utility_open() {
                                 div {
                                     class: "account-dropdown utility-dropdown", id: "utility-options", tabindex: "-1",
-                                    onmounted: move |_| focus_control("appearance-menu-item"),
                                     button {
-                                        id: "appearance-menu-item", r#type: "button", class: "dropdown-item utility-menu-row",
+                                        id: "appearance-menu-item", r#type: "button", class: "dropdown-item",
                                         aria_haspopup: "dialog", aria_controls: "appearance-options",
                                         onclick: move |_| { utility_open.set(false); appearance_open.set(true); },
-                                        i { class: "fa-solid fa-palette", aria_hidden: "true" }
-                                        span { "Appearance" }
-                                        i { class: "fa-solid fa-chevron-right menu-chevron", aria_hidden: "true" }
+                                        "Appearance"
                                     }
                                     Link { to: Route::Docs {}, class: "dropdown-item", "Help & documentation" }
                                     Link { to: Route::About {}, class: "dropdown-item", "About Arctos" }

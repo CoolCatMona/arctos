@@ -136,14 +136,14 @@ async def palette_matrix(check: SmokeCheck, page: Page) -> None:
             await check_contrast(
                 page,
                 ".arctos-app, .arctos-event-card, .arctos-introduction > p, "
-                ".arctos-hero-actions .btn-primary, .arctos-event-card .btn, .arctos-card-title a, "
+                "#organize-trigger, .arctos-segment.is-active, .arctos-event-card .btn, .arctos-card-title a, "
                 ".arctos-meta-list li, .arctos-league-link",
             )
             surfaces[mode][palette] = await page.evaluate("""() => {
                 const app = getComputedStyle(document.querySelector('.arctos-app'));
                 const card = getComputedStyle(document.querySelector('.arctos-event-card'));
-                const action = getComputedStyle(document.querySelector('.arctos-hero-actions .btn-primary'));
-                return {page: app.backgroundColor, card: card.backgroundColor, accent: action.backgroundColor,
+                const filter = getComputedStyle(document.querySelector('.arctos-segment.is-active'));
+                return {page: app.backgroundColor, card: card.backgroundColor, accent: filter.color,
                     text: app.color, border: card.borderTopColor};
             }""")
             check.visited += 1
@@ -166,10 +166,17 @@ async def keyboard_and_persistence(check: SmokeCheck, page: Page) -> None:
     await expect(trigger).to_have_attribute("aria-label", "More options")
     # No dedicated theme control remains in the main header.
     await expect(page.locator("#appearance-trigger")).to_have_count(0)
+    await trigger.click()
+    appearance = page.get_by_role("button", name="Appearance", exact=True)
+    await expect(trigger).to_be_focused()
+    await expect(appearance.locator("i, svg, img")).to_have_count(0)
+    assert not await appearance.evaluate("el => el.matches(':focus, :focus-visible')")
+    await page.keyboard.press("Escape")
     await trigger.focus()
     await page.keyboard.press("Enter")
-    appearance = page.get_by_role("button", name="Appearance", exact=True)
-    await appearance.focus()
+    await expect(trigger).to_be_focused()
+    await page.keyboard.press("Tab")
+    await expect(appearance).to_be_focused()
     await page.keyboard.press("Enter")
     await expect(page.get_by_role("radio", name="Light mode", exact=True)).to_be_focused()
     await expect(page.locator("#appearance-options legend").first).to_have_text("Display mode")
@@ -178,7 +185,9 @@ async def keyboard_and_persistence(check: SmokeCheck, page: Page) -> None:
     await preference(page, "california", "dark")
     await page.get_by_role("button", name="Back to menu", exact=True).click()
     await expect(page.locator("#appearance-options")).to_be_hidden()
-    await expect(page.locator("#appearance-menu-item")).to_be_focused()
+    await expect(trigger).to_be_focused()
+    await page.keyboard.press("Tab")
+    await expect(appearance).to_be_focused()
     await page.keyboard.press("Enter")
     await expect(page.get_by_role("radio", name="Dark mode", exact=True)).to_be_focused()
     await page.get_by_role("button", name="Close appearance settings", exact=True).click()

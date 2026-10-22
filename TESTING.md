@@ -227,6 +227,13 @@ for registration destinations, league-event redirects, and schedule availability
 These checks use browser-only responses to cover unpublished schedules and
 unregistered accounts without changing demo records.
 
+Run `uv run python scripts/check_mobile_ui.py --workflow discovery-controls`
+for Events/Leagues navigation, narrow-screen discovery toolbars, contextual
+Organize menus, and keyboard dismissal. League fixtures cover Active/Past date
+boundaries, counts, and search. Creation checks verify guest login destinations,
+retained input after errors, and successful navigation to draft Settings.
+Creation responses are intercepted in the browser; no draft is saved.
+
 Check appearance preferences separately with the same running demo:
 
 ```bash

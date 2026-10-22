@@ -1,6 +1,4 @@
 /* More contains the same utility actions for guests and signed-in accounts. */
-.arctos-app .utility-menu-row { display: flex; align-items: center; gap: 10px; }
-.arctos-app .utility-menu-row .menu-chevron { margin-left: auto; font-size: .75rem; }
 .arctos-app .appearance-panel { position: absolute; z-index: 2; top: calc(100% + 12px); right: 0; width: min(360px, calc(100vw - 32px)); max-height: calc(100dvh - 100px); overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--ui-border); border-radius: 12px; background: var(--ui-surface); color: var(--ui-text); box-shadow: 0 12px 40px var(--ui-shadow-strong); }
 .arctos-app .appearance-panel-header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid var(--ui-border); background: var(--ui-surface); }
 .arctos-app .appearance-panel-header h2 { flex: 1; min-width: 0; margin: 0; font-size: 1rem; text-align: center; }

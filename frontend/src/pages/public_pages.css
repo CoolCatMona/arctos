@@ -6,11 +6,20 @@
 .arctos-app .arctos-introduction > p { color: var(--ui-muted); max-width: 650px; margin: 0 auto 1rem; line-height: 1.6; }
 .arctos-app .arctos-introduction[hidden] { display: none; }
 .arctos-app .arctos-brand-mark { width: 3.25rem; height: 3.25rem; display: inline-flex; align-items: center; justify-content: center; border-radius: .9rem; color: var(--ui-gradient-contrast); background: linear-gradient(135deg, var(--ui-gradient-start), var(--ui-gradient-end)); font-size: 1.35rem; flex-shrink: 0; }
-.arctos-app .arctos-hero-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: .75rem; }
-.arctos-app .arctos-hero-actions .btn, .arctos-app .arctos-card-footer .btn, .arctos-app .arctos-choice-card .btn { display: inline-flex; align-items: center; justify-content: center; gap: .65rem; min-height: 44px; }
+.arctos-app .arctos-card-footer .btn, .arctos-app .arctos-choice-card .btn { display: inline-flex; align-items: center; justify-content: center; gap: .65rem; min-height: 44px; }
 .arctos-app .arctos-discovery-toolbar { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+.arctos-app .arctos-discovery-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; min-width: 0; }
+.arctos-app .organize-menu { position: relative; flex: 0 0 auto; margin-left: auto; }
+.arctos-app .organize-menu.is-open { z-index: 1040; }
+.arctos-app .organize-trigger { position: relative; z-index: 3; display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 44px; padding: .6rem .5rem; border: 1px solid transparent; border-radius: .6rem; background: transparent; color: var(--ui-muted); font-size: .875rem; font-weight: 500; white-space: nowrap; }
+.arctos-app .organize-trigger > i { font-size: .65rem; }
+.arctos-app .organize-trigger:hover, .arctos-app .organize-trigger[aria-expanded=true] { color: var(--ui-text); background: var(--ui-surface-hover); }
+.arctos-app .organize-dismiss { position: fixed; inset: 0; z-index: 1; border: 0; padding: 0; background: transparent; cursor: default; }
+.arctos-app .organize-dropdown { position: absolute; z-index: 2; top: calc(100% + 8px); right: 0; width: min(290px, calc(100vw - 32px)); padding: .5rem; border: 1px solid var(--ui-border); border-radius: .75rem; background: var(--ui-surface); box-shadow: 0 8px 24px var(--ui-shadow-strong); }
+.arctos-app .organize-dropdown .dropdown-item { display: flex; flex-direction: column; justify-content: center; gap: .2rem; min-height: 52px; white-space: normal; }
+.arctos-app .organize-dropdown small { color: var(--ui-muted); font-size: .8125rem; font-weight: 400; }
 .arctos-app .arctos-segmented { display: inline-flex; padding: 4px; background: var(--ui-surface-muted); border: 1px solid var(--ui-border); border-radius: .8rem; gap: 4px; }
-.arctos-app .arctos-segment { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; border: 0; background: transparent; color: var(--ui-muted); border-radius: .6rem; min-height: 44px; padding: .6rem 1rem; font-size: .9rem; font-weight: 600; }
+.arctos-app .arctos-segment { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; border: 0; background: transparent; color: var(--ui-muted); border-radius: .6rem; min-height: 44px; padding: .6rem 1rem; font-size: .9rem; font-weight: 600; white-space: nowrap; }
 .arctos-app .arctos-segment.is-active { background: var(--ui-surface); color: var(--ui-accent-text); box-shadow: 0 1px 4px var(--ui-shadow); }
 .arctos-app .arctos-count { border-radius: 1rem; background: var(--ui-surface-hover); padding: .08rem .45rem; font-size: .75rem; }
 .arctos-app .arctos-event-search { position: relative; flex: 0 1 350px; }
@@ -101,8 +110,12 @@
     .arctos-app .arctos-card-grid, .arctos-app .arctos-choice-grid { grid-template-columns: minmax(0, 1fr); }
     .arctos-app .arctos-introduction > p { font-size: .95rem; }
     .arctos-app .arctos-discovery-toolbar { align-items: stretch; gap: .85rem; }
-    .arctos-app .arctos-segmented, .arctos-app .arctos-event-search { width: 100%; flex-basis: 100%; }
-    .arctos-app .arctos-segment { flex: 1; padding-left: .5rem; padding-right: .5rem; }
+    .arctos-app .arctos-discovery-actions, .arctos-app .arctos-event-search { width: 100%; flex-basis: 100%; }
+    .arctos-app .arctos-discovery-actions { gap: .5rem; }
+    .arctos-app .arctos-discovery-actions .arctos-segmented { flex: 1 1 auto; }
+    .arctos-app .arctos-segment { flex: 1; gap: .35rem; padding-inline: .375rem; font-size: .8125rem; }
+    .arctos-app .organize-trigger { padding-inline: .4rem; font-size: .8125rem; }
+    .arctos-app .arctos-count { padding-inline: .3rem; }
     .arctos-app .arctos-card-grid { gap: 1rem; }
     .arctos-app .arctos-directory-card, .arctos-app .arctos-choice-card { padding: 1.25rem; }
     .arctos-app .arctos-event-card .card-body { padding: 1.25rem; }

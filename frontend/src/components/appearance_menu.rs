@@ -19,7 +19,11 @@ pub fn AppearanceMenu(
                 div { class: "appearance-panel-header",
                     button {
                         class: "appearance-back", r#type: "button", aria_label: "Back to menu",
-                        onclick: move |_| { open.set(false); utility_open.set(true); },
+                        onclick: move |_| {
+                            open.set(false);
+                            utility_open.set(true);
+                            focus_control("utility-trigger");
+                        },
                         i { class: "fa-solid fa-chevron-left", aria_hidden: "true" }
                         span { "Menu" }
                     }

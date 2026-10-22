@@ -44,13 +44,13 @@ pub fn NewLeague() -> Element {
                 div { class: "card",
                     div { class: "card-header",
                         h1 { class: "mb-2", "Create a league" }
-                        p { class: "text-muted mb-0", "Group events under one season, with shared registration and rosters." }
+                        p { class: "text-muted mb-0", "Start a private draft for a season of events, with shared registration and rosters." }
                     }
                     div { class: "card-body",
                         if let Some(ref err) = error() {
                             div { class: "alert alert-danger mb-3", role: "alert", "{err}" }
                         }
-                        p { class: "form-text mb-4", "Create a league for each season. You can add events and configure fees, waivers, and organizers next." }
+                        p { class: "form-text mb-4", "Next, you’ll go to Settings to set registration, fees, and waivers. Your league stays private until you publish it." }
                         form {
                             onsubmit: move |ev| {
                                 ev.prevent_default();
@@ -72,7 +72,7 @@ pub fn NewLeague() -> Element {
                                     match api::create_league(&league_name, &league_url).await {
                                         Ok(res) if res.success => {
                                             if let Some(lu) = res.league_url {
-                                                nav.push(Route::LeagueHome { league_url: lu });
+                                                nav.push(Route::LeagueSettings { league_url: lu });
                                             } else {
                                                 error.set(Some("League created but no URL returned.".to_string()));
                                             }

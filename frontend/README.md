@@ -51,6 +51,19 @@ use Field; removed or unknown themes fall back to California Jugger without
 changing the saved display mode. Preferences apply across routes and browser
 tabs. When storage is blocked, changes still work for the current visit.
 
+Events and Leagues sit beside each other in the primary navigation. Their
+date filters lead the discovery toolbar; a quieter Organize disclosure offers
+creation for the current page only. Any signed-in account can create a private
+draft, then continue directly to its Settings page. Organizers can find their
+unpublished leagues in the directory; other visitors see only public leagues.
+League date ranges and event counts use published rounds. A league moves to
+Past after its last round's final day; leagues without dated rounds stay Active.
+
+More and Organize keep focus on their trigger when opened. Tab reaches their
+native links, and Escape closes the disclosure and returns focus. Appearance
+is an unselected text entry in More, with no icon. These controls follow the
+[W3C disclosure navigation pattern](https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/examples/disclosure-navigation-hybrid/).
+
 `src/theme.css` styles the shared shell and existing Bootstrap components on
 all routes. `src/pages/public_pages.css` contains event/discovery layouts;
 `src/pages/operator.css` contains match and stones refinements. Colors, focus,

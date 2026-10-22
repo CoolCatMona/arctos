@@ -791,8 +791,6 @@
   .arctos-app .container-wide { padding-inline: max(16px, env(safe-area-inset-left)); }
   .arctos-app .app-main { padding-block: 24px 36px; }
   .arctos-app .app-header-inner { padding-inline: max(16px, env(safe-area-inset-left)); }
-  .arctos-app .app-create span { display: none; }
-  .arctos-app .app-create { width: 44px; min-width: 44px; flex-shrink: 0; padding-inline: 0; }
   .arctos-app .app-nav-link { gap: 5px; padding-inline: 8px; font-size: .78rem; }
   .arctos-app .card-body { padding: 20px; }
   .arctos-app .card-header, .arctos-app .card-footer { padding: 16px 20px; }

@@ -142,8 +142,38 @@ pub struct LeagueInfo {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LeaguesListResponse {
     pub leagues: Vec<LeagueInfo>,
+    #[serde(default)]
     pub team_counts: std::collections::HashMap<String, u32>,
+    #[serde(default)]
     pub user_reg_status: std::collections::HashMap<String, UserRegStatus>,
+    #[serde(default)]
+    pub event_dates: std::collections::HashMap<String, LeagueEventDates>,
+}
+
+/// The date range and count of a league's published events.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct LeagueEventDates {
+    pub start_date: Option<String>,
+    pub end_date: Option<String>,
+    #[serde(default)]
+    pub event_count: u32,
+}
+
+#[cfg(test)]
+mod league_list_response_tests {
+    use super::LeaguesListResponse;
+
+    #[test]
+    fn organized_leagues_can_omit_directory_metadata() {
+        let response: LeaguesListResponse = serde_json::from_value(serde_json::json!({
+            "leagues": [{"league_url": "season", "name": "Season"}]
+        }))
+        .unwrap();
+        assert_eq!(response.leagues[0].league_url, "season");
+        assert!(response.team_counts.is_empty());
+        assert!(response.user_reg_status.is_empty());
+        assert!(response.event_dates.is_empty());
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

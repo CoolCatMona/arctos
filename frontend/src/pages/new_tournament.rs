@@ -44,13 +44,13 @@ pub fn NewTournament() -> Element {
                 div { class: "card",
                     div { class: "card-header",
                         h1 { class: "mb-2", "Create a tournament" }
-                        p { class: "text-muted mb-0", "Start with a name and link. Your tournament stays private until you publish it." }
+                        p { class: "text-muted mb-0", "Start with a name and link. Your tournament is a private draft until you publish it." }
                     }
                     div { class: "card-body",
                         if let Some(ref err) = error() {
                             div { class: "alert alert-danger mb-3", role: "alert", "{err}" }
                         }
-                        p { class: "form-text mb-4", "After creating your event, set its dates, location, fees, and registration options in Settings before sharing it." }
+                        p { class: "form-text mb-4", "Next, you’ll go to Settings to add dates, location, and registration details." }
                         form {
                             onsubmit: move |ev| {
                                 ev.prevent_default();
@@ -72,7 +72,7 @@ pub fn NewTournament() -> Element {
                                     match api::create_tournament(&name, &url_slug, None).await {
                                         Ok(res) if res.success => {
                                             if let Some(url) = res.url {
-                                                nav.push(Route::TournamentHome { url });
+                                                nav.push(Route::TournamentSettings { url });
                                             } else {
                                                 error.set(Some("Tournament created but no URL returned.".to_string()));
                                             }

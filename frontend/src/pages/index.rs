@@ -1,5 +1,6 @@
 use crate::api;
 use crate::appearance::focus_control;
+use crate::components::{OrganizeContext, OrganizeMenu};
 use crate::pages::layout::{remember_home_banner, use_home_banner_hidden};
 use crate::types::{Tournament, UserRegStatus};
 use crate::Route;
@@ -13,7 +14,7 @@ fn format_date(iso: &str) -> String {
         .unwrap_or_else(|_| date.to_string())
 }
 
-fn format_date_display(start: &str, end: Option<&String>) -> String {
+pub(super) fn format_date_display(start: &str, end: Option<&String>) -> String {
     let start_fmt = format_date(start);
     match end {
         Some(end) if format_date(end) != start_fmt => {
@@ -26,11 +27,15 @@ fn format_date_display(start: &str, end: Option<&String>) -> String {
 /// An event stays upcoming until its final day has passed in the user's timezone.
 fn is_past_in_local_tz(t: &Tournament) -> bool {
     let end_str = t.end_date.as_deref().unwrap_or(&t.start_date);
-    let date_str = end_str.get(..10).unwrap_or(end_str);
-    match NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
-        Ok(end_date) => Local::now().date_naive() > end_date,
-        Err(_) => false,
-    }
+    final_day_has_passed(Some(end_str), Local::now().date_naive())
+}
+
+pub(super) fn listing_date(iso: &str) -> Option<NaiveDate> {
+    NaiveDate::parse_from_str(iso.get(..10).unwrap_or(iso), "%Y-%m-%d").ok()
+}
+
+pub(super) fn final_day_has_passed(end: Option<&str>, today: NaiveDate) -> bool {
+    end.and_then(listing_date).is_some_and(|end| end < today)
 }
 
 fn split_upcoming_past(tournaments: &[Tournament]) -> (Vec<Tournament>, Vec<Tournament>) {
@@ -53,6 +58,10 @@ pub fn Index() -> Element {
     let mut search = use_signal(String::new);
     let mut introduction_hidden = use_home_banner_hidden();
     let val = tournaments.value();
+    let counts = val.read().as_ref().and_then(|result| result.as_ref().ok()).map(|data| {
+        let past = data.tournaments.iter().filter(|event| is_past_in_local_tz(event)).count();
+        (data.tournaments.len() - past, past)
+    });
 
     rsx! {
         section {
@@ -73,14 +82,42 @@ pub fn Index() -> Element {
                 a { href: "https://en.wikipedia.org/wiki/Jugger", "jugger" }
                 "."
             }
-            div { class: "arctos-hero-actions",
-                Link { to: Route::CreateEvent {}, class: "btn btn-primary", i { class: "fas fa-plus-circle", aria_hidden: "true" } "Create event" }
-                Link { to: Route::LeaguesIndex {}, class: "btn btn-outline-secondary", i { class: "fas fa-trophy", aria_hidden: "true" } "Browse leagues" }
-            }
         }
         section { id: "event-discovery", class: "arctos-discovery", aria_label: "Find an event", tabindex: "-1",
             if introduction_hidden() {
                 h1 { class: "visually-hidden", "Events" }
+            }
+            div { class: "arctos-discovery-toolbar",
+                div { class: "arctos-discovery-actions",
+                    div { class: "arctos-segmented", role: "group", aria_label: "Event dates",
+                        button {
+                            r#type: "button",
+                            class: if !show_past() { "arctos-segment is-active" } else { "arctos-segment" },
+                            aria_pressed: "{!show_past()}",
+                            onclick: move |_| show_past.set(false),
+                            "Upcoming "
+                            if let Some((upcoming, _)) = counts { span { class: "arctos-count", "{upcoming}" } }
+                        }
+                        button {
+                            r#type: "button",
+                            class: if show_past() { "arctos-segment is-active" } else { "arctos-segment" },
+                            aria_pressed: "{show_past()}",
+                            onclick: move |_| show_past.set(true),
+                            "Past "
+                            if let Some((_, past)) = counts { span { class: "arctos-count", "{past}" } }
+                        }
+                    }
+                    OrganizeMenu { context: OrganizeContext::Events }
+                }
+                div { class: "arctos-event-search",
+                    label { class: "visually-hidden", r#for: "event-search", "Search event names, locations, or leagues" }
+                    i { class: "fas fa-search", aria_hidden: "true" }
+                    input {
+                        id: "event-search", r#type: "search", class: "form-control",
+                        placeholder: "Find an event or location…", value: "{search()}",
+                        oninput: move |event| search.set(event.value()),
+                    }
+                }
             }
             if let Some(Ok(data)) = val.read().as_ref() {
                 {
@@ -93,33 +130,6 @@ pub fn Index() -> Element {
                             || t.league.as_ref().is_some_and(|league| league.name.to_lowercase().contains(&query))
                     }).collect();
                     rsx! {
-                        div { class: "arctos-discovery-toolbar",
-                            div { class: "arctos-segmented", role: "group", aria_label: "Event dates",
-                                button {
-                                    r#type: "button",
-                                    class: if !show_past() { "arctos-segment is-active" } else { "arctos-segment" },
-                                    aria_pressed: "{!show_past()}",
-                                    onclick: move |_| show_past.set(false),
-                                    "Upcoming " span { class: "arctos-count", "{upcoming.len()}" }
-                                }
-                                button {
-                                    r#type: "button",
-                                    class: if show_past() { "arctos-segment is-active" } else { "arctos-segment" },
-                                    aria_pressed: "{show_past()}",
-                                    onclick: move |_| show_past.set(true),
-                                    "Past " span { class: "arctos-count", "{past.len()}" }
-                                }
-                            }
-                            div { class: "arctos-event-search",
-                                label { class: "visually-hidden", r#for: "event-search", "Search event names, locations, or leagues" }
-                                i { class: "fas fa-search", aria_hidden: "true" }
-                                input {
-                                    id: "event-search", r#type: "search", class: "form-control",
-                                    placeholder: "Find an event or location…", value: "{search()}",
-                                    oninput: move |event| search.set(event.value()),
-                                }
-                            }
-                        }
                         h2 { class: "visually-hidden", if show_past() { "Past events" } else { "Upcoming events" } }
                         if filtered.is_empty() {
                             div { class: "arctos-empty-state", role: "status",

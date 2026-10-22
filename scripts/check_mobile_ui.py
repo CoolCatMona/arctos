@@ -9,9 +9,9 @@ Start ``uv run python -m scripts.dev_demo`` and ``just frontend`` first, then:
 This explicitly invoked browser check is separate from backend pytest. It refuses
 non-loopback URLs and requires the demo-only /_api/demo-info marker before login.
 All data-changing requests are blocked; the only real POSTs allowed are demo
-login and read-only Markdown rendering. A failed finalize request is simulated
-in the browser, so fixtures remain unchanged. Match UUIDs and competition IDs
-are discovered from the running demo instead of assuming database IDs.
+login and read-only Markdown rendering. Draft creation and a failed finalize
+request are simulated in the browser, so fixtures remain unchanged. Match UUIDs
+and competition IDs are discovered from the running demo instead of assuming database IDs.
 """
 
 from __future__ import annotations
@@ -19,11 +19,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 from dataclasses import dataclass
+from datetime import date, timedelta
 import json
 from pathlib import Path
 import re
 import sys
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from playwright.async_api import BrowserContext, Page, Route, async_playwright, expect
 
@@ -300,6 +301,253 @@ class SmokeCheck:
         await expect(page.locator(".arctos-event-card")).to_have_count(1)
         await expect(page.locator('.arctos-event-card a[href="/demo-summer-cup"]').first).to_be_visible()
 
+    async def discovery_controls(self, page: Page) -> None:
+        """Check Organize, date filters, and intercepted draft creation without writes."""
+        context = page.context
+        original_viewport = page.viewport_size
+        payload = await api_json(context, self.base_url, "/_api/leagues")
+        today = date.fromisoformat(
+            await page.evaluate("""() => {
+            const d = new Date(); return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'),
+                String(d.getDate()).padStart(2,'0')].join('-');
+        }""")
+        )
+        cases = (
+            ("completed", "Completed season", -8, -1, 2),
+            ("today", "Today season", 0, 0, 1),
+            ("future", "Future season", 7, 14, 2),
+            ("mixed", "Mixed season", -14, 7, 3),
+            ("undated", "Undated season", None, None, 0),
+        )
+        leagues, dates = [], {}
+        for key, name, start, end, count in cases:
+            key = "smoke-" + key
+            leagues.append(
+                {
+                    **payload["leagues"][0],
+                    "league_url": key,
+                    "name": name,
+                    "team_registration_open": name == "Completed season",
+                    "player_registration_open": False,
+                    "published": True,
+                }
+            )
+            dates[key] = {
+                "start_date": (today + timedelta(days=start)).isoformat() + "T12:00:00" if start is not None else None,
+                "end_date": (today + timedelta(days=end)).isoformat() + "T12:00:00" if end is not None else None,
+                "event_count": count,
+            }
+        fixture_payload = {
+            **payload,
+            "leagues": leagues,
+            "event_dates": dates,
+            "team_counts": {league["league_url"]: 1 for league in leagues},
+            "user_reg_status": {},
+        }
+
+        async def fixture(route: Route) -> None:
+            if route.request.method == "GET" and urlsplit(route.request.url).netloc == self.origin:
+                await route.fulfill(json=fixture_payload)
+            else:
+                await route.fallback()
+
+        async def toolbar() -> None:
+            await page.evaluate("document.fonts.ready")
+            controls = await page.locator(".arctos-discovery-actions .arctos-segment, #organize-trigger").evaluate_all(
+                """els => els.map(el => {
+                    const r = el.getBoundingClientRect(), walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+                    let node, wrapped = false;
+                    while ((node = walker.nextNode())) if (node.textContent.trim()) {
+                        const range = document.createRange(); range.selectNodeContents(node);
+                        if (range.getClientRects().length > 1) wrapped = true;
+                    }
+                    return {text: el.textContent.trim(), x:r.x, y:r.y, right:r.right, width:r.width, height:r.height, wrapped};
+                })"""
+            )
+            centers = [c["y"] + c["height"] / 2 for c in controls]
+            assert len(controls) == 3 and max(centers) - min(centers) <= 1, controls
+            assert all(
+                c["width"] >= 44
+                and c["height"] >= 44
+                and not c["wrapped"]
+                and c["x"] >= 0
+                and c["right"] <= page.viewport_size["width"] + 1
+                for c in controls
+            ), controls
+
+        await context.route("**/_api/leagues", fixture)
+        try:
+            for width in (320, 360):
+                await page.set_viewport_size({"width": width, "height": 900})
+                for path, label, destination in (
+                    ("/", "Create a tournament", "/new-tournament"),
+                    ("/leagues", "Create a league", "/leagues/new"),
+                ):
+                    await page.goto(self.base_url + path, wait_until="domcontentloaded")
+                    nav = page.get_by_role("navigation", name="Main navigation")
+                    await expect(nav.get_by_role("link", name="Events", exact=True)).to_be_visible()
+                    assert [text.strip() for text in await nav.get_by_role("link").all_text_contents()][:2] == [
+                        "Events",
+                        "Leagues",
+                    ]
+                    await expect(
+                        page.locator(
+                            '.app-header a[href="/create-event"], .app-header a[href="/new-tournament"], '
+                            '.app-header a[href="/leagues/new"]'
+                        )
+                    ).to_have_count(0)
+                    await expect(page.locator(".arctos-event-card").first).to_be_visible()
+                    await toolbar()
+                    trigger = page.get_by_role("button", name="Organize", exact=True)
+                    options = page.locator("#organize-options")
+                    await expect(options).to_be_hidden()
+                    await expect(
+                        page.get_by_role("link", name=re.compile(r"^Create a (tournament|league)"))
+                    ).to_have_count(0)
+                    await trigger.focus()
+                    await page.keyboard.press("Enter")
+                    await expect(trigger).to_have_attribute("aria-expanded", "true")
+                    await expect(trigger).to_be_focused()
+                    other = "Create a league" if path == "/" else "Create a tournament"
+                    await expect(options.get_by_role("link", name=label, exact=True)).to_be_visible()
+                    await expect(options.get_by_role("link", name=other, exact=True)).to_have_count(0)
+                    links = await options.get_by_role("link").evaluate_all("""els => els.map(el => {
+                        const r=el.getBoundingClientRect(); return {width:r.width,height:r.height,left:r.left,right:r.right};
+                    })""")
+                    assert len(links) == 1 and all(
+                        link["width"] >= 44
+                        and link["height"] >= 44
+                        and link["left"] >= 0
+                        and link["right"] <= width + 1
+                        for link in links
+                    ), links
+                    await page.keyboard.press("Tab")
+                    await expect(options.get_by_role("link").first).to_be_focused()
+                    await page.keyboard.press("Escape")
+                    await expect(options).to_be_hidden()
+                    await expect(trigger).to_be_focused()
+                    await trigger.click()
+                    await page.get_by_role("button", name="Dismiss organize menu", exact=True).click(
+                        position={"x": 2, "y": 200}
+                    )
+                    await expect(options).to_be_hidden()
+                    await expect(trigger).to_be_focused()
+                    await trigger.click()
+                    create = options.get_by_role("link", name=label, exact=True)
+                    await expect(create).to_have_attribute("href", destination)
+                    await create.focus()
+                    await page.keyboard.press("Enter")
+                    await expect(page).to_have_url(self.base_url + destination)
+                    await expect(page.get_by_role("heading", name=label, exact=True)).to_be_visible()
+                    login = page.get_by_role("link", name="Log in to continue", exact=True)
+                    href = urlsplit(await login.get_attribute("href"))
+                    assert href.path == "/login" and parse_qs(href.query).get("next") == [destination], href
+                    await page.go_back(wait_until="domcontentloaded")
+                    await expect(trigger).to_be_visible()
+                active = page.get_by_role("button", name=re.compile(r"^Active\s+4$"))
+                past = page.get_by_role("button", name=re.compile(r"^Past\s+1$"))
+                await expect(active).to_have_attribute("aria-pressed", "true")
+                await expect(page.locator(".arctos-league-grid .arctos-event-card")).to_have_count(4)
+                for name in ("Today season", "Future season", "Mixed season", "Undated season"):
+                    await expect(page.get_by_role("heading", name=name, exact=True)).to_be_visible()
+                mixed = page.locator(".arctos-event-card").filter(has=page.get_by_role("heading", name="Mixed season"))
+                for offset in (-14, 7):
+                    day = today + timedelta(days=offset)
+                    await expect(mixed).to_contain_text(f"{day:%b} {day.day}, {day.year}")
+                await expect(mixed).to_contain_text("3 events")
+                undated = page.locator(".arctos-event-card").filter(
+                    has=page.get_by_role("heading", name="Undated season")
+                )
+                await expect(undated).to_contain_text("Dates to be announced")
+                await page.locator("#league-search").fill("TODAY")
+                await expect(page.locator(".arctos-league-grid .arctos-event-card")).to_have_count(1)
+                await past.click()
+                await expect(page.get_by_role("heading", name="No matching leagues")).to_be_visible()
+                await expect(page.locator("#league-search")).to_have_value("TODAY")
+                await active.click()
+                await expect(page.locator(".arctos-league-grid .arctos-event-card")).to_have_count(1)
+                await page.locator("#league-search").fill("no-such-season")
+                await expect(page.get_by_role("heading", name="No matching leagues")).to_be_visible()
+                await page.get_by_role("button", name="Clear search", exact=True).click()
+                await expect(page.locator("#league-search")).to_have_value("")
+                await past.click()
+                await expect(past).to_have_attribute("aria-pressed", "true")
+                await expect(page.locator(".arctos-league-grid .arctos-event-card")).to_have_count(1)
+                await expect(page.get_by_role("heading", name="Completed season", exact=True)).to_be_visible()
+                await expect(page.get_by_text("Past league", exact=True)).to_be_visible()
+                await toolbar()
+                await self.check_layout(page, "discovery-league-past", width)
+                await active.click()
+                await expect(active).to_have_attribute("aria-pressed", "true")
+                await expect(page.locator(".arctos-league-grid .arctos-event-card")).to_have_count(4)
+                await self.check_layout(page, "discovery-league-active", width)
+            await self.draft_creation(page)
+        finally:
+            await context.unroute("**/_api/leagues", fixture)
+            if original_viewport:
+                await page.set_viewport_size(original_viewport)
+
+    async def draft_creation(self, page: Page) -> None:
+        """Simulate creation errors/success locally; never forward a creation POST."""
+        attempts = []
+        succeed = False
+        responses = {
+            "/_api/create-tournament": {"success": True, "url": "demo-open"},
+            "/_api/create-league": {"success": True, "league_url": "demo-coast-league"},
+        }
+        error = "Smoke check: draft creation failed. Your input is safe."
+
+        async def fixture(route: Route) -> None:
+            request, parsed = route.request, urlsplit(route.request.url)
+            if request.method == "POST" and parsed.netloc == self.origin and parsed.path in responses:
+                attempts.append((parsed.path, parse_qs(request.post_data or "")))
+                await route.fulfill(json=responses[parsed.path] if succeed else {"success": False, "error": error})
+                return
+            await route.fallback()
+
+        await page.context.route("**/_api/**", fixture)
+        try:
+            await self.login(page)
+            for path, name_field, slug_field, kind, target, ready in (
+                ("/new-tournament", "name", "url", "tournament", "/demo-open/settings", "#tournament-settings-form"),
+                (
+                    "/leagues/new",
+                    "league_name",
+                    "league_url",
+                    "league",
+                    "/leagues/demo-coast-league/settings",
+                    "main form",
+                ),
+            ):
+                succeed = False
+                await page.goto(self.base_url + path, wait_until="domcontentloaded")
+                name, slug = f"Browser-only {kind}", f"smoke-uncreated-{kind}"
+                await page.locator(f"#{name_field}").fill(name)
+                await page.locator(f"#{slug_field}").fill(slug)
+                await expect(page.locator("main")).to_contain_text("private draft")
+                submit = page.locator('form button[type="submit"]')
+                before = len(attempts)
+                await submit.click()
+                await expect(page.get_by_role("alert")).to_have_text(error)
+                await expect(page.locator(f"#{name_field}")).to_have_value(name)
+                await expect(page.locator(f"#{slug_field}")).to_have_value(slug)
+                await expect(submit).to_be_enabled()
+                assert len(attempts) == before + 1 and attempts[-1] == (
+                    f"/_api/create-{kind}",
+                    {name_field: [name], slug_field: [slug]},
+                ), attempts
+                succeed = True
+                await submit.click()
+                await expect(page).to_have_url(self.base_url + target)
+                await expect(page.locator(ready).first).to_be_visible()
+                assert len(attempts) == before + 2, attempts
+        finally:
+            await page.context.unroute("**/_api/**", fixture)
+            await page.context.clear_cookies()
+            self.authenticated = False
+            await page.goto(self.base_url, wait_until="domcontentloaded")
+            await expect(page.locator("#event-search")).to_be_visible()
+
     async def registration_and_schedule(self, page: Page) -> None:
         """Exercise navigation using GET-only draft/unregistered browser fixtures."""
         context = page.context
@@ -445,7 +693,9 @@ class SmokeCheck:
             page.get_by_role("navigation", name="Main navigation").get_by_role("link", name="Teams", exact=True).click()
         )
         await (
-            page.get_by_role("navigation", name="Main navigation").get_by_role("link", name="Home", exact=True).click()
+            page.get_by_role("navigation", name="Main navigation")
+            .get_by_role("link", name="Events", exact=True)
+            .click()
         )
         await expect(intro).to_be_hidden()
         await page.reload(wait_until="domcontentloaded")
@@ -722,7 +972,11 @@ def arguments(description: str | None = __doc__) -> argparse.Namespace:
         "--browser-executable", type=Path, help="Installed Chromium executable, e.g. /usr/bin/google-chrome"
     )
     parser.add_argument("--screenshots", type=Path, help="Optional output directory for deterministic full-page PNGs")
-    parser.add_argument("--workflow", choices=("registration-and-schedule",), help="Run only this workflow at 360px")
+    parser.add_argument(
+        "--workflow",
+        choices=("registration-and-schedule", "discovery-controls"),
+        help="Run one workflow (discovery covers 320/360px; other workflows 360px)",
+    )
     args = parser.parse_args()
     parsed = urlsplit(args.base_url)
     if (
@@ -772,7 +1026,11 @@ async def run(args: argparse.Namespace) -> int:
                 check.observe(page)
                 try:
                     if args.workflow:
-                        await check.workflow(page, args.workflow, width, lambda: check.registration_and_schedule(page))
+                        action = {
+                            "registration-and-schedule": check.registration_and_schedule,
+                            "discovery-controls": check.discovery_controls,
+                        }[args.workflow]
+                        await check.workflow(page, args.workflow, width, lambda: action(page))
                         continue
                     if width == 360:
                         await check.workflow(
@@ -780,6 +1038,7 @@ async def run(args: argparse.Namespace) -> int:
                         )
                         await context.clear_cookies()
                         check.authenticated = False
+                        await check.workflow(page, "discovery-controls", width, lambda: check.discovery_controls(page))
                     for screen in PUBLIC_SCREENS:
                         await check.visit(page, screen, width)
                     await check.workflow(page, "event-search-and-dates", width, lambda: check.discover_events(page))

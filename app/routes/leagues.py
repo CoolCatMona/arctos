@@ -25,7 +25,7 @@ import collections
 
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.domain.enums import (
     MatchStatus,
@@ -70,14 +70,41 @@ bp = Blueprint("leagues", __name__, url_prefix="/_api")
 
 @bp.route("/leagues", methods=["GET"])
 def leagues_list():
-    """List published leagues for homepage with registration counts and user status."""
-    leagues = League.query.filter(League.published == True).all()
-
-    # Team counts per league (confirmed registrations only)
+    """List public leagues and the caller's drafts, with public round metadata."""
+    visible = League.published == True
+    if current_user.is_authenticated:
+        organized_ids = db.session.query(TO.league_id).filter(
+            TO.user_id == current_user.id,
+            TO.user_type == current_user_type(),
+            TO.league_id.isnot(None),
+        )
+        visible = or_(visible, League.url.in_(organized_ids))
+    leagues = League.query.filter(visible).all()
 
     team_counts = {l.url: 0 for l in leagues}
+    event_dates = {l.url: {"start_date": None, "end_date": None, "event_count": 0} for l in leagues}
     if leagues:
         league_ids = [l.url for l in leagues]
+        # Derive season ranges from public rounds only, in one query for the
+        # entire directory. An empty league has no inferred end date.
+        ranges = (
+            db.session.query(
+                Tournament.league_id,
+                func.min(Tournament.start_date),
+                func.max(func.coalesce(Tournament.end_date, Tournament.start_date)),
+                func.count(Tournament.url),
+            )
+            .filter(Tournament.league_id.in_(league_ids), Tournament.published == True)
+            .group_by(Tournament.league_id)
+            .all()
+        )
+        for lid, start_date, end_date, event_count in ranges:
+            event_dates[lid] = {
+                "start_date": dt_iso(start_date),
+                "end_date": dt_iso(end_date),
+                "event_count": int(event_count),
+            }
+        # Team counts per league (confirmed registrations only).
         counts = (
             db.session.query(TeamRegistration.league_id, func.count(TeamRegistration.id))
             .filter(TeamRegistration.status == TeamRegistrationStatus.CONFIRMED)
@@ -122,6 +149,7 @@ def leagues_list():
     return jsonify(
         {
             "leagues": [league_to_dict(l) for l in leagues],
+            "event_dates": event_dates,
             "team_counts": team_counts,
             "user_reg_status": user_reg_status,
         }
