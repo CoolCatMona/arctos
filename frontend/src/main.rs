@@ -210,6 +210,9 @@ enum Route {
 
     #[route("/oauth/authorize")]
     OAuthAuthorize {},
+
+    #[route("/:..segments")]
+    NotFound { segments: Vec<String> },
 }
 
 /// The page's path and query string (without `?`) as it was loaded. The router

@@ -479,7 +479,6 @@ pub fn TournamentSettings(url: String) -> Element {
     let mut require_waiver_signature_ui = use_signal(|| false);
     let mut waiver_toggle_initialized = use_signal(|| false);
     let val = data.value();
-    let _backend = api::base_url();
     let url_form = url.clone();
     let url_form_submit = url_form.clone();
 
@@ -713,7 +712,7 @@ pub fn TournamentSettings(url: String) -> Element {
                                                 p { class: "form-text mb-1", "No waiver uploaded yet." }
                                             }
                                             if let Some(link) = d.tournament.waiver_filepath.as_deref() {
-                                                a { href: "{_backend}{link}", class: "d-block small mb-3", target: "_blank", rel: "noreferrer", "View current waiver" }
+                                                a { href: api::static_file_url(link), class: "d-block small mb-3", target: "_blank", rel: "noreferrer", "View current waiver" }
                                             }
 
                                             div { class: "mb-2",

@@ -21,27 +21,35 @@ application code lives under `src/`:
 
 ## Running
 
-In dev:
+From the repository root:
 
 ```bash
-cd frontend
-dx serve
+uv sync --group test
+just setup-frontend
+just demo                    # isolated sample backend on 127.0.0.1:5006
+# In a second terminal:
+just frontend                # frontend on 127.0.0.1:8080
 ```
 
-`dx serve` runs the SPA on `http://127.0.0.1:8080` with hot reload. By
-default it talks to the Flask backend on `http://127.0.0.1:5006` (see
-`api.rs::base_url`); set `ARCTOS_CORS_DEV=1` and start Flask on `5006`
-so credentialed cross-origin requests work.
+Use `just dev` instead of `just demo` for your normal local database.
+Dioxus proxies API and static requests to Flask, so requests and cookies use
+the same origin. For phone testing on your LAN:
+`just frontend --addr 0.0.0.0`, then open the computer's LAN address at port
+8080. Recording requires a browser secure context (localhost or HTTPS).
 
-For production:
+For production, `cd frontend && dx bundle --release`; follow the build output
+path reported by Dioxus and the repository deployment guide.
 
-```bash
-cd frontend
-dx bundle --release
-```
+## Design system
 
-Output ends up in `dist/`. Copy `dist/` to wherever your reverse proxy
-serves the SPA from.
+`src/theme.css` styles the shared shell and existing Bootstrap components on
+all routes. `src/pages/public_pages.css` contains event/discovery layouts;
+`src/pages/operator.css` contains match and stones refinements. Colors, focus,
+touch spacing, safe areas, forms, cards, tables, and dialogs share the same
+mobile-first system. Keep canvas node/port geometry in the dedicated bracket
+and schedule stylesheets. Scoreboard/OBS and exact-size offline frame routes
+remain outside the app theme. Styles and icons are vendored under
+`assets/vendor/` with licenses; no CSS/font CDN or Node build is needed.
 
 ## Routing
 
@@ -83,10 +91,10 @@ sent.
 
 Two important details:
 
-- **Base URL.** In `cfg!(debug_assertions)` builds the SPA hard-codes
-  `http://127.0.0.1:5006`. In release builds it reads
-  `window.location.origin` so it talks to the same host that served
-  the SPA.
+- **Base URL.** Uses `window.location.origin` in browser builds. The Dioxus
+  development proxy forwards `/_api/`, `/api/`, and `/static/` to Flask on
+  `127.0.0.1:5006`. An explicit `ARCTOS_API_BASE` build-time environment
+  variable overrides this for separate-host deployments.
 - **Credentials.** Without `fetch_credentials_include()`, all `/_api/`
   calls would 401.
 
@@ -119,16 +127,19 @@ Backend: `just test` / `just coverage-check`.
 Frontend: Pure Rust unit tests (time sync, filters, display helpers,
 …) run on the host target with the `just frontend-test` recipe.
 
-Browser/wasm stuff still has to be done manually with `dx serve`.
+Run the browser matrix against the demo with
+`uv run python scripts/check_mobile_ui.py` from the repository root while
+`just demo` and `just frontend` are running. It covers phone, tablet, and
+desktop layouts plus common input and save failures. See
+[`TESTING.md`](../TESTING.md#mobile-browser-verification) for browser setup
+and the remaining real-device checks.
 
-## When the SPA can't reach the backend
+## When the SPA cannot reach the backend
 
-Common gotchas:
-
-1. **CORS.** Set `ARCTOS_CORS_DEV=1` in `.env` *and* restart Flask. The
-   browser console will show a CORS error before the request lands.
-2. **Cookies blocked.** With `SameSite=None` the browser requires
-   `Secure`; some browsers refuse `Secure` cookies over plain HTTP from
-   non-localhost origins. Run on `127.0.0.1` / `localhost` in dev.
-3. **Wrong base URL.** If the SPA is hitting a stale port, rebuild -
-   the URL is baked in at compile time for dev builds.
+1. Start Flask on `127.0.0.1:5006` (`just demo` or `just dev`).
+2. Open the frontend on port 8080. Its `/_api/tournaments` request should use
+   that same origin. Restart `dx serve` after changing proxy configuration.
+3. With the default proxy, keep `ARCTOS_CORS_DEV` unset/0; secure cross-origin
+   cookies are unnecessary and will not work on an ordinary HTTP LAN address.
+4. If intentionally setting `ARCTOS_API_BASE`, rebuild after changing it and
+   configure backend CORS and secure cookies for that separate origin.

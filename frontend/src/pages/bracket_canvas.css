@@ -10,18 +10,18 @@
 
 .bracket-canvas-wrap {
     position: relative;
-    border: 1px solid #dee2e6;
+    border: 1px solid #e1e7e2;
     border-radius: 0.5rem;
     background: #ffffff;
     overflow: hidden;
     user-select: none;
-    touch-action: none;
     width: 100%;
     box-sizing: border-box;
 }
 
 /* Edit mode: large viewport for pan/zoom workspace (inline style also sets this). */
 .bracket-canvas-wrap.edit-mode {
+    touch-action: none;
     cursor: default;
     min-height: 70vh;
     height: min(85vh, calc(100vh - 160px));
@@ -30,6 +30,9 @@
 
 /* View mode: height is set inline from width-fit scale. */
 .bracket-canvas-wrap.view-mode {
+    /* Read-only diagrams must allow ordinary page scrolling and browser zoom. */
+    touch-action: auto;
+    user-select: text;
     min-height: 120px;
     max-height: none;
     /* Static diagram — no pan chrome; clip to fit box. */
@@ -57,7 +60,7 @@
 
 .bracket-wire {
     fill: none;
-    stroke: #495057;
+    stroke: #52615a;
     stroke-width: 2;
     /* Visual only — clicks go to .bracket-wire-hit / the group. */
     pointer-events: none;
@@ -65,7 +68,7 @@
 
 .bracket-wire-group:hover .bracket-wire,
 .bracket-wire.selected {
-    stroke: #0d6efd;
+    stroke: #15803d;
     stroke-width: 3;
 }
 
@@ -96,7 +99,7 @@
     position: absolute;
     z-index: 2;
     background: #fff;
-    border: 2px solid #343a40;
+    border: 2px solid #374151;
     border-radius: 6px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
     /* Absolute children pin team rows to the same Y as the input ports
@@ -108,19 +111,19 @@
 }
 
 .bracket-match.selected {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.35);
+    border-color: #15803d;
+    box-shadow: 0 0 0 2px rgba(21, 128, 61, 0.35);
 }
 
 /* View-mode status outlines (hidden while editing so selection stays clear). */
 .bracket-match.status-in-progress {
-    border-color: #e6a800;
-    box-shadow: 0 0 0 1px rgba(230, 168, 0, 0.35);
+    border-color: #d97706;
+    box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.35);
 }
 
 .bracket-match.status-completed {
-    border-color: #198754;
-    box-shadow: 0 0 0 1px rgba(25, 135, 84, 0.28);
+    border-color: #15803d;
+    box-shadow: 0 0 0 1px rgba(21, 128, 61, 0.28);
 }
 
 .bracket-team-slot .winner-badge {
@@ -146,7 +149,7 @@
     text-align: center;
     font-weight: 600;
     font-size: 0.8rem;
-    color: #212529;
+    color: #202923;
     line-height: 1.2;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -201,7 +204,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #6c757d;
+    background: #647067;
     color: #fff;
     font-size: 0.7em;
     font-weight: 700;
@@ -220,8 +223,8 @@
     width: 1.25rem;
     height: 1.25rem;
     border-radius: 3px;
-    background: #e9ecef;
-    color: #212529;
+    background: #eef2ee;
+    color: #202923;
     font-size: 0.7rem;
     font-weight: 700;
     display: inline-flex;
@@ -232,7 +235,7 @@
 
 .bracket-port-badge.winner {
     background: #d1e7dd;
-    border-color: #198754;
+    border-color: #15803d;
     color: #0f5132;
 }
 
@@ -248,7 +251,7 @@
 }
 .bracket-canvas-wrap.edit-mode .bracket-port-badge.clickable:hover {
     filter: brightness(0.92);
-    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.35);
+    box-shadow: 0 0 0 2px rgba(21, 128, 61, 0.35);
 }
 .bracket-port-badge.clickable.unused {
     opacity: 0.55;
@@ -263,7 +266,7 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #343a40;
+    background: #374151;
     border: 2px solid #fff;
     box-sizing: border-box;
     z-index: 3;
@@ -272,7 +275,7 @@
 }
 
 .bracket-port-stub.output {
-    background: #198754;
+    background: #15803d;
 }
 
 .bracket-port-stub.output.loser {
@@ -314,8 +317,8 @@
 }
 
 .bracket-net-label.editable:hover {
-    border-color: #0d6efd;
-    background: #e7f1ff;
+    border-color: #15803d;
+    background: #edf7ee;
 }
 
 .bracket-net-label img.token-icon {
@@ -323,8 +326,8 @@
     height: 0.95em;
     object-fit: contain;
     flex-shrink: 0;
-    /* Bootstrap primary blue-ish tint for SVG icons */
-    filter: invert(27%) sepia(98%) saturate(2476%) hue-rotate(226deg) brightness(99%) contrast(101%);
+    /* Green accent for reference icons */
+    filter: invert(37%) sepia(68%) saturate(643%) hue-rotate(93deg) brightness(89%) contrast(95%);
 }
 
 .bracket-net-label img.avatar {
@@ -343,7 +346,7 @@
 .bracket-resize-handle {
     position: absolute;
     z-index: 6;
-    background: #0d6efd;
+    background: #15803d;
     border: 2px solid #fff;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
 }
@@ -378,7 +381,7 @@
 .bracket-text {
     position: absolute;
     z-index: 3;
-    color: #212529;
+    color: #202923;
     font-weight: 500;
     line-height: 1.2;
     white-space: pre;
@@ -388,8 +391,8 @@
 }
 
 .bracket-text.selected {
-    outline: 2px solid #0d6efd;
-    background: rgba(13, 110, 253, 0.08);
+    outline: 2px solid #15803d;
+    background: rgba(21, 128, 61, 0.08);
 }
 
 .bracket-labeled-team {
@@ -400,7 +403,7 @@
     gap: 6px;
     padding: 4px 10px;
     background: #fff;
-    border: 2px solid #343a40;
+    border: 2px solid #374151;
     border-radius: 999px;
     box-sizing: border-box;
     width: fit-content;
@@ -411,8 +414,8 @@
 }
 
 .bracket-labeled-team.selected {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.35);
+    border-color: #15803d;
+    box-shadow: 0 0 0 2px rgba(21, 128, 61, 0.35);
 }
 
 .bracket-labeled-team .caption {
@@ -423,7 +426,7 @@
 }
 
 .bracket-labeled-team .caption-prefix {
-    color: #495057;
+    color: #52615a;
     font-weight: 600;
 }
 
@@ -447,14 +450,14 @@
 }
 
 .bracket-image.selected {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.35);
+    border-color: #15803d;
+    box-shadow: 0 0 0 2px rgba(21, 128, 61, 0.35);
 }
 
 .bracket-marquee {
     position: absolute;
-    border: 1px dashed #0d6efd;
-    background: rgba(13, 110, 253, 0.08);
+    border: 1px dashed #15803d;
+    background: rgba(21, 128, 61, 0.08);
     z-index: 10;
     pointer-events: none;
 }
@@ -465,7 +468,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #6c757d;
+    color: #647067;
     pointer-events: none;
     z-index: 0;
     padding: 2rem;
@@ -496,7 +499,7 @@
 .bracket-add-modal-header,
 .bracket-add-modal-footer {
     padding: 0.75rem 1rem;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid #e1e7e2;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -504,7 +507,7 @@
 
 .bracket-add-modal-footer {
     border-bottom: none;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid #e1e7e2;
     justify-content: flex-end;
     gap: 0.5rem;
 }
@@ -539,17 +542,17 @@
 
 .bracket-add-match-item:hover,
 .bracket-add-match-item:focus {
-    background: #e7f1ff;
+    background: #edf7ee;
 }
 
 /* First filtered result — accepted by Enter in the search box */
 .bracket-add-match-item.is-top {
-    background: #e7f1ff;
+    background: #edf7ee;
 }
 
 .bracket-add-match-item .meta {
     font-size: 0.8rem;
-    color: #6c757d;
+    color: #647067;
 }
 
 .bracket-status {
@@ -562,7 +565,7 @@
     background-color: #ffffff;
     background-image: radial-gradient(
         circle at center,
-        rgba(13, 110, 253, calc(0.45 * var(--grid-alpha, 1))) 1.1px,
+        rgba(21, 128, 61, calc(0.45 * var(--grid-alpha, 1))) 1.1px,
         transparent 1.25px
     );
     background-size: var(--grid-size, 20px) var(--grid-size, 20px);
@@ -587,7 +590,7 @@
     opacity: 0.45;
     cursor: not-allowed;
     background: #f1f3f5;
-    color: #6c757d;
+    color: #647067;
 }
 .bracket-add-match-item.already-placed:hover {
     background: #f1f3f5;
@@ -646,8 +649,8 @@
 .bracket-canvas-wrap.field-hovering .bracket-match.field-hot {
     opacity: 1;
     filter: none;
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.45), 0 4px 14px rgba(13, 110, 253, 0.2);
+    border-color: #15803d;
+    box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.45), 0 4px 14px rgba(21, 128, 61, 0.2);
     z-index: 8;
 }
 
@@ -693,4 +696,29 @@
 
 .bracket-airwire.ref.rtl {
     stroke: #e6194b;
+}
+
+/* View controls do not change node sizes, ports, wire paths, or saved placement. */
+.bracket-page-toolbar { padding: .8rem 0; gap: .65rem; }
+.bracket-page-toolbar > * { max-width: 100%; }
+.bracket-shortcut-help { flex-basis: 100%; }
+.bracket-shortcut-help summary { cursor: pointer; padding: .5rem 0; }
+.bracket-view-controls { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; padding: .75rem; margin-bottom: .75rem; border: 1px solid #e1e7e2; border-radius: .75rem; background: #f8faf7; }
+.bracket-zoom-controls, .bracket-pan-controls { display: flex; align-items: center; gap: .35rem; }
+.bracket-view-controls .btn { min-width: 44px; min-height: 44px; }
+.bracket-zoom-value { min-width: 4rem; text-align: center; font-variant-numeric: tabular-nums; }
+.bracket-mobile-hint { display: none; }
+.bracket-keyboard-focus:focus-visible { outline: 3px solid #0d9488; outline-offset: 4px; }
+.bracket-add-modal { border: 1px solid #e1e7e2; border-radius: .9rem; }
+@media (max-width: 767.98px) {
+    .bracket-page-toolbar { align-items: center; gap: .6rem; }
+    .bracket-page-toolbar .btn, .bracket-page-toolbar .form-select { min-height: 44px; }
+    .bracket-page-toolbar .form-check { display: flex; align-items: center; gap: .6rem; min-height: 44px; }
+    .bracket-mobile-hint { display: block; }
+    .bracket-view-controls { gap: .65rem; }
+    .bracket-add-modal-backdrop { padding: max(1rem, env(safe-area-inset-top)) .75rem max(1rem, env(safe-area-inset-bottom)); align-items: center; }
+    .bracket-add-modal { max-height: calc(100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+    .bracket-add-modal-body { overflow-y: auto; overscroll-behavior: contain; }
+    .bracket-add-modal-header, .bracket-add-modal-footer { gap: .6rem; flex-wrap: wrap; }
+    .bracket-add-match-item { min-height: 44px; padding-block: .75rem; }
 }

@@ -18,15 +18,23 @@ pub fn ManageFootage(url: String) -> Element {
     let mut query = use_signal(|| String::new());
     let refresh = use_signal(|| 0u32);
     let delete_error = use_signal(|| None::<String>);
+    let mut deleting = use_signal(|| None::<String>);
 
     let url_for_data = url.clone();
     let data = use_resource(move || {
         let u = url_for_data.clone();
         let _ = refresh();
         async move {
-            let tournament = api::tournament_detail(&u).await.map_err(|e| e.to_string())?;
-            let cams = api::list_event_footage(&u).await.map_err(|e| e.to_string())?;
-            Ok::<(String, Vec<FootageCameraRow>), String>((tournament.tournament.name, cams.cameras))
+            let tournament = api::tournament_detail(&u)
+                .await
+                .map_err(|e| e.to_string())?;
+            let cams = api::list_event_footage(&u)
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok::<(String, Vec<FootageCameraRow>), String>((
+                tournament.tournament.name,
+                cams.cameras,
+            ))
         }
     });
     let val = data.value();
@@ -35,7 +43,8 @@ pub fn ManageFootage(url: String) -> Element {
         if let Some(Ok((tournament_name, cameras))) = val.read().as_ref() {
             div { class: "row",
                 div { class: "col-12",
-                    h1 { "{tournament_name} - Manage Footage" }
+                    h1 { "Match footage" }
+                    p { class: "text-muted", "Review recordings for {tournament_name}. Open footage to check it before removing an entry." }
                     nav { aria_label: "breadcrumb",
                         ol { class: "breadcrumb",
                             li { class: "breadcrumb-item", Link { to: Route::TournamentHome { url: url.clone() }, "{tournament_name}" } }
@@ -51,6 +60,7 @@ pub fn ManageFootage(url: String) -> Element {
                         class: "form-control",
                         r#type: "text",
                         placeholder: "Search match, field, camera, status, user, timestamp",
+                        aria_label: "Search match footage",
                         value: "{query}",
                         oninput: move |e| query.set(e.value()),
                     }
@@ -58,7 +68,7 @@ pub fn ManageFootage(url: String) -> Element {
             }
 
             if let Some(err) = delete_error() {
-                div { class: "alert alert-danger", "{err}" }
+                div { class: "alert alert-danger", role: "alert", "{err}" }
             }
 
             div { class: "row",
@@ -119,14 +129,22 @@ pub fn ManageFootage(url: String) -> Element {
                                                 td {
                                                     button {
                                                         class: "btn btn-sm btn-outline-danger",
+                                                        disabled: deleting().is_some(),
                                                         onclick: {
                                                             let u = url.clone();
                                                             let match_uuid = cam.match_uuid.clone();
                                                             let uuid = cam.uuid.clone();
+                                                            let description = format!("Delete footage from camera ‘{}’ for match ‘{}’? This cannot be undone.", cam.camera_name, cam.match_name);
                                                             let mut delete_error_sig = delete_error;
                                                             let mut refresh_sig = refresh;
                                                             move |_| {
+                                                                if deleting().is_some() { return; }
+                                                                #[cfg(target_arch = "wasm32")]
+                                                                if !web_sys::window().and_then(|window| window.confirm_with_message(&description).ok()).unwrap_or(false) {
+                                                                    return;
+                                                                }
                                                                 delete_error_sig.set(None);
+                                                                deleting.set(Some(uuid.clone()));
                                                                 let u = u.clone();
                                                                 let match_uuid = match_uuid.clone();
                                                                 let uuid = uuid.clone();
@@ -135,10 +153,11 @@ pub fn ManageFootage(url: String) -> Element {
                                                                         Ok(()) => refresh_sig.set(refresh_sig() + 1),
                                                                         Err(e) => delete_error_sig.set(Some(e)),
                                                                     }
+                                                                    deleting.set(None);
                                                                 });
                                                             }
                                                         },
-                                                        "Delete"
+                                                        if deleting().as_deref() == Some(cam.uuid.as_str()) { "Deleting…" } else { "Delete" }
                                                     }
                                                 }
                                             }

@@ -3,103 +3,55 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn About() -> Element {
+    let features = [
+        ("fa-calendar-alt", "Flexible scheduling", "Publish schedules that fit your tournament structure, with fields, referees, and dynamic match dependencies."),
+        ("fa-users", "Registration and rosters", "Bring team and player registrations together. Track payments, waivers, roster requests, and capacity."),
+        ("fa-stopwatch", "Live match operations", "Select field rosters, record points and penalties, track stones, and finalize matches with captain signatures."),
+        ("fa-video", "Footage and broadcasts", "View and upload match footage, connect field cameras, and show live scoreboards in OBS."),
+        ("fa-trophy", "Leagues and results", "Follow event results or organize a season with shared registration and collective standings."),
+        ("fa-award", "Side competitions", "Manage registrations and live results for individual competitions alongside the main tournament."),
+    ];
     rsx! {
-        div { class: "row",
-            div { class: "col-lg-8 mx-auto",
+        div { class: "arctos-about",
+            header { class: "arctos-discovery-hero",
+                div { class: "arctos-brand-mark", aria_hidden: "true", i { class: "fas fa-trophy" } }
                 h1 { "About Arctos" }
+                p { "A tournament operations tool built by organizers, for organizers—and everyone who makes a Jugger event happen." }
+            }
+            section { class: "card arctos-about-story",
+                h2 { "Less administration. More time on the field." }
+                p { "Arctos helps organizers publish events, manage registration, run matches, and share results. Players, teams, referees, and spectators can find what they need in one place." }
                 p {
-                    "Arctos, latin for "
-                    i { "bear" }
-                    ", is a "
-                    a { href: "https://en.wikipedia.org/wiki/Recursive_acronym", "recursive" }
-                    " "
+                    "Arctos, Latin for " em { "bear" } ", is a "
+                    a { href: "https://en.wikipedia.org/wiki/Recursive_acronym", "recursive" } " "
                     a { href: "https://en.wikipedia.org/wiki/Backronym", "backronym" }
-                    " that stands for "
-                    strong { "A" }
-                    "rctos: "
-                    strong { "R" }
-                    "eid's "
-                    strong { "C" }
-                    "omprehensive "
-                    strong { "T" }
-                    "ournament "
-                    strong { "O" }
-                    "rganization "
-                    strong { "S" }
-                    "ystem."
+                    " that stands for " strong { "Arctos: Reid’s Comprehensive Tournament Organization System." }
                 }
-                p {
-                    "It is a tool designed by TOs, for TOs, with the goal of reducing the tournament organization workload. The design philosophy has three main components:"
-                }
-                ul {
-                    li { strong { "capable & accessible" } ": give all juggers easy access to the best available tools and data." }
-                    li { strong { "unopinionated" } ": don't impose unnecessary structure onto how tournaments are organized." }
-                    li { strong { "minimal" } ": collect all data necessary for functionality and nothing more." }
-                }
-                div { class: "alert alert-info mt-5",
-                    i { class: "fas fa-book" }
-                    " Read more in the "
-                    Link { to: Route::Docs {}, class: "alert-link", "User Documentation" }
-                    "."
-                }
-                h2 { class: "mt-4", "Functionality" }
-                div { class: "row mt-4",
-                    div { class: "col-md-4 mb-3",
-                        div { class: "card h-100 border-0 shadow-sm",
-                            div { class: "card-body",
-                                h5 { class: "card-title", i { class: "fas fa-calendar-alt text-primary" } " Flexible Scheduling" }
-                                p { class: "card-text text-muted", "Give teams clear, predictable, and efficient schedules. Implement any tournament structure." }
-                            }
-                        }
-                    }
-                    div { class: "col-md-4 mb-3",
-                        div { class: "card h-100 border-0 shadow-sm",
-                            div { class: "card-body",
-                                h5 { class: "card-title", i { class: "fas fa-bolt text-warning" } " Live Updates" }
-                                p { class: "card-text text-muted", "Get live score updates for matches as they happen, and overlay a scoreboard on your live stream in OBS." }
-                            }
-                        }
-                    }
-                    div { class: "col-md-4 mb-3",
-                        div { class: "card h-100 border-0 shadow-sm",
-                            div { class: "card-body",
-                                h5 { class: "card-title", i { class: "fas fa-magnifying-glass text-success" } " Player Tracking" }
-                                p { class: "card-text text-muted", "Log injuries and view results for all tournaments." }
-                            }
+            }
+            section { class: "arctos-about-features", aria_labelledby: "about-features-heading",
+                h2 { id: "about-features-heading", "From registration to the final score" }
+                div { class: "arctos-card-grid",
+                    for (icon, title, description) in features {
+                        article { class: "card arctos-feature-card",
+                            div { class: "arctos-feature-icon", aria_hidden: "true", i { class: "fas {icon}" } }
+                            h3 { "{title}" }
+                            p { "{description}" }
                         }
                     }
                 }
-                div { class: "row mt-2",
-                    div { class: "col-md-4 mb-3",
-                        div { class: "card h-100 border-0 shadow-sm",
-                            div { class: "card-body",
-                                h5 { class: "card-title", i { class: "fas fa-users text-info" } " Registration" }
-                                p { class: "card-text text-muted", "Manage team and player registrations and payment. Stripe payment portal coming soon." }
-                            }
-                        }
-                    }
-                    div { class: "col-md-4 mb-3",
-                        div { class: "card h-100 border-0 shadow-sm",
-                            div { class: "card-body",
-                                h5 { class: "card-title", i { class: "fas fa-wrench text-secondary" } " Head Ref Tools" }
-                                p { class: "card-text text-muted", "Automatically track point outcomes, scores, and stone count. Log notes on teams, players, and points." }
-                            }
-                        }
-                    }
-                    div { class: "col-md-4 mb-3",
-                        div { class: "card h-100 border-0 shadow-sm",
-                            div { class: "card-body",
-                                h5 { class: "card-title", i { class: "fas fa-list-ol text-danger" } " Side Comp Managment" }
-                                p { class: "card-text text-muted", "Registraion and live results for several common individual competitions (bear pit, chain pit)." }
-                            }
-                        }
-                    }
+            }
+            section { class: "card arctos-about-story",
+                h2 { "Built around the way you organize" }
+                dl { class: "arctos-principles",
+                    div { dt { "Capable and accessible" } dd { "Give all juggers easy access to useful tools and event data, from a phone on the sideline or a desktop at the organizer’s table." } }
+                    div { dt { "Unopinionated" } dd { "Support different event formats without imposing unnecessary structure. Organizers stay in control of their schedules and brackets." } }
+                    div { dt { "Minimal" } dd { "Collect the data needed for the event and make everyday tasks clear." } }
+                    div { dt { "Open source and independent" } dd { "Arctos is an independent community project. It does not belong to or represent CAJA or the US NJA." } }
                 }
-                p {
-                    "and more, that i'm too lazy to list here nicely! Again, see the "
-                    Link { to: Route::Docs {}, class: "alert-link", "User Documentation" }
-                    " for more details."
-                }
+            }
+            div { class: "arctos-about-actions",
+                Link { to: Route::Docs {}, class: "btn btn-primary", i { class: "fas fa-book", aria_hidden: "true" } "Read the user guide" }
+                a { href: "https://github.com/reid23/arctos", class: "btn btn-outline-secondary", i { class: "fab fa-github", aria_hidden: "true" } "Explore the source" }
             }
         }
     }

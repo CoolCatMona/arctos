@@ -2,7 +2,7 @@ use crate::Route;
 use crate::api;
 use crate::components::{
     EditRegistrationContext, EditRegistrationModal, EventHeader, LeagueRegistrationButtons,
-    PompfenIcon,
+    PompfenIcon, EventTeamsList,
 };
 use crate::types::{ToEntry, User};
 use dioxus::prelude::*;
@@ -96,7 +96,6 @@ fn TournamentHomeContent(url: String, initial_tab: Option<String>) -> Element {
     rsx! {
         if let Some(Ok(d)) = val.read().as_ref() {
             {{
-                let teams_count = d.teams_with_counts.len();
                 let unattached_count = d.unattached_players.len();
                 rsx! {
             EventHeader {
@@ -107,7 +106,7 @@ fn TournamentHomeContent(url: String, initial_tab: Option<String>) -> Element {
                 badge_name: d.tournament.league.as_ref().map(|l| l.name.clone()),
             }
 
-            div { class: "row mb-3",
+            div { class: "row mb-3 event-actions",
                 div { class: "col-12 d-flex flex-wrap gap-2",
                     if d.tournament.schedule_published {
                         Link { to: Route::Schedule { url: url.clone(), view: String::new(), team: String::new(), field: String::new() }, class: "btn btn-primary", "Schedule" }
@@ -137,7 +136,7 @@ fn TournamentHomeContent(url: String, initial_tab: Option<String>) -> Element {
                         if let Some(current_user) = me_res.read().as_ref().and_then(|r| r.as_ref().ok()) {
                             if current_user.user_type == "team" {
                                 if d.is_current_team_registered {
-                                    a { href: "{backend}/{url}/invitations", class: "btn btn-outline-secondary", "Manage Roster" }
+                                    Link { to: Route::Invitations { url: url.clone() }, class: "btn btn-outline-secondary", "Manage roster" }
                                     button {
                                         class: "btn btn-outline-secondary",
                                         onclick: move |_| show_edit_team_modal.set(true),
@@ -183,11 +182,10 @@ fn TournamentHomeContent(url: String, initial_tab: Option<String>) -> Element {
                                 }
                             }
                         } else {
-                            button {
-                                r#type: "button",
-                                class: "btn btn-secondary disabled",
-                                disabled: true,
-                                "Sign in to register"
+                            a {
+                                href: format!("/login?next={}", urlencoding::encode(&format!("/{url}/register"))),
+                                class: "btn btn-primary",
+                                "Log in to register"
                             }
                         }
                     }
@@ -214,7 +212,7 @@ fn TournamentHomeContent(url: String, initial_tab: Option<String>) -> Element {
                                         class: if active_info_tab == "info" { "nav-link active" } else { "nav-link" },
                                         href: "#",
                                         onclick: move |evt| { evt.prevent_default(); info_tab.set(Some("info".to_string())); },
-                                        "Tournament Information"
+                                        "Event info"
                                     }
                                 }
                                 li { class: "nav-item",
@@ -222,7 +220,7 @@ fn TournamentHomeContent(url: String, initial_tab: Option<String>) -> Element {
                                         class: if active_info_tab == "sidecomps" { "nav-link active" } else { "nav-link" },
                                         href: "#",
                                         onclick: move |evt| { evt.prevent_default(); info_tab.set(Some("sidecomps".to_string())); },
-                                        "Side Competitions"
+                                        "Side events"
                                     }
                                 }
                             }
@@ -277,7 +275,7 @@ fn TournamentHomeContent(url: String, initial_tab: Option<String>) -> Element {
                                             if html.is_empty() {
                                                 div { class: "markdown-content", style: "white-space: pre-wrap;", "{about}" }
                                             } else {
-                                                div { dangerous_inner_html: "{html}" }
+                                                div { class: "markdown-content", dangerous_inner_html: "{html}" }
                                             }
                                         } else {
                                             div { class: "markdown-content", style: "white-space: pre-wrap;", "{about}" }
@@ -436,58 +434,11 @@ fn TournamentHomeContent(url: String, initial_tab: Option<String>) -> Element {
                 }
             }
 
-            if !d.teams_with_counts.is_empty() {
-                div { class: "row mt-4",
-                    div { class: "col-12",
-                        div { class: "card",
-                            div { class: "card-header", h5 { class: "mb-0", "Registered Teams ({teams_count})" } }
-                            div { class: "card-body",
-                                div { class: "table-responsive",
-                                    table { class: "table table-striped",
-                                        thead {
-                                            tr {
-                                                th { "Team Name" }
-                                                th { "Players" }
-                                                th { "Registration Date" }
-                                            }
-                                        }
-                                        tbody {
-                                            for team in d.teams_with_counts.iter() {
-                                                tr { key: "{team.team_id}",
-                                                    td {
-                                                        div { class: "d-flex align-items-center",
-                                                            div { class: "flex-shrink-0 me-2",
-                                                                if let Some(photo) = &team.profile_photo {
-                                                                    img { src: "{backend}/static/{photo}", alt: "", class: "rounded-circle", style: "width: 40px; height: 40px; object-fit: cover;" }
-                                                                } else {
-                                                                    div { class: "d-flex align-items-center justify-content-center bg-secondary rounded-circle", style: "width: 40px; height: 40px;",
-                                                                        span { class: "text-white", "👥" }
-                                                                    }
-                                                                }
-                                                            }
-                                                            div {
-                                                                Link { to: Route::TeamProfilePage { id: team.team_id.clone() }, class: "text-decoration-none",
-                                                                    strong { "{team.pseudonym.as_deref().unwrap_or(&team.team_name)}" }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    td {
-                                                        span { class: "badge bg-primary", "{team.player_count}" }
-                                                        if let Some(max) = d.tournament.max_team_size_roster {
-                                                            span { " / {max}" }
-                                                        }
-                                                    }
-                                                    td { "{team.registered_at.as_deref().unwrap_or(\"-\")}" }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+            EventTeamsList {
+                teams: d.teams_with_counts.clone(),
+                card_title: "Registered teams".to_string(),
+                show_registered_at: true,
+                max_team_size_roster: d.tournament.max_team_size_roster,
             }
 
             if !d.unattached_players.is_empty() {
@@ -497,7 +448,7 @@ fn TournamentHomeContent(url: String, initial_tab: Option<String>) -> Element {
                             div { class: "card-header", h5 { class: "mb-0", "Unattached Players ({unattached_count})" } }
                             div { class: "card-body",
                                 div { class: "table-responsive",
-                                    table { class: "table table-striped",
+                                    table { class: "table table-striped roster-table",
                                         thead {
                                             tr {
                                                 th { "Player Name" }
@@ -526,7 +477,7 @@ fn TournamentHomeContent(url: String, initial_tab: Option<String>) -> Element {
                                                             }
                                                         }
                                                     }
-                                                    td {
+                                                    td { "data-label": "Jersey",
                                                         if let (Some(num), Some(name)) = (&p.jersey_number, &p.jersey_name) {
                                                             "#{num} {name}"
                                                         } else if let Some(name) = &p.jersey_name {
@@ -537,7 +488,7 @@ fn TournamentHomeContent(url: String, initial_tab: Option<String>) -> Element {
                                                             span { class: "text-muted", "No jersey info" }
                                                         }
                                                     }
-                                                    td { "{p.registered_at.as_deref().unwrap_or(\"-\")}" }
+                                                    td { "data-label": "Registered", {crate::time_format::format_registration_timestamp(p.registered_at.as_deref().unwrap_or("—"))} }
                                                 }
                                             }
                                         }

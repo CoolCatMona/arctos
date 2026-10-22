@@ -30,9 +30,8 @@ const STEP2_MAX_SYNC_MS: u32 = 3000;
 
 #[component]
 pub fn Stones() -> Element {
-    let stones_data = use_resource(move || async move {
-        api::stones_list().await.map_err(|e| e.to_string())
-    });
+    let stones_data =
+        use_resource(move || async move { api::stones_list().await.map_err(|e| e.to_string()) });
     let stones_val = stones_data.value();
 
     #[cfg(target_arch = "wasm32")]
@@ -47,7 +46,7 @@ pub fn Stones() -> Element {
     #[cfg(not(target_arch = "wasm32"))]
     {
         rsx! {
-            div { class: "container mt-4",
+            div { class: "container mt-4 stones-page",
                 h1 { "Stones Player" }
                 p { "Use the web (WASM) build for the synchronized Stones player." }
             }
@@ -136,9 +135,7 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                 let ctx = audio_ctx_sig.read().clone();
                 let buf = audio_buffer_sig.read().clone();
                 let start_time = ctx_start_time_sig.read();
-                if let (Some(ref ctx), Some(ref buf), Some(_start)) =
-                    (ctx, buf, *start_time)
-                {
+                if let (Some(ref ctx), Some(ref buf), Some(_start)) = (ctx, buf, *start_time) {
                     let cal = time_sync.calibration();
                     if cal.audio_delay_ms != last_audio
                         || cal.locked_offset_ms != last_locked
@@ -230,7 +227,11 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
             set_media_session_playing(false);
         } else {
             custom_status.set(None);
-            let stones_opt = stones_val.read().as_ref().and_then(|r| r.as_ref().ok()).cloned();
+            let stones_opt = stones_val
+                .read()
+                .as_ref()
+                .and_then(|r| r.as_ref().ok())
+                .cloned();
             let idx = selected_index();
             let stones_len = stones_opt.as_ref().map(|s| s.stones.len()).unwrap_or(0);
             let is_custom = idx >= stones_len;
@@ -314,7 +315,11 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
         set_range_input_value("stones-clock-offset", next);
     };
 
-    let stones_ok = stones_val.read().as_ref().and_then(|r| r.as_ref().ok()).cloned();
+    let stones_ok = stones_val
+        .read()
+        .as_ref()
+        .and_then(|r| r.as_ref().ok())
+        .cloned();
     let stones_len = stones_ok.as_ref().map(|s| s.stones.len()).unwrap_or(0);
     let quality = time_sync.quality();
     let calibration = time_sync.calibration();
@@ -367,26 +372,39 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
             transform: scale(1.12);
         }}
         "# }
-        div { class: "container mt-4",
+        div { class: "container mt-4 stones-page",
             div { class: "row",
                 div { class: "col-12",
                     h1 { "Stones Player" }
-                    p {
-                        "This is a stones player that plays globally synchronized stones: all devices on this page will (eventually) play stones at the same time."
-                    }
-                    p { strong { "Important Notes:" } }
-                    ul {
-                        li { "The speed of sound is about 343 m/s (~110 ms to cross a 40 m field). If stones sound out of sync, try standing equidistant from speakers." }
-                        li { "It should only take a few (3–5) stones to sync." }
-                        li { "Bluetooth can add up to ~250 ms delay; if you are using bluetooth, click \"calibrate manually\" to compensate for this delay." }
-                        li { "Custom files: keep them under 1.5 s and avoid dead space at the start." }
-                    }
+                    p { class: "text-muted stones-intro", "Keep every field on the same beat. Choose a sound and press play to join the synchronized stones." }
 
                     div { class: "card",
                         div { class: "card-body",
+                            div { class: "stones-playback mb-4",
+                                button {
+                                    class: if is_playing() { "btn btn-warning btn-lg mb-3" } else { "btn btn-primary btn-lg mb-3" },
+                                    aria_pressed: is_playing(),
+                                    onclick: move |_| on_play_pause.call(()),
+                                    if is_playing() { "Pause stones" } else { "Play stones" }
+                                }
+                                button {
+                                    class: "btn btn-outline-secondary mb-3 ms-2",
+                                    onclick: on_reset_sync,
+                                    "Reset Sync"
+                                }
+                                if let Some(ref msg) = *custom_status.read() {
+                                    p { class: "form-text mt-2 text-danger", "{msg}" }
+                                }
+                            }
+
+                            p { class: "stones-sync-status small", role: "status",
+                                if !is_playing() { "Ready when you are. Audio starts after you press play." }
+                                else if quality.converged { "Synchronized — playing on the shared beat." }
+                                else { "Synchronizing… allow 3–5 stones to settle into the shared beat." }
+                            }
                             div { class: "mb-4",
-                                label { class: "form-label mb-2", "Sound:" }
-                                div { class: "d-flex flex-wrap gap-2", role: "group",
+                                span { class: "form-label mb-2 d-block", "Choose your sound" }
+                                div { class: "d-flex flex-wrap gap-2", role: "group", aria_label: "Stone sound",
                                     for sound_btn in sound_buttons.iter() {
                                         {
                                             let key_name = sound_btn.key_name.clone();
@@ -399,6 +417,7 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                                                 button {
                                                     key: "{key_name}",
                                                     class: if is_selected { "btn btn-primary" } else { "btn btn-outline-primary" },
+                                                    aria_pressed: is_selected,
                                                     onclick: move |_| {
                                                         if let Some(ctx) = audio_ctx.read().clone() {
                                                             clear_future_scheduled(schedule_state.read().clone(), &ctx);
@@ -429,6 +448,7 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                                     }
                                     button {
                                         class: if selected_index() >= stones_len { "btn btn-primary" } else { "btn btn-outline-primary" },
+                                        aria_pressed: selected_index() >= stones_len,
                                         onclick: move |_| {
                                             if let Some(ctx) = audio_ctx.read().clone() {
                                                 clear_future_scheduled(schedule_state.read().clone(), &ctx);
@@ -441,7 +461,7 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                                 }
                                 if selected_index() >= stones_len {
                                     div { class: "mt-3",
-                                        label { class: "form-label", "Upload MP3 (under 1.5 s):" }
+                                        label { class: "form-label", r#for: "stones-custom-file", "Upload MP3 (under 1.5 s):" }
                                         input {
                                             id: "stones-custom-file",
                                             r#type: "file",
@@ -470,21 +490,6 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                                 }
                             }
 
-                            div { class: "mb-3",
-                                button {
-                                    class: if is_playing() { "btn btn-warning btn-lg mb-3" } else { "btn btn-primary btn-lg mb-3" },
-                                    onclick: move |_| on_play_pause.call(()),
-                                    if is_playing() { "Pause" } else { "Play" }
-                                }
-                                button {
-                                    class: "btn btn-danger mb-3 ms-2",
-                                    onclick: on_reset_sync,
-                                    "Reset Sync"
-                                }
-                                if let Some(ref msg) = *custom_status.read() {
-                                    p { class: "form-text mt-2 text-danger", "{msg}" }
-                                }
-                            }
 
                             div { class: "mb-3",
                                 p { class: "form-text mb-1", "Something doesn't look or sound right?" }
@@ -495,6 +500,16 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                                 }
                             }
 
+                            details { class: "stones-details mb-3",
+                                summary { "Tips for speakers and Bluetooth" }
+                                ul { class: "mt-3 mb-0",
+                                    li { "Stand an equal distance from speakers when comparing the beat. Sound takes about 110 ms to cross a 40 m field." }
+                                    li { "Allow 3–5 stones for devices to synchronize." }
+                                    li { "Bluetooth can delay sound by up to about 250 ms. Use ‘Calibrate manually’ to compensate." }
+                                    li { "For a custom sound, use an MP3 under 1.5 seconds with no silence at the start." }
+                                }
+                            }
+
                         audio {
                             id: "audio-stream",
                             autoplay: true,
@@ -502,8 +517,9 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                             style: "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px;bottom:0;",
                         }
 
-                            div { class: "mb-3",
-                                h5 { "Stats" }
+                            details { class: "stones-details mb-3",
+                                summary { "Advanced synchronization details" }
+                                p { class: "form-text mt-2", "These diagnostics help troubleshoot audio timing. Most players can leave the automatic settings on." }
                                 p { "Offset (x\u{0302}): {offset_str}" }
                                 div { class: "form-check mb-2",
                                     input {
@@ -537,7 +553,7 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
         }
 
         if calibration_step() != 0 {
-            div { class: "modal show", style: "display: block;",
+            div { class: "modal show", style: "display: block;", role: "dialog", aria_modal: "true", aria_label: "Calibrate stone timing",
                 div { class: "modal-dialog modal-dialog-centered",
                     div { class: "modal-content",
                         div { class: "modal-header",
@@ -545,7 +561,7 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                                 if calibration_step() == 1 { "Calibrate — Step 1 of 2: Audio offset" }
                                 else { "Calibrate — Step 2 of 2: Clock offset" }
                             }
-                            button { r#type: "button", class: "btn-close", onclick: on_calibration_cancel }
+                            button { r#type: "button", class: "btn-close", aria_label: "Close calibration", onclick: on_calibration_cancel }
                         }
                         div { class: "modal-body",
                             div { class: "d-flex flex-column align-items-center mb-3",
@@ -553,11 +569,11 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                                     class: if beat_flash() { "stones-beat-dot stones-beat-dot-on" } else { "stones-beat-dot" },
                                 }
                                 span { class: "form-text mt-2 text-center",
-				       "this should light up when " strong {
-					   if calibration_step()==1 { "this device plays" }
-					   else { "other devices play" }
-				       } " a stone"
-				}
+                       "this should light up when " strong {
+                       if calibration_step()==1 { "this device plays" }
+                       else { "other devices play" }
+                       } " a stone"
+                }
                             }
 
                             if calibration_step() == 1 {
@@ -809,11 +825,8 @@ fn ensure_media_destination(
                         &JsValue::from(dest.clone()),
                         &JsValue::from_str("stream"),
                     ) {
-                        let _ = js_sys::Reflect::set(
-                            &audio,
-                            &JsValue::from_str("srcObject"),
-                            &stream,
-                        );
+                        let _ =
+                            js_sys::Reflect::set(&audio, &JsValue::from_str("srcObject"), &stream);
                     }
                     audio.set_autoplay(true);
                     let _ = js_sys::Reflect::set(

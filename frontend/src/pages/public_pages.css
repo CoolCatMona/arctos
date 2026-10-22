@@ -1,0 +1,125 @@
+/* Public discovery and event identity, translated from the reference design. */
+.arctos-discovery-hero { text-align: center; max-width: 760px; margin: 0 auto 2.75rem; padding: 1.5rem 0 .5rem; }
+.arctos-discovery-hero h1 { margin: 1.1rem 0 .85rem; font-size: clamp(1.65rem, 3.2vw, 2.25rem); letter-spacing: -.035em; }
+.arctos-discovery-hero > p { color: #59665f; max-width: 650px; margin: 0 auto 1.5rem; line-height: 1.7; }
+.arctos-brand-mark { width: 3.25rem; height: 3.25rem; display: inline-flex; align-items: center; justify-content: center; border-radius: .9rem; color: white; background: linear-gradient(135deg, #15803d, #0d9488); font-size: 1.35rem; flex-shrink: 0; }
+.arctos-hero-actions, .arctos-about-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: .75rem; }
+.arctos-hero-actions .btn, .arctos-about-actions .btn, .arctos-card-footer .btn, .arctos-choice-card .btn { display: inline-flex; align-items: center; justify-content: center; gap: .65rem; min-height: 44px; }
+.arctos-discovery-toolbar { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+.arctos-segmented { display: inline-flex; padding: 4px; background: #eef2ef; border: 1px solid #e4e9e5; border-radius: .8rem; gap: 4px; }
+.arctos-segment { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; border: 0; background: transparent; color: #536259; border-radius: .6rem; min-height: 44px; padding: .6rem 1rem; font-size: .9rem; font-weight: 600; }
+.arctos-segment.is-active { background: #fff; color: #183d29; box-shadow: 0 1px 4px #162d2012; }
+.arctos-count { border-radius: 1rem; background: #e7eee9; padding: .08rem .45rem; font-size: .75rem; }
+.arctos-event-search { position: relative; flex: 0 1 350px; }
+.arctos-event-search > i { position: absolute; top: 50%; left: .9rem; transform: translateY(-50%); color: #708076; pointer-events: none; }
+.arctos-event-search input { padding-left: 2.5rem; min-height: 44px; }
+.arctos-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
+.arctos-event-card { min-width: 0; height: 100%; border-radius: .9rem; overflow: hidden; transition: border-color .18s, box-shadow .18s; }
+.arctos-event-card:hover { border-color: #b8ccbf; box-shadow: 0 6px 22px #20372a0b; }
+.arctos-event-card .card-body { padding: 1.4rem; display: flex; flex-direction: column; align-items: flex-start; }
+.arctos-card-statuses { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: .85rem; }
+.arctos-card-title { font-size: 1.15rem; line-height: 1.4; letter-spacing: -.015em; overflow-wrap: anywhere; margin-bottom: .65rem; }
+.arctos-card-title a { color: #1e3327; text-decoration: none; }
+.arctos-card-title a:hover { color: #157343; text-decoration: underline; }
+.arctos-league-link { display: inline-flex; align-items: center; gap: .45rem; border: 1px solid #dce6df; border-radius: .4rem; padding: .3rem .5rem; color: #3e5f49; font-size: .8rem; margin-bottom: .75rem; text-decoration: none; max-width: 100%; overflow-wrap: anywhere; }
+.arctos-league-link:hover { background: #f0f7f2; }
+.arctos-meta-list { list-style: none; padding: 0; margin: .4rem 0 0; display: grid; gap: .8rem; color: #5c6b62; font-size: .9rem; width: 100%; }
+.arctos-meta-list li { display: flex; gap: .65rem; align-items: flex-start; overflow-wrap: anywhere; }
+.arctos-meta-list i { width: 1rem; flex-shrink: 0; margin-top: .2rem; color: #718078; text-align: center; }
+.arctos-registration-summary { width: 100%; border-top: 1px solid #e8eeea; margin-top: 1.2rem; padding-top: 1rem; display: flex; flex-wrap: wrap; gap: .4rem; }
+.arctos-registration-summary .badge, .arctos-card-statuses .badge { line-height: 1.35; white-space: normal; text-align: left; }
+.arctos-badge-success { background: #e7f5eb !important; color: #176238 !important; }
+.arctos-badge-warning { background: #fff1d6 !important; color: #785414 !important; }
+.arctos-badge-danger { background: #fce9e8 !important; color: #a12d2d !important; }
+.arctos-badge-neutral { background: #edf0ee !important; color: #526259 !important; }
+.arctos-card-footer { margin-top: auto; padding: 0 1.4rem 1.4rem; }
+.arctos-empty-state { border: 1px dashed #d8e2db; background: #f8faf8; border-radius: .9rem; padding: 3rem 1.25rem; text-align: center; color: #586b5e; }
+.arctos-empty-state > i { font-size: 2rem; color: #718b78; margin-bottom: 1rem; }
+.arctos-empty-state h2, .arctos-empty-state h3 { font-size: 1.2rem; color: #263e2f; }
+.arctos-empty-state p { max-width: 36rem; margin: .65rem auto 1.25rem; overflow-wrap: anywhere; }
+.arctos-empty-state .btn { min-height: 44px; }
+.arctos-page-intro { margin: .75rem 0 1.75rem; }
+.arctos-page-intro h1 { margin-bottom: .65rem; letter-spacing: -.03em; }
+.arctos-page-intro p { color: #5c6b62; line-height: 1.65; max-width: 660px; margin-bottom: 0; }
+.arctos-directory-search { display: flex; gap: .6rem; max-width: 600px; margin-bottom: 1rem; }
+.arctos-directory-search input { min-width: 0; min-height: 44px; }
+.arctos-directory-search .btn { flex-shrink: 0; min-height: 44px; }
+.arctos-results-count { color: #607067; font-size: .875rem; margin: 0 0 1.25rem; }
+.arctos-directory-card { min-width: 0; padding: 1.4rem; text-decoration: none; color: #223d2c; border-radius: .9rem; transition: border-color .18s, box-shadow .18s; }
+.arctos-directory-card:hover { color: #223d2c; border-color: #b8ccbf; box-shadow: 0 6px 22px #20372a0b; }
+.arctos-directory-identity { display: flex; align-items: center; gap: 1rem; }
+.arctos-directory-avatar { width: 64px; height: 64px; flex-shrink: 0; border-radius: .8rem; object-fit: cover; }
+.arctos-player-avatar { border-radius: 50%; }
+.arctos-avatar-placeholder { display: flex; align-items: center; justify-content: center; color: white; background: linear-gradient(135deg, #15803d, #0d9488); font-size: 1.6rem; }
+.arctos-directory-name { min-width: 0; }
+.arctos-directory-name h2 { font-size: 1.1rem; margin-bottom: .25rem; line-height: 1.4; overflow-wrap: anywhere; }
+.arctos-directory-name p { color: #627269; font-size: .875rem; margin-bottom: 0; overflow-wrap: anywhere; }
+.arctos-directory-location { color: #627269; font-size: .9rem; margin: 1rem 0 0; display: flex; align-items: flex-start; gap: .6rem; overflow-wrap: anywhere; }
+.arctos-directory-location i { margin-top: .2rem; }
+.arctos-directory-action { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 1.25rem; color: #167242; font-size: .85rem; font-weight: 600; }
+.arctos-pagination { margin: 1.75rem 0 0; display: flex; align-items: center; justify-content: center; gap: .75rem; flex-wrap: wrap; }
+.arctos-pagination .btn, .arctos-pagination .form-select { min-height: 44px; }
+.arctos-page-position { font-size: .875rem; color: #5c6b62; }
+.arctos-page-jump { display: flex; align-items: center; gap: .6rem; font-size: .875rem; font-weight: 400; color: #5c6b62; margin: 0; }
+.arctos-page-jump select { width: auto; min-width: 75px; }
+.arctos-league-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.arctos-league-identity { display: flex; align-items: center; gap: 1rem; margin-bottom: .5rem; }
+.arctos-league-identity .arctos-card-title { margin-bottom: .3rem; }
+.arctos-league-caption { margin: 0; color: #65756c; font-size: .85rem; }
+.arctos-create-event { max-width: 900px; margin: 0 auto; }
+.arctos-centered-intro { text-align: center; padding: .75rem 0; }
+.arctos-centered-intro .arctos-brand-mark { margin-bottom: 1rem; }
+.arctos-centered-intro p { margin-left: auto; margin-right: auto; }
+.arctos-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+.arctos-choice-card { padding: 1.75rem; border-radius: .9rem; min-width: 0; }
+.arctos-choice-icon { width: 3.75rem; height: 3.75rem; border-radius: 1rem; background: #e8f4ed; color: #197842; display: flex; align-items: center; justify-content: center; font-size: 1.65rem; margin-bottom: 1.3rem; }
+.arctos-choice-card h2 { font-size: 1.35rem; margin-bottom: .75rem; }
+.arctos-choice-card p { color: #607067; line-height: 1.65; }
+.arctos-choice-card ul { color: #607067; padding-left: 1.2rem; font-size: .9rem; line-height: 1.7; margin: 0 0 1.5rem; }
+.arctos-choice-card li + li { margin-top: .4rem; }
+.arctos-choice-card .btn { margin-top: auto; }
+.arctos-inline-help { display: flex; align-items: flex-start; gap: .75rem; background: #edf5ef; color: #44644e; border-radius: .75rem; padding: 1rem 1.25rem; margin-top: 1.5rem; font-size: .9rem; }
+.arctos-inline-help i { margin-top: .2rem; }
+.arctos-inline-help p { margin: 0; }
+.arctos-about { max-width: 1120px; margin: 0 auto; }
+.arctos-about-story { padding: 1.75rem; border-radius: .9rem; margin-bottom: 2.5rem; }
+.arctos-about-story h2 { font-size: 1.35rem; margin-bottom: 1rem; }
+.arctos-about-story p { color: #586c60; line-height: 1.8; }
+.arctos-about-story p:last-child { margin-bottom: 0; }
+.arctos-about-features { margin-bottom: 2.5rem; }
+.arctos-about-features > h2 { font-size: 1.4rem; text-align: center; margin-bottom: 1.5rem; }
+.arctos-feature-card { padding: 1.5rem; border-radius: .9rem; }
+.arctos-feature-icon { color: #15703e; background: #e8f4ed; border-radius: .65rem; width: 2.75rem; height: 2.75rem; display: flex; justify-content: center; align-items: center; margin-bottom: 1rem; font-size: 1.1rem; }
+.arctos-feature-card h3 { font-size: 1.05rem; margin-bottom: .65rem; }
+.arctos-feature-card p { font-size: .9rem; color: #5d6e63; line-height: 1.7; margin: 0; }
+.arctos-principles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem 2rem; margin: 0; }
+.arctos-principles dt { margin-bottom: .5rem; color: #2e4c37; }
+.arctos-principles dd { margin: 0; color: #5d6e63; font-size: .9rem; line-height: 1.7; }
+.arctos-event-hero { position: relative; display: flex; gap: 1.25rem; align-items: center; padding: 2.5rem; margin-bottom: 1.5rem; border-radius: 1rem; background: linear-gradient(115deg, #147d3d, #0e867b); color: #fff; overflow: hidden; }
+.arctos-event-hero::after { content: ""; position: absolute; width: 260px; height: 260px; right: -70px; top: -140px; border: 40px solid #ffffff08; border-radius: 50%; pointer-events: none; }
+.arctos-event-hero-mark { width: 4rem; height: 4rem; border-radius: 1rem; background: #ffffff19; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; flex-shrink: 0; }
+.arctos-event-hero-content { min-width: 0; }
+.arctos-event-hero h1 { font-size: clamp(1.6rem, 3vw, 2.2rem); color: #fff; letter-spacing: -.03em; line-height: 1.25; margin: 0; overflow-wrap: anywhere; }
+.arctos-event-hero p { margin: .8rem 0 0; color: #f0fff6; font-size: .95rem; line-height: 1.7; overflow-wrap: anywhere; }
+.arctos-event-league-badge { display: inline-flex; align-items: center; gap: .5rem; border: 1px solid #ffffff55; border-radius: .45rem; padding: .4rem .65rem; margin-bottom: 1rem; color: #fff; text-decoration: none; font-size: .8rem; min-height: 44px; overflow-wrap: anywhere; }
+.arctos-event-league-badge:hover { background: #ffffff20; color: #fff; }
+@media (max-width: 1100px) { .arctos-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) {
+    .arctos-card-grid, .arctos-choice-grid, .arctos-principles { grid-template-columns: minmax(0, 1fr); }
+    .arctos-discovery-hero { padding-top: .65rem; margin-bottom: 2rem; }
+    .arctos-discovery-hero h1 { margin-top: 1rem; }
+    .arctos-discovery-hero > p { font-size: .95rem; }
+    .arctos-discovery-toolbar { align-items: stretch; gap: .85rem; }
+    .arctos-segmented, .arctos-event-search { width: 100%; flex-basis: 100%; }
+    .arctos-segment { flex: 1; padding-left: .5rem; padding-right: .5rem; }
+    .arctos-card-grid { gap: 1rem; }
+    .arctos-directory-card, .arctos-choice-card, .arctos-about-story { padding: 1.25rem; }
+    .arctos-event-card .card-body { padding: 1.25rem; }
+    .arctos-card-footer { padding: 0 1.25rem 1.25rem; }
+    .arctos-event-hero { padding: 1.5rem 1.25rem; align-items: flex-start; gap: .85rem; }
+    .arctos-event-hero-mark { width: 2.5rem; height: 2.5rem; border-radius: .65rem; font-size: 1.05rem; }
+    .arctos-event-hero h1 { font-size: 1.5rem; }
+    .arctos-event-hero p { font-size: .9rem; }
+    .arctos-page-jump { width: 100%; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) { .arctos-event-card, .arctos-directory-card { transition: none; } }

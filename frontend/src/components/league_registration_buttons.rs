@@ -20,15 +20,16 @@ pub fn LeagueRegistrationButtons(
     /// Label for the register button when not registered. Default "Register".
     #[props(default = String::from("Register"))]
     register_label: String,
-    #[props(default = false)]
-    show_edit_warning: bool,
+    #[props(default = false)] show_edit_warning: bool,
     /// Per-role toggles; when provided, override the aggregate flag.
     #[props(default = None)]
     team_registration_open: Option<bool>,
-    #[props(default = None)]
-    player_registration_open: Option<bool>,
+    #[props(default = None)] player_registration_open: Option<bool>,
 ) -> Element {
-    let show_register_only = current_user.is_none();
+    let show_register_only = current_user
+        .as_ref()
+        .and_then(|user| user.as_ref().ok())
+        .is_none();
     let (_is_registered, user_type) = current_user
         .as_ref()
         .and_then(|r| r.as_ref().ok())
@@ -44,11 +45,10 @@ pub fn LeagueRegistrationButtons(
 
     rsx! {
         if show_register_only {
-            button {
-                r#type: "button",
-                class: "btn btn-secondary disabled",
-                disabled: true,
-                "Sign in to register"
+            a {
+                href: format!("/login?next={}", urlencoding::encode(&format!("/leagues/{league_url}/register"))),
+                class: "btn btn-primary",
+                "Log in to register"
             }
         } else {
             if user_type == "team" {

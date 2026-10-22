@@ -108,7 +108,6 @@ pub fn LeagueSettings(league_url: String) -> Element {
     let mut save_success = use_signal(|| false);
     let mut to_error = use_signal(|| None as Option<String>);
     let navigator = use_navigator();
-    let _backend = api::base_url();
     let mut waiver_file_bytes = use_signal(|| None as Option<bytes::Bytes>);
     let mut waiver_file_name = use_signal(|| None as Option<String>);
     let mut waiver_reading = use_signal(|| false);
@@ -277,7 +276,7 @@ pub fn LeagueSettings(league_url: String) -> Element {
                                 }
                                 if let Some(link) = d.league.waiver_filepath.as_deref() {
                                     a {
-                                        href: "{_backend}{link}",
+                                        href: api::static_file_url(link),
                                         class: "d-block small mb-3",
                                         target: "_blank",
                                         rel: "noreferrer",

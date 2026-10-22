@@ -120,28 +120,30 @@ pub fn SideCompDetail(url: String, comp_id: i32) -> Element {
                             if registrants.is_empty() {
                                 p { class: "text-muted", "No registrants yet." }
                             } else {
-                                table { class: "table",
-                                    thead {
-                                        tr {
-                                            th { "#" }
-                                            th { "Player" }
-                                            th { "Role" }
-                                            th { "Registered" }
-                                            th { "Source" }
-                                        }
-                                    }
-                                    tbody {
-                                        for r in registrants.iter() {
+                                div { class: "table-responsive", role: "region", "aria-label": "Side competition registrants", tabindex: "0",
+                                    table { class: "table",
+                                        thead {
                                             tr {
-                                                td { "{r.entry_number}" }
-                                                td { "{r.player_name}" }
-                                                td {
-                                                    if let Some(weapon) = r.weapon.as_ref() {
-                                                        PompfenIcon { weapon: weapon.clone(), size: "1.75em".to_string() }
+                                                th { "#" }
+                                                th { "Player" }
+                                                th { "Role" }
+                                                th { "Registered" }
+                                                th { "Source" }
+                                            }
+                                        }
+                                        tbody {
+                                            for r in registrants.iter() {
+                                                tr {
+                                                    td { "{r.entry_number}" }
+                                                    td { "{r.player_name}" }
+                                                    td {
+                                                        if let Some(weapon) = r.weapon.as_ref() {
+                                                            PompfenIcon { weapon: weapon.clone(), size: "1.75em".to_string() }
+                                                        }
                                                     }
+                                                    td { "{r.registered_at.clone().unwrap_or_default()}" }
+                                                    td { if r.registered_by_to { "TO" } else { "Self" } }
                                                 }
-                                                td { "{r.registered_at.clone().unwrap_or_default()}" }
-                                                td { if r.registered_by_to { "TO" } else { "Self" } }
                                             }
                                         }
                                     }

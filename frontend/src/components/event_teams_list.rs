@@ -27,7 +27,7 @@ pub fn EventTeamsList(props: EventTeamsListProps) -> Element {
     } = props;
     let backend = api::base_url();
     if teams.is_empty() {
-        return rsx! { };
+        return rsx! {};
     }
     let count = teams.len();
     let title = format!("{card_title} ({count})");
@@ -38,7 +38,7 @@ pub fn EventTeamsList(props: EventTeamsListProps) -> Element {
                     div { class: "card-header", h5 { class: "mb-0", "{title}" } }
                     div { class: "card-body",
                         div { class: "table-responsive",
-                            table { class: "table table-striped",
+                            table { class: "table table-striped roster-table",
                                 thead {
                                     tr {
                                         th { "Team Name" }
@@ -69,14 +69,14 @@ pub fn EventTeamsList(props: EventTeamsListProps) -> Element {
                                                     }
                                                 }
                                             }
-                                            td {
+                                            td { "data-label": "Players",
                                                 span { class: "badge bg-primary", "{team.player_count}" }
                                                 if let Some(max) = max_team_size_roster {
                                                     span { " / {max}" }
                                                 }
                                             }
                                             if show_registered_at {
-                                                td { "{team.registered_at.as_deref().unwrap_or(\"-\")}" }
+                                                td { "data-label": "Registered", {crate::time_format::format_registration_timestamp(team.registered_at.as_deref().unwrap_or("—"))} }
                                             }
                                         }
                                     }

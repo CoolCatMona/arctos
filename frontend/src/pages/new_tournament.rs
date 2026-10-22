@@ -16,21 +16,46 @@ fn get_form_value(id: &str) -> String {
 pub fn NewTournament() -> Element {
     let navigator = use_navigator();
     let mut error = use_signal(|| None::<String>);
+    let mut busy = use_signal(|| false);
+    let user = use_resource(move || async move { api::me().await });
+
+    if user.read().is_none() {
+        return rsx! { div { class: "loading-state", role: "status", "Checking your account…" } };
+    }
+    if !matches!(user.read().as_ref(), Some(Ok(_))) {
+        return rsx! {
+            div { class: "row justify-content-center form-page",
+                div { class: "col-12 form-column",
+                    div { class: "card",
+                        div { class: "card-body",
+                            h1 { "Create a tournament" }
+                            p { "Log in to create and manage your tournament. Both player and team accounts can organize events." }
+                            a { class: "btn btn-primary", href: "/login?next=/new-tournament", "Log in to continue" }
+                        }
+                    }
+                }
+            }
+        };
+    }
 
     rsx! {
-        div { class: "row justify-content-center",
-            div { class: "col-md-8",
+        div { class: "row justify-content-center form-page",
+            div { class: "col-12 form-column",
                 div { class: "card",
                     div { class: "card-header",
-                        h3 { class: "mb-0", "Create New Tournament" }
+                        p { class: "auth-eyebrow", "BRING EVERYONE TOGETHER" }
+                        h1 { class: "mb-2", "Create a tournament" }
+                        p { class: "text-muted mb-0", "Start with a name and link. Your tournament stays private until you publish it." }
                     }
                     div { class: "card-body",
                         if let Some(ref err) = error() {
-                            div { class: "alert alert-danger mb-3", "{err}" }
+                            div { class: "alert alert-danger mb-3", role: "alert", "{err}" }
                         }
+                        p { class: "form-text mb-4", "After creating your event, set its dates, location, fees, and registration options in Settings before sharing it." }
                         form {
                             onsubmit: move |ev| {
                                 ev.prevent_default();
+                                if busy() { return; }
                                 error.set(None);
                                 let name = get_form_value("name").trim().to_string();
                                 let url_slug = get_form_value("url").trim().to_string();
@@ -42,6 +67,7 @@ pub fn NewTournament() -> Element {
                                     error.set(Some(URL_SLUG_ALLOWED_HINT.to_string()));
                                     return;
                                 }
+                                busy.set(true);
                                 let nav = navigator.clone();
                                 spawn(async move {
                                     match api::create_tournament(&name, &url_slug, None).await {
@@ -59,6 +85,7 @@ pub fn NewTournament() -> Element {
                                             error.set(Some(e));
                                         }
                                     }
+                                    busy.set(false);
                                 });
                             },
                             div { class: "mb-3",
@@ -66,20 +93,23 @@ pub fn NewTournament() -> Element {
                                 input { r#type: "text", class: "form-control", id: "name", name: "name", required: true }
                             }
                             div { class: "mb-3",
-                                label { r#for: "url", class: "form-label", "URL Slug" }
+                                label { r#for: "url", class: "form-label", "Event URL" }
                                 input {
                                     r#type: "text",
                                     class: "form-control",
                                     id: "url",
                                     name: "url",
+                                    autocomplete: "off",
+                                    autocapitalize: "none",
+                                    spellcheck: "false",
                                     required: true,
-                                    pattern: r"[A-Za-z0-9\.\_\~\-]+",
+                                    pattern: r"[A-Za-z0-9._~\-]+",
                                     title: URL_SLUG_ALLOWED_HINT,
                                 }
-                                div { class: "form-text", "This will be used in the URL (e.g., /my-tournament). {URL_SLUG_ALLOWED_HINT}" }
+                                div { class: "form-text", "Choose a unique, shareable link, such as /summer-cup. {URL_SLUG_ALLOWED_HINT}" }
                             }
                             div { class: "d-grid",
-                                button { r#type: "submit", class: "btn btn-primary", "Create Tournament" }
+                                button { r#type: "submit", class: "btn btn-primary", disabled: busy(), if busy() { "Creating tournament…" } else { "Create tournament" } }
                             }
                         }
                     }

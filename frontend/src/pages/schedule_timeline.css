@@ -23,7 +23,7 @@
     align-items: center;
     gap: 0.5rem;
     flex-wrap: wrap;
-    background: #f8f9fa;
+    background: #f8faf7;
 }
 
 /* Only this area scrolls vertically; no horizontal scrollbar */
@@ -66,7 +66,7 @@
     background-image: linear-gradient(
         to bottom,
         #ffffff 50%,
-        #f3f4f6 50%
+        #f3f6f2 50%
     );
     background-size: 100% calc(var(--slot-height) * 2);
     background-position: 0 var(--header-height);
@@ -76,7 +76,7 @@
 .schedule-timeline-header {
     display: contents;
     font-weight: 600;
-    background: #f8f9fa;
+    background: #f8faf7;
     border-bottom: 2px solid #ddd;
 }
 
@@ -91,7 +91,7 @@
     min-height: var(--header-height);
     display: flex;
     align-items: center;
-    background: #f8f9fa;
+    background: #f8faf7;
 }
 
 .schedule-timeline-time-col {
@@ -108,7 +108,7 @@
 }
 
 .schedule-timeline-header .schedule-timeline-time-col {
-    background: #f8f9fa !important;
+    background: #f8faf7 !important;
     z-index: 31;
 }
 
@@ -322,13 +322,13 @@
     white-space: nowrap;
 }
 
-/* Tag, reference/link, and ribbon SVG icons – Bootstrap primary blue (#0d6efd) */
+/* Tag, reference/link, and ribbon SVG icons. */
 .icon-primary-svg {
     width: 1em;
     height: 1em;
     object-fit: contain;
     vertical-align: -0.15em;
-    filter: invert(27%) sepia(98%) saturate(2476%) hue-rotate(226deg) brightness(99%) contrast(101%);
+    filter: invert(37%) sepia(68%) saturate(643%) hue-rotate(93deg) brightness(89%) contrast(95%);
 }
 
 /* Ribbon game indicator: bottom-right corner, tooltip on hover */
@@ -350,7 +350,7 @@
     width: 1em;
     height: 1em;
     object-fit: contain;
-    filter: invert(27%) sepia(98%) saturate(2476%) hue-rotate(226deg) brightness(99%) contrast(101%);
+    filter: invert(37%) sepia(68%) saturate(643%) hue-rotate(93deg) brightness(89%) contrast(95%);
 }
 
 /* Now line (Google Calendar–style) across the multi-field schedule */
@@ -384,7 +384,7 @@
     right: 0;
     top: var(--header-height);
     bottom: 0;
-    background: rgba(13, 110, 253, 0.05);
+    background: rgba(21, 128, 61, 0.05);
     pointer-events: none;
     z-index: 10;
 }
@@ -399,7 +399,7 @@
     padding: 0.5rem 1rem;
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.9);
-    color: #6c757d;
+    color: #647067;
     font-weight: 500;
 }
 
@@ -407,14 +407,14 @@
 .schedule-timeline-empty-message {
     padding: 3rem 1rem;
     text-align: center;
-    color: #6c757d;
+    color: #647067;
     font-weight: 500;
 }
 
 /* BREAK / JOIN: stable neutral look, no lifecycle chrome */
 .schedule-timeline-event--structural {
     border-style: dashed;
-    color: #495057;
+    color: #52615a;
     box-shadow: none;
 }
 
@@ -422,10 +422,10 @@
     opacity: 0.55;
     background: repeating-linear-gradient(
         -45deg,
-        #f8f9fa,
-        #f8f9fa 6px,
-        #e9ecef 6px,
-        #e9ecef 12px
+        #f8faf7,
+        #f8faf7 6px,
+        #eef2ee 6px,
+        #eef2ee 12px
     );
     border-style: dashed;
 }
@@ -571,13 +571,13 @@
     padding: 0.2rem 0.4rem;
     border-radius: 4px;
     font-size: 0.9em;
-    background: #e9ecef;
-    border: 1px solid #dee2e6;
+    background: #eef2ee;
+    border: 1px solid #e1e7e2;
 }
 
 .team-token-chip-focused {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    border-color: #15803d;
+    box-shadow: 0 0 0 0.2rem rgba(21, 128, 61, 0.25);
 }
 
 .team-token-chip-team .team-token-avatar {
@@ -587,15 +587,15 @@
     width: 1.4em;
     height: 1.4em;
     border-radius: 50%;
-    background: #6c757d;
+    background: #647067;
     color: white;
     font-size: 0.75em;
     font-weight: 600;
 }
 
 .team-token-chip-tag {
-    background: #e7f1ff;
-    border-color: #b6d4fe;
+    background: #edf7ee;
+    border-color: #b9dfc5;
 }
 
 .team-token-chip-tag .team-token-icon,
@@ -605,7 +605,7 @@
 
 .team-token-chip-winner .team-token-badge,
 .winner-badge {
-    background: #198754;
+    background: #15803d;
     color: white;
     padding: 0.1rem 0.35rem;
     border-radius: 3px;
@@ -631,7 +631,7 @@
     margin-left: 0.2rem;
     font-size: 1.1em;
     line-height: 1;
-    color: #6c757d;
+    color: #647067;
     border-radius: 2px;
 }
 
@@ -718,9 +718,9 @@
 
 /* Matched pair — soft blue wash + outline so both ends read as a pair. */
 .ass-entry-bracket-match {
-    background-color: rgba(13, 110, 253, 0.28);
+    background-color: rgba(21, 128, 61, 0.28);
     border-radius: 2px;
-    box-shadow: 0 0 0 1px rgba(13, 110, 253, 0.55);
+    box-shadow: 0 0 0 1px rgba(21, 128, 61, 0.55);
 }
 
 /* Unmatched bracket — red so it's obvious something is wrong. */
@@ -752,7 +752,7 @@
     margin-top: 2px;
     padding: 0.15rem 0;
     background: white;
-    border: 1px solid #dee2e6;
+    border: 1px solid #e1e7e2;
     border-radius: 4px;
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
     list-style: none;
@@ -775,7 +775,7 @@
 }
 
 .ass-entry-ac-item-active {
-    background: #0d6efd;
+    background: #15803d;
     color: white;
 }
 
@@ -812,14 +812,14 @@
     gap: 0.25rem;
     align-items: center;
     padding: 0.25rem 0.4rem;
-    background: #f8f9fa;
+    background: #f8faf7;
     border-radius: 4px;
     border: 1px dashed #ced4da;
 }
 
 .ass-entry-preview-text {
     font-family: var(--bs-font-monospace, monospace);
-    color: #495057;
+    color: #52615a;
     white-space: pre;
 }
 
@@ -856,7 +856,7 @@
     overflow-y: hidden;
     line-height: 1.5;
     /* Keep caret visible even when background is transparent. */
-    caret-color: var(--bs-body-color, #212529);
+    caret-color: var(--bs-body-color, #202923);
 }
 
 .ass-entry-simplified {
@@ -866,9 +866,9 @@
     gap: 0.25rem;
     align-items: center;
     padding: 0.25rem 0.4rem;
-    background: rgba(25, 135, 84, 0.06);
+    background: rgba(21, 128, 61, 0.06);
     border-radius: 4px;
-    border: 1px dashed rgba(25, 135, 84, 0.35);
+    border: 1px dashed rgba(21, 128, 61, 0.35);
 }
 
 .ass-entry-simplified-label {
@@ -882,8 +882,8 @@
     gap: 0.15rem;
     padding: 0 0.2rem;
     border-radius: 3px;
-    background: rgba(13, 110, 253, 0.07);
-    border: 1px solid rgba(13, 110, 253, 0.18);
+    background: rgba(21, 128, 61, 0.07);
+    border: 1px solid rgba(21, 128, 61, 0.18);
     font-size: 0.78em;
     line-height: 1.3;
     margin-right: 0.1rem;
@@ -906,7 +906,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: #6c757d;
+    background: #647067;
     color: white;
     font-size: 0.7em;
     font-weight: 600;
@@ -1044,10 +1044,10 @@
 .schedule-drag-ghost {
     position: absolute;
     box-sizing: border-box;
-    border: 2px dashed #0d6efd;
+    border: 2px dashed #15803d;
     border-radius: 6px;
-    background: rgba(13, 110, 253, 0.12);
-    color: #0d6efd;
+    background: rgba(21, 128, 61, 0.12);
+    color: #15803d;
     font-size: 0.85em;
     font-weight: 600;
     padding: 0.25rem 0.4rem;
@@ -1085,18 +1085,18 @@
 .schedule-drag-gap-line {
     position: absolute;
     height: 0;
-    border-top: 3px solid #0d6efd;
-    box-shadow: 0 0 4px rgba(13, 110, 253, 0.6);
+    border-top: 3px solid #15803d;
+    box-shadow: 0 0 4px rgba(21, 128, 61, 0.6);
     pointer-events: none;
     z-index: 27;
 }
 
 /* Bulk-length tool: selected blocks. */
 .schedule-timeline-event--bulk-selected {
-    outline: 3px solid #0d6efd;
+    outline: 3px solid #15803d;
     outline-offset: -1px;
-    background-color: rgba(13, 110, 253, 0.10) !important;
-    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+    background-color: rgba(21, 128, 61, 0.10) !important;
+    box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.25);
 }
 
 /* Alt-hover dependency view. Both the hovered source and every dependency
@@ -1108,12 +1108,12 @@
 }
 
 .schedule-timeline-event--dep-chain {
-    background-color: rgba(13, 110, 253, 0.12) !important;
+    background-color: rgba(21, 128, 61, 0.12) !important;
     z-index: 19 !important;
 }
 
 .schedule-timeline-event--dep-team {
-    background-color: rgba(25, 135, 84, 0.12) !important;
+    background-color: rgba(21, 128, 61, 0.12) !important;
     z-index: 19 !important;
 }
 
@@ -1229,9 +1229,9 @@
 
 /* Pending-create placeholder: stays visible while the create card is open. */
 .schedule-drag-ghost--pending {
-    border-color: #198754;
-    background: rgba(25, 135, 84, 0.10);
-    color: #198754;
+    border-color: #15803d;
+    background: rgba(21, 128, 61, 0.10);
+    color: #15803d;
 }
 
 /* Winner/Loser insertion chips: shown on block hover while an editor card has
@@ -1264,9 +1264,29 @@
 }
 
 .schedule-result-chip--winner {
-    background: #198754;
+    background: #15803d;
 }
 
 .schedule-result-chip--loser {
     background: #dc3545;
+}
+
+/* Let controls wrap without changing grid measurements used by drag/drop. */
+.schedule-timeline-wrapper { border-color: #e1e7e2; border-radius: .8rem; }
+.schedule-timeline-nav { border-bottom-color: #e1e7e2; padding: .75rem; gap: .65rem; }
+.schedule-timeline-nav > * { max-width: 100%; }
+.schedule-timeline-date { overflow-wrap: anywhere; }
+.schedule-keyboard-focus:focus-visible { outline: 3px solid #0d9488; outline-offset: 4px; }
+@media (max-width: 991.98px) {
+    /* 100vw includes scrollbar width; contained mobile tools avoid page overflow. */
+    .schedule-editor-fullbleed { width: 100%; max-width: 100%; margin-inline: 0; padding-inline: 0; }
+    .schedule-editor-panel { width: 100%; min-width: 0; }
+}
+@media (max-width: 575.98px) {
+    .schedule-timeline-nav { align-items: flex-start; }
+    .schedule-timeline-date { width: 100%; margin-left: 0; }
+    .team-token-autocomplete { min-width: min(200px, 100%); }
+}
+@media (min-width: 992px) {
+    .schedule-editor-panel { top: calc(var(--header-height, 76px) + 1rem); max-height: calc(100dvh - var(--header-height, 76px) - 2rem); }
 }

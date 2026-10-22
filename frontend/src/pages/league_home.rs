@@ -110,7 +110,7 @@ pub fn LeagueHome(league_url: String) -> Element {
                 badge_name: None,
             }
 
-            div { class: "row mb-3",
+            div { class: "row mb-3 event-actions",
                 div { class: "col-12 d-flex flex-wrap gap-2",
                     if show_registration_success() {
                         div { class: "alert alert-success mb-0 w-100",
@@ -165,7 +165,7 @@ pub fn LeagueHome(league_url: String) -> Element {
                         div { class: "card",
                             div { class: "card-header", h5 { class: "mb-0", "Events" } }
                             div { class: "card-body",
-                                div { class: "list-group list-group-flush",
+                                div { class: "list-group list-group-flush league-events",
                                     for event in d.events.iter() {
                                         li { key: "{event.url}", class: "list-group-item d-flex justify-content-between align-items-center",
                                             Link { to: Route::TournamentHome { url: event.url.clone() }, class: "text-decoration-none",

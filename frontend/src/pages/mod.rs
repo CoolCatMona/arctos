@@ -120,3 +120,6 @@ pub use thanks::Thanks;
 pub use tournament_home::{TournamentHome, TournamentHomeWithTab};
 pub use tournament_register::TournamentRegister;
 pub use tournament_settings::TournamentSettings;
+
+mod not_found;
+pub use not_found::NotFound;

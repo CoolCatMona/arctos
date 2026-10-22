@@ -1,4 +1,4 @@
-//! Shared event header (title, subtitle, optional league badge).
+//! Shared event identity, with an optional link to its parent league.
 
 use crate::Route;
 use dioxus::prelude::*;
@@ -23,19 +23,14 @@ pub fn EventHeader(props: EventHeaderProps) -> Element {
         badge_name,
     } = props;
     rsx! {
-        div { class: "row",
-            div { class: "col-12",
-                h1 { "{title}" }
-                if let (Some(lu), Some(name)) = (badge_league_url, badge_name) {
-                    p { class: "mb-1",
-                        Link {
-                            to: Route::LeagueHome { league_url: lu },
-                            class: "badge bg-secondary text-decoration-none",
-                            "Part of {name}"
-                        }
-                    }
+        header { class: "arctos-event-hero",
+            div { class: "arctos-event-hero-mark", aria_hidden: "true", i { class: "fas fa-trophy" } }
+            div { class: "arctos-event-hero-content",
+                if let (Some(url), Some(name)) = (badge_league_url, badge_name) {
+                    Link { to: Route::LeagueHome { league_url: url }, class: "arctos-event-league-badge", i { class: "fas fa-trophy", aria_hidden: "true" } "Part of {name}" }
                 }
-                p { class: "lead", "{subtitle}" }
+                h1 { "{title}" }
+                if !subtitle.trim().is_empty() { p { "{subtitle}" } }
             }
         }
     }

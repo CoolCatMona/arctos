@@ -1,0 +1,131 @@
+/* Operational surfaces share the shell palette while keeping live timing and
+   canvas geometry independent of presentation. */
+.operator-setup .card, .operator-finalize .card { margin-bottom: 1rem; }
+.operator-setup .row.mb-4 { row-gap: 1rem; }
+.operator-signature-pad { background: #fff; border-radius: .85rem; }
+.operator-finalize .row.mb-4 { row-gap: 1.25rem; }
+.operator-signature-pad canvas { display: block; }
+.stones-page { max-width: 860px; padding: 0; }
+.stones-intro { max-width: 42rem; }
+.stones-playback { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.stones-playback .btn { margin: 0 !important; }
+.stones-playback .btn-lg { min-width: 13rem; min-height: 64px; }
+.stones-sync-status { color: var(--bs-success); padding: .8rem 1rem; background: rgba(16,185,129,.08); border-radius: .75rem; }
+.stones-details { border-top: 1px solid var(--bs-border-color); padding: .8rem 0; }
+.stones-details summary { cursor: pointer; font-weight: 600; min-height: 44px; padding: .55rem 0; }
+.stones-details li { margin-bottom: .65rem; }
+.run-match-page { max-width: 1120px; padding: 0; }
+.run-match-page h2 { margin-bottom: 1rem; }
+.run-match-page #score-stones-card { margin-top: 1.25rem; border-color: rgba(16,185,129,.3); }
+.run-match-page #score-by-set strong { font-size: 2rem; font-variant-numeric: tabular-nums; }
+.run-match-page #score-by-set small { font-size: .9rem; }
+.run-match-page #time-elapsed { color: var(--bs-success); font-variant-numeric: tabular-nums; }
+.run-match-page .winner-option { min-height: 44px; border-radius: .65rem; background: var(--bs-tertiary-bg); color: var(--bs-body-color); border-color: var(--bs-border-color); }
+.run-match-page .winner-option:hover { background: var(--bs-secondary-bg); }
+.run-match-page .winner-option.active { background: var(--bs-primary); border-color: var(--bs-primary); color: #fff; }
+.run-match-page .delete-point-btn { width: 44px; height: 44px; border-radius: .6rem; background: rgba(239,68,68,.12); color: var(--bs-danger); }
+.run-match-page .set-number-controls { width: 44px; }
+.run-match-page .set-number-controls button.set-step-btn { width: 44px; height: 36px; color: var(--bs-secondary-color); }
+.run-match-page #quick-timer { min-height: 56px; background: var(--bs-tertiary-bg); color: var(--bs-body-color); border-color: var(--bs-border-color); border-radius: .8rem; }
+.run-match-page #quick-timer:hover, .run-match-page #quick-timer.qt-dragging { background: var(--bs-secondary-bg); }
+.run-match-page #points-table { min-width: 620px; }
+.run-match-page .point-mobile-label { display: none; }
+.match-page .match-overview .card-body > .row { row-gap: 1.1rem; }
+.match-page .match-live { border-color: rgba(16,185,129,.35); }
+.match-page .match-live .card-header { background: rgba(16,185,129,.055); }
+.match-page .match-video .card-header { flex-wrap: wrap; gap: .75rem; }
+.match-page #youtube-player-container { overflow: hidden; border-radius: .8rem; background: #080b0d; }
+.match-page #youtube-player-container iframe { width: 100%; height: 100%; }
+.match-page #points-dropdown { max-width: 100%; }
+@media (max-width: 767.98px) {
+    .run-match-page { padding-bottom: calc(116px + env(safe-area-inset-bottom)); }
+    .run-match-page #score-stones-card .card-body { padding: 1rem; }
+    .run-match-page #score-by-set strong { font-size: 1.5rem; }
+    .run-match-page #score-by-set small { font-size: .85rem; }
+    .run-match-page #quick-timer { position: relative; top: auto; right: auto; z-index: 1; min-width: 64px; height: 56px; }
+    .run-match-page #quick-timer.qt-dragging { z-index: 2001; }
+    .mobile-button-wrapper.operator-match-controls { padding: .75rem .75rem calc(.75rem + env(safe-area-inset-bottom)); gap: .65rem; background: var(--bs-body-bg); border-top: 1px solid var(--bs-border-color); box-shadow: 0 -8px 28px rgba(0,0,0,.18); }
+    .mobile-button-wrapper.operator-match-controls .btn { border-radius: .85rem; min-height: 64px; font-size: 1rem; }
+    .run-match-page .set-number-controls button.set-step-btn { height: 44px; }
+    .stones-playback .btn-lg { flex: 1 1 100%; }
+    .stones-playback .btn-outline-secondary { flex: 1; }
+    .operator-setup .input-group { flex-wrap: wrap; }
+    .operator-finalize .card-body { padding: 1rem; }
+    .match-page > .row > .col-md-4 { margin-top: 1rem; }
+}
+
+/* Keep every point action within the phone viewport. The same table and
+   controls remain in the DOM, preserving live state, focus, and handlers. */
+@media (max-width: 575.98px) {
+    .run-match-page .point-history { border: 0; background: transparent; overflow: visible; }
+    .run-match-page #points-table, .run-match-page #points-table tbody { display: block; width: 100%; min-width: 0; }
+    .run-match-page #points-table thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+    .run-match-page #points-table .point-entry {
+        display: grid;
+        grid-template-columns: minmax(0,1fr) 112px minmax(0,1fr);
+        grid-template-areas: "point set stones" "winner winner winner" "rerun notes delete";
+        align-items: center;
+        gap: 12px 8px;
+        padding: 12px;
+        margin-bottom: 12px;
+        border: 1px solid var(--bs-border-color);
+        border-radius: .8rem;
+        background: var(--bs-body-bg);
+    }
+    .run-match-page #points-table .point-entry > td { display: block; min-width: 0; border: 0; padding: 0; background: transparent; box-shadow: none; }
+    .run-match-page .point-mobile-label { display: block; margin-bottom: 5px; color: var(--bs-secondary-color); font-size: .75rem; font-weight: 600; }
+    .run-match-page #points-table .point-index { grid-area: point; text-align: left !important; font-weight: 600; }
+    .run-match-page #points-table .point-set { grid-area: set; text-align: center; }
+    .run-match-page #points-table .point-stones { grid-area: stones; text-align: right; font-variant-numeric: tabular-nums; }
+    .run-match-page #points-table .point-winner { grid-area: winner; }
+    .run-match-page #points-table .point-rerun { grid-area: rerun; }
+    .run-match-page #points-table .point-notes { grid-area: notes; }
+    .run-match-page #points-table .point-delete { grid-area: delete; justify-self: end; }
+    .run-match-page .set-number-controls { flex-direction: row; justify-content: center; width: 112px; }
+    .run-match-page .set-number-controls .set-number-display { min-width: 24px; }
+    .run-match-page .set-number-controls button.set-step-btn { flex: 0 0 44px; border: 1px solid var(--bs-border-color); border-radius: .5rem; background: var(--bs-tertiary-bg); }
+    .run-match-page .winner-cell, .run-match-page .winner-options-group { width: 100%; }
+    .run-match-page .winner-options-group { flex-wrap: nowrap; gap: 8px; }
+    .run-match-page .winner-option { flex: 1 1 0; justify-content: center; padding: 10px 6px; }
+    .run-match-page .winner-option .winner-name { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+    .run-match-page .point-rerun-toggle { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 44px; min-height: 44px; margin: 0; padding: 0; cursor: pointer; }
+    .run-match-page .point-rerun-toggle .form-check-input { float: none; margin: 0; }
+    .run-match-page .point-rerun-toggle .point-mobile-label { margin: 0; }
+    .run-match-page .point-note-actions { flex-direction: row !important; justify-content: center; }
+    .run-match-page .point-note-actions .btn { flex: 0 0 44px; width: 44px; padding: 0; }
+    .run-match-page #points-table .point-row-no-border { border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+    .run-match-page #points-table .point-note-details { display: block; margin-top: -12px; margin-bottom: 12px; border: 1px solid var(--bs-border-color); border-top: 0; border-radius: 0 0 .8rem .8rem; }
+    .run-match-page #points-table .point-note-details > td { display: block; padding: 0 12px 12px; border: 0; background: transparent; box-shadow: none; overflow-wrap: anywhere; }
+    .run-match-page #points-table .point-entry:last-child, .run-match-page #points-table .point-note-details:last-child { margin-bottom: 0; }
+}
+
+/* Registration managers keep one person's details and controls together on phones. */
+.arctos-app .management-table th, .arctos-app .management-table td { overflow-wrap: normal; word-break: normal; }
+.arctos-app .management-payment { margin-top: 10px; }
+.arctos-app .management-payment-controls { max-width: 420px; }
+.arctos-app .management-payment-confirmed { gap: 8px; cursor: pointer; white-space: normal; }
+.arctos-app .management-payment-confirmed .form-check-input { flex-shrink: 0; }
+@media (min-width: 992px) {
+    .arctos-app .management-table { min-width: 960px; }
+    .arctos-app .management-actions { min-width: 330px; }
+}
+@media (max-width: 991.98px) {
+    .arctos-app .management-table-wrap { overflow: visible; }
+    .arctos-app .management-table, .arctos-app .management-table tbody { display: block; width: 100%; }
+    .arctos-app .management-table thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+    .arctos-app .management-table tr { display: flex; flex-direction: column; width: 100%; padding: 12px 0; border-bottom: 1px solid var(--bs-border-color); }
+    .arctos-app .management-table tr:last-child { border-bottom: 0; }
+    .arctos-app .management-table td { display: block; min-width: 0; width: 100%; border: 0; padding: 7px 14px; background: #fff; box-shadow: none; overflow-wrap: anywhere; }
+    .arctos-app .management-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; color: var(--bs-secondary-color); font-size: .75rem; font-weight: 600; }
+    .arctos-app .management-table td:first-child { font-size: 1rem; }
+    .arctos-app .management-table .management-actions { border-top: 1px solid var(--bs-border-color); margin-top: 8px; padding-top: 12px; }
+    .arctos-app .management-actions > .btn { width: 100%; }
+    .arctos-app .management-payment-controls { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 8px 0; width: 100%; }
+    .arctos-app .management-payment-controls > * { margin: 0 !important; }
+    .arctos-app .management-payment-controls > .form-control { width: 100%; min-width: 0; border-radius: 0 8px 8px 0 !important; }
+    .arctos-app .management-payment-controls > .input-group-text:first-child { border-radius: 8px 0 0 8px; }
+    .arctos-app .management-payment-controls > .management-payment-confirmed,
+    .arctos-app .management-payment-controls > .btn,
+    .arctos-app .management-payment-controls > .w-100 { grid-column: 1 / -1; width: 100%; min-height: 44px; border-radius: 8px !important; }
+    .arctos-app .management-payment-confirmed { justify-content: flex-start; gap: 12px; }
+}
