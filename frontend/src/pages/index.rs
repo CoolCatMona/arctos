@@ -231,27 +231,54 @@ fn TournamentCard(
 
 #[component]
 pub(super) fn UserRegBadges(urs: UserRegStatus) -> Element {
-    let (status_class, status_label) = match urs.status.as_str() {
-        "CONFIRMED" => ("arctos-badge-success", "Confirmed"),
-        "PENDING_TEAM_APPROVAL" => ("arctos-badge-warning", "Awaiting team approval"),
-        "REJECTED" => ("arctos-badge-danger", "Declined"),
-        "CANCELLED" => ("arctos-badge-neutral", "Cancelled"),
-        _ => ("arctos-badge-neutral", "Status unavailable"),
+    let (status_class, status_icon, status_label) = match urs.status.as_str() {
+        "CONFIRMED" => ("arctos-badge-success", "fas fa-circle-check", "Confirmed"),
+        "PENDING_TEAM_APPROVAL" => (
+            "arctos-badge-warning",
+            "fas fa-clock",
+            "Awaiting Team Approval",
+        ),
+        "REJECTED" => ("arctos-badge-danger", "fas fa-circle-xmark", "Declined"),
+        "CANCELLED" => ("arctos-badge-neutral", "fas fa-circle-minus", "Cancelled"),
+        _ => (
+            "arctos-badge-neutral",
+            "fas fa-circle-question",
+            "Status unavailable",
+        ),
     };
-    let (waiver_class, waiver_label) = match urs.waiver_status.as_deref().unwrap_or("NOT_SIGNED") {
-        "VALID" => ("arctos-badge-success", "Waiver valid"),
-        "OUT_OF_DATE" => ("arctos-badge-warning", "Waiver needs re-signing"),
-        "NOT_SIGNED" => ("arctos-badge-danger", "Waiver not signed"),
-        _ => ("arctos-badge-neutral", "Waiver status unknown"),
-    };
-    let account_label = if urs.reg_type == "team" {
-        "Team"
-    } else {
-        "Player"
-    };
+    let (waiver_class, waiver_icon, waiver_label) =
+        match urs.waiver_status.as_deref().unwrap_or("NOT_SIGNED") {
+            "VALID" => ("arctos-badge-success", "fas fa-check", "Waiver valid"),
+            "OUT_OF_DATE" => (
+                "arctos-badge-warning",
+                "fas fa-file-signature",
+                "Waiver needs re-signing",
+            ),
+            "NOT_SIGNED" => (
+                "arctos-badge-danger",
+                "fas fa-file-signature",
+                "Waiver not signed",
+            ),
+            _ => (
+                "arctos-badge-neutral",
+                "fas fa-circle-question",
+                "Waiver status unknown",
+            ),
+        };
     rsx! {
-        span { class: "badge {status_class}", "{account_label}: {status_label}" }
-        span { class: if urs.paid { "badge arctos-badge-success" } else { "badge arctos-badge-warning" }, if urs.paid { "Paid" } else { "Unpaid" } }
-        if urs.waiver_required { span { class: "badge {waiver_class}", "{waiver_label}" } }
+        span { class: "badge arctos-registration-badge {status_class}",
+            i { class: "{status_icon}", aria_hidden: "true" }
+            span { "{status_label}" }
+        }
+        span { class: if urs.paid { "badge arctos-registration-badge arctos-badge-success" } else { "badge arctos-registration-badge arctos-badge-danger" },
+            i { class: if urs.paid { "fas fa-check" } else { "fas fa-receipt" }, aria_hidden: "true" }
+            span { if urs.paid { "Paid" } else { "Unpaid" } }
+        }
+        if urs.waiver_required {
+            span { class: "badge arctos-registration-badge {waiver_class}",
+                i { class: "{waiver_icon}", aria_hidden: "true" }
+                span { "{waiver_label}" }
+            }
+        }
     }
 }

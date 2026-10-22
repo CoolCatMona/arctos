@@ -7,7 +7,8 @@ Checks all three themes in light/dark at phone width, actual surface/label
 contrast and distinct backgrounds, nested menu keyboard/focus behavior, guest,
 player and team access, unsaved form retention, existing preferences, persistence,
 live System changes, explicit overrides, cross-tab changes/removal, blocked
-browser storage, representative custom surfaces, and overlay isolation.
+browser storage, personal registration statuses, representative custom surfaces,
+and overlay isolation.
 Shares the demo marker, loopback restriction, asset checks, and mutation guard
 with check_mobile_ui.py. No server data is changed except signing into the demo.
 """
@@ -19,7 +20,7 @@ from contextlib import asynccontextmanager
 import json
 import sys
 
-from playwright.async_api import Page, async_playwright, expect
+from playwright.async_api import Page, Route, async_playwright, expect
 
 from check_mobile_ui import DEMO_USER, TIMEOUT_MS, Screen, SmokeCheck, api_json, arguments
 
@@ -207,6 +208,130 @@ async def keyboard_and_persistence(check: SmokeCheck, page: Page) -> None:
     await preference(page, "field", "dark")
 
 
+async def registration_statuses(check: SmokeCheck, browser) -> None:
+    """Check real pending/payment highlights, then GET-only fixtures for rarer states."""
+    selector = ".arctos-registration-summary .arctos-registration-badge"
+    async with isolated_page(check, browser) as page:
+        await check.login(page, "demo-player")
+        pending = page.locator(selector).filter(has_text="Awaiting Team Approval").first
+        unpaid = page.locator(selector).filter(has_text="Unpaid").first
+        await expect(pending).to_have_text("Awaiting Team Approval")
+        await expect(unpaid).to_have_text("Unpaid")
+        for mode in ("light", "dark"):
+            for palette in PALETTES:
+                await choose(page, palette, mode)
+                await close_menu(page)
+                await preference(page, palette, mode)
+                await expect(page.locator(".arctos-registration-summary").filter(has_text="Player:")).to_have_count(0)
+                await check_contrast(page, selector + " > span")
+                styles = []
+                for badge in (pending, unpaid):
+                    await expect(badge.locator("i")).to_have_attribute("aria-hidden", "true")
+                    styles.append(
+                        await badge.evaluate("""el => {
+                        const s = getComputedStyle(el), icon = el.querySelector('i');
+                        const r = icon.getBoundingClientRect();
+                        return {background: s.backgroundColor, border: s.borderTopColor,
+                            width: parseFloat(s.borderTopWidth), icon: getComputedStyle(icon, '::before').content,
+                            visible: r.width > 0 && r.height > 0};
+                    }""")
+                    )
+                assert all(s["width"] >= 1 and s["visible"] and s["icon"] not in ("none", '""') for s in styles), styles
+                assert all(styles[0][key] != styles[1][key] for key in ("background", "border", "icon")), styles
+                clipped = await page.locator(selector).evaluate_all("""els => els.filter(el => {
+                    const r = el.getBoundingClientRect();
+                    return r.left < -1 || r.right > innerWidth + 1 || el.scrollWidth > el.clientWidth + 1;
+                }).map(el => el.textContent)""")
+                assert not clipped, f"Registration highlights are clipped: {clipped}"
+                await check.check_layout(page, f"registration-statuses-{palette}-{mode}", WIDTH)
+                check.visited += 1
+
+        # Payment flags remain authoritative, including paid zero-fee and unpaid
+        # partial-payment records. These responses exist only in this browser.
+        cases = (
+            ("confirmed", "player", "CONFIRMED", True, 0, True, "VALID", ["Confirmed", "Paid", "Waiver valid"]),
+            (
+                "pending",
+                "player",
+                "PENDING_TEAM_APPROVAL",
+                False,
+                5,
+                True,
+                "OUT_OF_DATE",
+                ["Awaiting Team Approval", "Unpaid", "Waiver needs re-signing"],
+            ),
+            (
+                "declined",
+                "player",
+                "REJECTED",
+                False,
+                0,
+                True,
+                "NOT_SIGNED",
+                ["Declined", "Unpaid", "Waiver not signed"],
+            ),
+            ("cancelled", "player", "CANCELLED", True, 0, False, "VALID", ["Cancelled", "Paid"]),
+            (
+                "unknown",
+                "player",
+                "FUTURE_STATUS",
+                False,
+                0,
+                True,
+                "FUTURE_WAIVER",
+                ["Status unavailable", "Unpaid", "Waiver status unknown"],
+            ),
+            ("team", "team", "CONFIRMED", True, 0, False, "NOT_SIGNED", ["Confirmed", "Paid"]),
+        )
+        for resource, path, id_key in (("tournaments", "/", "url"), ("leagues", "/leagues", "league_url")):
+            payload = await api_json(page.context, check.base_url, "/_api/" + resource)
+            template = payload[resource][0]
+            payload[resource], payload["user_reg_status"], payload["team_counts"] = [], {}, {}
+            for key, kind, status, paid, amount, required, waiver, _labels in cases:
+                fixture_id = "badge-fixture-" + key
+                payload[resource].append(
+                    {
+                        **template,
+                        id_key: fixture_id,
+                        "name": fixture_id,
+                        "start_date": "2099-01-01",
+                        "end_date": "2099-01-02",
+                    }
+                )
+                payload["user_reg_status"][fixture_id] = {
+                    "type": kind,
+                    "status": status,
+                    "paid": paid,
+                    "amount_paid": amount,
+                    "waiver_required": required,
+                    "waiver_status": waiver,
+                }
+
+            async def fixture(route: Route) -> None:
+                if route.request.method != "GET":
+                    await check.guard_requests(route)
+                    return
+                await route.fulfill(status=200, json=payload)
+
+            pattern = check.base_url + "/_api/" + resource
+            await page.context.route(pattern, fixture)
+            try:
+                await page.goto(check.base_url + path, wait_until="domcontentloaded")
+                for key, *_values, labels in cases:
+                    card = page.locator(".arctos-event-card").filter(
+                        has=page.get_by_role("heading", name="badge-fixture-" + key, exact=True)
+                    )
+                    await expect(card.locator(".arctos-registration-badge")).to_have_text(labels)
+                    await expect(
+                        card.locator(".arctos-registration-summary a, .arctos-registration-summary button")
+                    ).to_have_count(0)
+                await check_contrast(page, selector + " > span")
+                await check.check_layout(page, f"registration-fixtures-{resource}", WIDTH)
+                check.visited += 1
+            finally:
+                await page.context.unroute(pattern, fixture)
+
+
 async def retain_registration(check: SmokeCheck, page: Page) -> None:
     await page.goto(check.base_url + "/register/player", wait_until="domcontentloaded")
     values = {"username": "demo-unsaved-only", "name": "Keep my unsaved entry", "password": "not-submitted"}
@@ -363,6 +488,9 @@ async def account_access(check: SmokeCheck, browser) -> None:
     for username, account_type in (("demo-player", "player"), ("demo-team", "team")):
         async with isolated_page(check, browser) as page:
             await check.login(page, username)
+            if account_type == "team":
+                await expect(page.locator(".arctos-registration-summary").first).to_be_visible()
+                await expect(page.locator(".arctos-registration-summary").filter(has_text="Team:")).to_have_count(0)
             await expect(page.locator("#account-trigger")).to_have_attribute(
                 "aria-label",
                 f"Account: {(await api_json(page.context, check.base_url, '/_api/me'))['name']} ({account_type})",
@@ -456,6 +584,7 @@ async def run(args) -> int:
             await close_menu(page)
             for name, action in (
                 ("palette-mode-matrix", lambda: palette_matrix(check, page)),
+                ("registration-statuses", lambda: registration_statuses(check, browser)),
                 ("nested-menu-and-persistence", lambda: keyboard_and_persistence(check, page)),
                 ("unsaved-registration", lambda: retain_registration(check, page)),
                 ("system-and-overrides", lambda: system_changes(check, page)),

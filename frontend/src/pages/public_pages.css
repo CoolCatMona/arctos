@@ -35,6 +35,10 @@
 .arctos-app .arctos-badge-warning { background: var(--ui-warning-soft) !important; color: var(--ui-warning-text) !important; }
 .arctos-app .arctos-badge-danger { background: var(--ui-danger-soft) !important; color: var(--ui-danger-text) !important; }
 .arctos-app .arctos-badge-neutral { background: var(--ui-surface-hover) !important; color: var(--ui-muted) !important; }
+.arctos-app .arctos-registration-summary .arctos-registration-badge { display: inline-flex; align-items: center; gap: .4rem; max-width: 100%; padding: .35rem .6rem; border: 1px solid transparent; font-size: .8125rem; }
+.arctos-app .arctos-registration-badge > i { flex-shrink: 0; }
+.arctos-app .arctos-registration-badge.arctos-badge-warning { border-color: var(--ui-warning-border); }
+.arctos-app .arctos-registration-badge.arctos-badge-danger { border-color: var(--ui-danger-border); }
 .arctos-app .arctos-card-footer { margin-top: auto; padding: 0 1.4rem 1.4rem; }
 .arctos-app .arctos-empty-state { border: 1px dashed var(--ui-border); background: var(--ui-surface-muted); border-radius: .9rem; padding: 3rem 1.25rem; text-align: center; color: var(--ui-muted); }
 .arctos-app .arctos-empty-state > i { font-size: 2rem; color: var(--ui-muted); margin-bottom: 1rem; }

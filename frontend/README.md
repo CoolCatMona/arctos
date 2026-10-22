@@ -60,6 +60,10 @@ text, and accents; use `--ui-link` for text and focus indicators, and
 `--ui-accent` with `--ui-accent-contrast` for filled actions. Status colors
 retain their meaning across palettes.
 
+Personal registration summaries use icons and outlined badges for pending
+approval, unpaid registrations, and missing or outdated waivers. Keep status
+labels explicit: team approval and recorded payment are independent states.
+
 Use `data-section` on cards containing tables or lists to keep one shared frame
 and compact rows. Use native `details.section-disclosure` for secondary records
 and settings, with a labeled summary and a count where useful. Keep current

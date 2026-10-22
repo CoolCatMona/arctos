@@ -232,7 +232,9 @@ This covers all three themes in light and dark modes, distinct page/card
 backgrounds, text contrast, mobile menu sizing, guest/player/team menu access,
 keyboard controls, unsaved form preservation, saved-theme migration, browser
 persistence, live system-mode changes, cross-tab updates, and unavailable
-storage. It accepts the same `--base-url` and
+storage. Registration summaries are checked at narrow phone widths in each
+theme, including approval, payment, and waiver states. It accepts the same
+`--base-url` and
 `--browser-executable` options. OBS and exact-size render routes retain their
 independent presentation.
 
