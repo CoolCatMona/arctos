@@ -42,14 +42,14 @@ path reported by Dioxus and the repository deployment guide.
 
 ## Design system
 
-Open Appearance from the account menu, or from More when signed out. Display
-mode offers Light, Dark, and System. California Jugger, Field Chalk, and
-Neutral Ops each coordinate page backgrounds, cards, navigation, and controls;
-Forest, Ocean, Plum, and Ember remain under Additional themes. California
-Jugger and System are the defaults; existing saved choices remain selected.
-Preferences stay in this browser and apply across routes. System tracks
-changes to the device's color scheme. If browser storage is unavailable,
-changes still apply for the visit.
+Open Appearance from More, alongside Help and About. The separate account menu
+contains profile, developer apps, and logout actions. Choose
+Light, Dark, or System and one of three themes: California Jugger, Field, or
+Neutral. Themes coordinate page backgrounds, cards, navigation, and controls.
+California Jugger and System are the defaults. Saved `field-chalk` preferences
+use Field; removed or unknown themes fall back to California Jugger without
+changing the saved display mode. Preferences apply across routes and browser
+tabs. When storage is blocked, changes still work for the current visit.
 
 `src/theme.css` styles the shared shell and existing Bootstrap components on
 all routes. `src/pages/public_pages.css` contains event/discovery layouts;
@@ -59,9 +59,24 @@ mobile-first system. Use the `--ui-*` semantic color variables for app surfaces,
 text, and accents; use `--ui-link` for text and focus indicators, and
 `--ui-accent` with `--ui-accent-contrast` for filled actions. Status colors
 retain their meaning across palettes.
+
+Use `data-section` on cards containing tables or lists to keep one shared frame
+and compact rows. Use native `details.section-disclosure` for secondary records
+and settings, with a labeled summary and a count where useful. Keep current
+event information and essential actions visible. Collapsing a section keeps its
+form state intact. The home banner can be dismissed and restored from More;
+its visibility is saved separately from appearance preferences.
+
+These choices follow [NN/g's progressive disclosure guidance](https://www.nngroup.com/articles/progressive-disclosure/):
+keep frequent tasks visible and reveal secondary details on request. Icon
+buttons need accessible names and predictable focus behavior
+([W3C button pattern](https://www.w3.org/WAI/ARIA/apg/patterns/button/)).
+Use 44px touch targets, even for visually small controls
+([W3C target-size guidance](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html)).
+
 `src/appearance.rs` owns browser preferences and system-mode listeners;
 `src/components/appearance_menu.rs` and its adjacent stylesheet provide the
-controls and previews. The app wrapper
+controls. The app wrapper
 sets `data-palette` and Bootstrap's `data-bs-theme` without changing the
 document's global theme. Keep canvas node/port geometry in the dedicated bracket
 and schedule stylesheets. Scoreboard/OBS and exact-size offline frame routes

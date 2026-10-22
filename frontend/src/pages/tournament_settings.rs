@@ -836,8 +836,8 @@ pub fn TournamentSettings(url: String) -> Element {
 
                 div { class: "col-md-4",
                     if d.tournament.league.is_none() {
-                    div { class: "card",
-                        div { class: "card-header", h5 { class: "mb-0", "Penalty Types" } }
+                    details { class: "card section-disclosure", open: true,
+                        summary { class: "card-header", h2 { class: "h5 mb-0", "Penalty Types ({d.penalty_types.len()})" } }
                         div { class: "card-body",
                             div { class: "table-responsive",
                                 table { class: "table table-sm",
@@ -871,9 +871,9 @@ pub fn TournamentSettings(url: String) -> Element {
                     }
 
                     if d.tournament.league.is_none() {
-                    div { class: "card mt-4",
-                        div { class: "card-header",
-                            h5 { class: "mb-0", "Tournament Organizers" }
+                    details { class: "card section-disclosure mt-4", open: true,
+                        summary { class: "card-header",
+                            h2 { class: "h5 mb-0", "Tournament Organizers ({d.to_entries.len()})" }
                         }
                         div { class: "card-body",
                             if !d.to_entries.is_empty() {

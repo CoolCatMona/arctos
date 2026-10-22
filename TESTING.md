@@ -214,7 +214,9 @@ origins, and blocks mutations except demo login and read-only Markdown
 rendering. It checks phones (360px and 390px), tablet (768px), and desktop
 (1280px), including discovery, account forms, tournament/league pages,
 profiles, schedules, operator/registration tools, and side competitions.
-It also checks search/date filters, validation input retention, phone-sized
+It also checks search/date filters, banner dismissal/restoration and persistence,
+profile/settings disclosures, unsaved injury-edit retention, keyboard roster
+expansion, validation input retention, phone-sized
 point controls, modern browser input patterns, and a simulated failed match
 finalization without changing a real match. Phone runs exercise bracket
 dragging, pointer capture, cancellation, and panning against a browser-only
@@ -226,10 +228,11 @@ Check appearance preferences separately with the same running demo:
 uv run python scripts/check_appearance_ui.py --screenshots /tmp/arctos-appearance
 ```
 
-This covers all seven themes in light and dark modes, distinct page/card
+This covers all three themes in light and dark modes, distinct page/card
 backgrounds, text contrast, mobile menu sizing, guest/player/team menu access,
-keyboard controls, unsaved form preservation, browser persistence, live
-system-mode changes, cross-tab updates, and unavailable storage. It accepts the same `--base-url` and
+keyboard controls, unsaved form preservation, saved-theme migration, browser
+persistence, live system-mode changes, cross-tab updates, and unavailable
+storage. It accepts the same `--base-url` and
 `--browser-executable` options. OBS and exact-size render routes retain their
 independent presentation.
 

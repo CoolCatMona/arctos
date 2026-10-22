@@ -1,4 +1,6 @@
 use crate::api;
+use crate::appearance::focus_control;
+use crate::pages::layout::{remember_home_banner, use_home_banner_hidden};
 use crate::types::{Tournament, UserRegStatus};
 use crate::Route;
 use chrono::{Local, NaiveDate};
@@ -49,19 +51,37 @@ pub fn Index() -> Element {
         use_resource(move || async move { api::tournaments().await.map_err(|e| e.to_string()) });
     let mut show_past = use_signal(|| false);
     let mut search = use_signal(String::new);
+    let mut introduction_hidden = use_home_banner_hidden();
     let val = tournaments.value();
 
     rsx! {
-        section { class: "arctos-discovery-hero",
-            div { class: "arctos-brand-mark", aria_hidden: "true", i { class: "fas fa-trophy" } }
-            h1 { "Jugger Tournament Operations" }
-            p { "Find your next event, follow the action, and keep match day running smoothly. Registration, schedules, live scores, and results in one place." }
+        section {
+            id: "arctos-introduction", class: "arctos-discovery-hero arctos-introduction", hidden: introduction_hidden(),
+            button {
+                id: "arctos-introduction-dismiss", class: "arctos-intro-dismiss",
+                r#type: "button", aria_label: "Dismiss home banner", title: "Dismiss home banner",
+                onclick: move |_| {
+                    introduction_hidden.set(true);
+                    remember_home_banner(true);
+                    focus_control("event-discovery");
+                },
+                i { class: "fa-solid fa-xmark", aria_hidden: "true" }
+            }
+            h1 { id: "arctos-introduction-heading", tabindex: "-1", "Arctos" }
+            p {
+                "Tournaments, teams, and players in "
+                a { href: "https://en.wikipedia.org/wiki/Jugger", "jugger" }
+                "."
+            }
             div { class: "arctos-hero-actions",
                 Link { to: Route::CreateEvent {}, class: "btn btn-primary", i { class: "fas fa-plus-circle", aria_hidden: "true" } "Create event" }
                 Link { to: Route::LeaguesIndex {}, class: "btn btn-outline-secondary", i { class: "fas fa-trophy", aria_hidden: "true" } "Browse leagues" }
             }
         }
-        section { class: "arctos-discovery", aria_label: "Find an event",
+        section { id: "event-discovery", class: "arctos-discovery", aria_label: "Find an event", tabindex: "-1",
+            if introduction_hidden() {
+                h1 { class: "visually-hidden", "Events" }
+            }
             if let Some(Ok(data)) = val.read().as_ref() {
                 {
                     let (upcoming, past) = split_upcoming_past(&data.tournaments);

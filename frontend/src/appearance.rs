@@ -10,70 +10,36 @@ pub const STORAGE_KEY: &str = "arctos.appearance.v1";
 pub enum Palette {
     #[default]
     California,
-    #[serde(rename = "field-chalk")]
-    FieldChalk,
+    Field,
     Neutral,
-    Forest,
-    Ocean,
-    Plum,
-    Ember,
 }
 
 impl Palette {
-    pub const PRIMARY: [Self; 3] = [Self::California, Self::FieldChalk, Self::Neutral];
-    pub const ADDITIONAL: [Self; 4] = [Self::Forest, Self::Ocean, Self::Plum, Self::Ember];
-    pub const ALL: [Self; 7] = [
-        Self::California,
-        Self::FieldChalk,
-        Self::Neutral,
-        Self::Forest,
-        Self::Ocean,
-        Self::Plum,
-        Self::Ember,
-    ];
+    pub const ALL: [Self; 3] = [Self::California, Self::Field, Self::Neutral];
 
     pub fn id(self) -> &'static str {
         match self {
             Self::California => "california",
-            Self::FieldChalk => "field-chalk",
+            Self::Field => "field",
             Self::Neutral => "neutral",
-            Self::Forest => "forest",
-            Self::Ocean => "ocean",
-            Self::Plum => "plum",
-            Self::Ember => "ember",
         }
     }
 
     pub fn name(self) -> &'static str {
         match self {
             Self::California => "California Jugger",
-            Self::FieldChalk => "Field Chalk",
-            Self::Neutral => "Neutral Ops",
-            Self::Forest => "Forest",
-            Self::Ocean => "Ocean",
-            Self::Plum => "Plum",
-            Self::Ember => "Ember",
+            Self::Field => "Field",
+            Self::Neutral => "Neutral",
         }
-    }
-
-    pub fn description(self) -> &'static str {
-        match self {
-            Self::California => "Warm sand · poppy · pacific",
-            Self::FieldChalk => "Canvas · tape red · chalk",
-            Self::Neutral => "Mist · copper · graphite",
-            Self::Forest => "Leaf green · soft neutrals",
-            Self::Ocean => "Ocean blue · cool teal",
-            Self::Plum => "Violet · soft lavender",
-            Self::Ember => "Warm orange · earth tones",
-        }
-    }
-
-    pub fn is_additional(self) -> bool {
-        Self::ADDITIONAL.contains(&self)
     }
 
     fn parse(value: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|palette| palette.id() == value)
+        // Preserve this earlier public storage ID; removed and unknown choices
+        // fall back to the default through Preferences::from_storage.
+        match value {
+            "field-chalk" => Some(Self::Field),
+            _ => Self::ALL.into_iter().find(|palette| palette.id() == value),
+        }
     }
 }
 
@@ -148,7 +114,6 @@ impl Preferences {
 pub struct Appearance {
     preferences: Signal<Preferences>,
     system_dark: Signal<bool>,
-    storage_available: Signal<bool>,
 }
 
 impl Appearance {
@@ -158,10 +123,6 @@ impl Appearance {
 
     pub fn scheme(self) -> &'static str {
         self.preferences().mode.resolve((self.system_dark)())
-    }
-
-    pub fn storage_available(self) -> bool {
-        (self.storage_available)()
     }
 
     pub fn set_palette(self, palette: Palette) {
@@ -180,14 +141,13 @@ impl Appearance {
 
     fn update(mut self, preferences: Preferences) {
         self.preferences.set(preferences);
-        self.storage_available.set(store_preferences(preferences));
+        let _ = store_preferences(preferences);
     }
 }
 
 pub fn use_appearance() -> Appearance {
     let initial = use_hook(load_preferences);
-    let preferences = use_signal(move || initial.0);
-    let storage_available = use_signal(move || initial.1);
+    let preferences = use_signal(move || initial);
     let system_dark = use_signal(system_prefers_dark);
     #[cfg(target_arch = "wasm32")]
     let _listeners = use_hook(move || {
@@ -198,20 +158,19 @@ pub fn use_appearance() -> Appearance {
     Appearance {
         preferences,
         system_dark,
-        storage_available,
     }
 }
 
-fn load_preferences() -> (Preferences, bool) {
+fn load_preferences() -> Preferences {
     #[cfg(target_arch = "wasm32")]
     if let Some(storage) =
         web_sys::window().and_then(|window| window.local_storage().ok().flatten())
     {
         if let Ok(raw) = storage.get_item(STORAGE_KEY) {
-            return (Preferences::from_storage(raw.as_deref()), true);
+            return Preferences::from_storage(raw.as_deref());
         }
     }
-    (Preferences::default(), false)
+    Preferences::default()
 }
 
 fn store_preferences(preferences: Preferences) -> bool {
@@ -367,20 +326,38 @@ mod tests {
             }
         );
         assert_eq!(
-            Preferences::from_storage(Some(r#"{"palette":"ocean"}"#)),
+            Preferences::from_storage(Some(r#"{"palette":"field"}"#)),
             Preferences {
-                palette: Palette::Ocean,
+                palette: Palette::Field,
                 mode: ColorMode::System
             }
         );
-        // Keep the public hyphenated ID stable rather than serializing fieldchalk.
-        let field_chalk = Preferences {
-            palette: Palette::FieldChalk,
+    }
+
+    #[test]
+    fn legacy_field_id_migrates_and_removed_palettes_use_california() {
+        let field = Preferences {
+            palette: Palette::Field,
             mode: ColorMode::Light,
         };
-        let raw = serde_json::to_string(&field_chalk).unwrap();
-        assert_eq!(raw, r#"{"palette":"field-chalk","mode":"light"}"#);
-        assert_eq!(Preferences::from_storage(Some(&raw)), field_chalk);
+        assert_eq!(
+            Preferences::from_storage(Some(r#"{"palette":"field-chalk","mode":"light"}"#)),
+            field
+        );
+        assert_eq!(
+            serde_json::to_string(&field).unwrap(),
+            r#"{"palette":"field","mode":"light"}"#
+        );
+        for palette in ["forest", "ocean", "plum", "ember"] {
+            let raw = format!(r#"{{"palette":"{palette}","mode":"dark"}}"#);
+            assert_eq!(
+                Preferences::from_storage(Some(&raw)),
+                Preferences {
+                    palette: Palette::California,
+                    mode: ColorMode::Dark
+                }
+            );
+        }
     }
 
     #[test]

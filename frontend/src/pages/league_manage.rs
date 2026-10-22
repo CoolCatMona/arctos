@@ -91,7 +91,7 @@ pub fn LeagueManage(league_url: String) -> Element {
 
             div { class: "row",
                 div { class: "col-12",
-                    div { class: "card",
+                    div { class: "card data-section",
                         div { class: "card-header", h5 { class: "mb-0", "Team Registrations" } }
                         div { class: "card-body",
                             div { class: "table-responsive management-table-wrap",
@@ -246,7 +246,7 @@ pub fn LeagueManage(league_url: String) -> Element {
 
             div { class: "row mt-4",
                 div { class: "col-12",
-                    div { class: "card",
+                    div { class: "card data-section",
                         div { class: "card-header", h5 { class: "mb-0", "Player Registrations" } }
                         div { class: "card-body",
                             div { class: "table-responsive management-table-wrap",

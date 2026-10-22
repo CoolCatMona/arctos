@@ -95,7 +95,7 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                 div { class: "row",
                     div { class: "col-12",
                         h1 { "Start match" }
-                        p { class: "text-muted", "Review both rosters, then hand over to the live match controls." }
+                        p { class: "text-muted", "Review both rosters before starting the match." }
                         nav { aria_label: "breadcrumb",
                             ol { class: "breadcrumb",
                                 li { class: "breadcrumb-item",

@@ -15,7 +15,7 @@ pub fn TeamsList() -> Element {
     rsx! {
         header { class: "arctos-page-intro",
             h1 { "Teams" }
-            p { "Find Jugger teams, explore their profiles, and follow their events." }
+            p { "Find team profiles and results." }
         }
         form {
             class: "arctos-directory-search", role: "search",

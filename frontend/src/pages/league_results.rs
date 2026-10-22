@@ -88,7 +88,7 @@ pub fn LeagueResults(league_url: String) -> Element {
                         if asc { ord } else { ord.reverse() }
                     });
                 rsx! {
-                div { class: "card mt-3",
+                div { class: "card data-section mt-3",
                     div { class: "card-body",
                         div { class: "table-responsive",
                             table { class: "table table-striped align-middle mb-0",

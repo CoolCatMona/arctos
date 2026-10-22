@@ -1,12 +1,11 @@
-use crate::Route;
 use crate::api;
 use crate::components::{
-    EditRegistrationContext, EditRegistrationModal, EventHeader, LeagueRegistrationButtons,
-    PompfenIcon, EventTeamsList,
+    EditRegistrationContext, EditRegistrationModal, EventHeader, EventTeamsList,
+    LeagueRegistrationButtons, PompfenIcon,
 };
 use crate::types::{ToEntry, User};
+use crate::Route;
 use dioxus::prelude::*;
-
 
 fn is_current_user_to(me: Option<&Result<User, String>>, to_entries: &[ToEntry]) -> bool {
     me.and_then(|r| r.as_ref().ok()).map_or(false, |u| {
@@ -444,11 +443,11 @@ fn TournamentHomeContent(url: String, initial_tab: Option<String>) -> Element {
             if !d.unattached_players.is_empty() {
                 div { class: "row mt-4",
                     div { class: "col-12",
-                        div { class: "card",
+                        div { class: "card data-section event-roster",
                             div { class: "card-header", h5 { class: "mb-0", "Unattached Players ({unattached_count})" } }
                             div { class: "card-body",
                                 div { class: "table-responsive",
-                                    table { class: "table table-striped roster-table",
+                                    table { class: "table roster-table",
                                         thead {
                                             tr {
                                                 th { "Player Name" }
@@ -460,18 +459,12 @@ fn TournamentHomeContent(url: String, initial_tab: Option<String>) -> Element {
                                             for p in d.unattached_players.iter() {
                                                 tr { key: "{p.player_id}",
                                                     td {
-                                                        div { class: "d-flex align-items-center",
-                                                            div { class: "flex-shrink-0 me-2",
-                                                                if let Some(photo) = &p.profile_photo {
-                                                                    img { src: "{backend}/static/{photo}", alt: "", class: "rounded-circle", style: "width: 40px; height: 40px; object-fit: cover;" }
-                                                                } else {
-                                                                    div { class: "d-flex align-items-center justify-content-center bg-secondary rounded-circle", style: "width: 40px; height: 40px;",
-                                                                        span { class: "text-white", "👤" }
-                                                                    }
-                                                                }
+                                                        div { class: "roster-identity",
+                                                            if let Some(photo) = &p.profile_photo {
+                                                                img { src: "{backend}/static/{photo}", alt: "", class: "rounded-circle me-2", style: "width: 32px; height: 32px; object-fit: cover; flex-shrink: 0;" }
                                                             }
                                                             div {
-                                                                Link { to: Route::PlayerProfilePage { id: p.player_id.clone() }, class: "text-decoration-none",
+                                                                Link { to: Route::PlayerProfilePage { id: p.player_id.clone() }, class: "roster-name",
                                                                     strong { "{p.player_name}" }
                                                                 }
                                                             }

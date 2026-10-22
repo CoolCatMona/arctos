@@ -119,7 +119,6 @@ pub fn GoogleCompleteProfile() -> Element {
             div { class: "col-12 auth-column",
                 div { class: "card auth-card",
                     div { class: "card-header",
-                        p { class: "auth-eyebrow", "MAKE IT YOURS" }
                         h1 { class: "mb-2", "Complete your profile" }
                         p { class: "mb-0 text-muted",
                             small { "Creating a {user_type()} account" }

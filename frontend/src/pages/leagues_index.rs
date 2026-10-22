@@ -13,14 +13,14 @@ pub fn LeaguesIndex() -> Element {
     rsx! {
         header { class: "arctos-page-intro",
             h1 { "Leagues" }
-            p { "Seasonal competitions and event series, with shared registration, teams, and standings." }
+            p { "Event series with shared registration and standings." }
         }
         if let Some(Ok(response)) = val.read().as_ref() {
             if response.leagues.is_empty() {
                 div { class: "arctos-empty-state", role: "status",
                     i { class: "fas fa-trophy", aria_hidden: "true" }
                     h2 { "No leagues yet" }
-                    p { "Organizing a series of events? Create a league to keep registration and results together." }
+                    p { "Create a league for events with shared registration." }
                     Link { to: Route::NewLeague {}, class: "btn btn-primary", "Create a league" }
                 }
             } else {
@@ -73,7 +73,7 @@ fn LeagueCard(
                     div { class: "arctos-brand-mark", aria_hidden: "true", i { class: "fas fa-trophy" } }
                     div {
                         h2 { class: "arctos-card-title", Link { to: Route::LeagueHome { league_url: league.league_url.clone() }, "{league.name}" } }
-                        p { class: "arctos-league-caption", "One registration, multiple events" }
+                        p { class: "arctos-league-caption", "Shared registration" }
                     }
                 }
                 ul { class: "arctos-meta-list",

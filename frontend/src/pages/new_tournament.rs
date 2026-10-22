@@ -43,7 +43,6 @@ pub fn NewTournament() -> Element {
             div { class: "col-12 form-column",
                 div { class: "card",
                     div { class: "card-header",
-                        p { class: "auth-eyebrow", "BRING EVERYONE TOGETHER" }
                         h1 { class: "mb-2", "Create a tournament" }
                         p { class: "text-muted mb-0", "Start with a name and link. Your tournament stays private until you publish it." }
                     }

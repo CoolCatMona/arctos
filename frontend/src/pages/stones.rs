@@ -376,7 +376,7 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
             div { class: "row",
                 div { class: "col-12",
                     h1 { "Stones Player" }
-                    p { class: "text-muted stones-intro", "Keep every field on the same beat. Choose a sound and press play to join the synchronized stones." }
+                    p { class: "text-muted stones-intro", "Choose a sound and press play for synchronized stones." }
 
                     div { class: "card",
                         div { class: "card-body",
@@ -398,9 +398,9 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                             }
 
                             p { class: "stones-sync-status small", role: "status",
-                                if !is_playing() { "Ready when you are. Audio starts after you press play." }
-                                else if quality.converged { "Synchronized — playing on the shared beat." }
-                                else { "Synchronizing… allow 3–5 stones to settle into the shared beat." }
+                                if !is_playing() { "Audio starts after you press play." }
+                                else if quality.converged { "Playing synchronized stones." }
+                                else { "Synchronizing… this can take 3–5 stones." }
                             }
                             div { class: "mb-4",
                                 span { class: "form-label mb-2 d-block", "Choose your sound" }

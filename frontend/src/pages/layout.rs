@@ -9,6 +9,54 @@ pub fn use_auth_invalidate() -> Signal<u32> {
     use_context::<Signal<u32>>()
 }
 
+#[derive(Clone, Copy)]
+struct HomeBannerHidden(Signal<bool>);
+
+pub fn use_home_banner_hidden() -> Signal<bool> {
+    use_context::<HomeBannerHidden>().0
+}
+
+#[cfg(target_arch = "wasm32")]
+const INTRODUCTION_STORAGE_KEY: &str = "arctos.introduction.hidden.v1";
+
+fn home_banner_is_hidden() -> bool {
+    #[cfg(target_arch = "wasm32")]
+    if let Some(storage) =
+        web_sys::window().and_then(|window| window.local_storage().ok().flatten())
+    {
+        return storage
+            .get_item(INTRODUCTION_STORAGE_KEY)
+            .ok()
+            .flatten()
+            .as_deref()
+            == Some("true");
+    }
+    false
+}
+
+pub fn remember_home_banner(hidden: bool) {
+    #[cfg(target_arch = "wasm32")]
+    if let Some(storage) =
+        web_sys::window().and_then(|window| window.local_storage().ok().flatten())
+    {
+        let _ = storage.set_item(
+            INTRODUCTION_STORAGE_KEY,
+            if hidden { "true" } else { "false" },
+        );
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = hidden;
+}
+
+fn focus_restored_home_banner() {
+    #[cfg(target_arch = "wasm32")]
+    spawn(async move {
+        // Let the shared signal remove the banner's hidden attribute first.
+        gloo_timers::future::TimeoutFuture::new(0).await;
+        focus_control("arctos-introduction-heading");
+    });
+}
+
 /// Returns a short page name for the tab title: "Page Name | Arctos".
 fn page_title_for_route(route: &Route) -> String {
     match route {
@@ -88,11 +136,14 @@ const ICONS: Asset = asset!("/assets/vendor/fontawesome");
 pub fn Layout() -> Element {
     let auth_version = use_signal(|| 0u32);
     provide_context(auth_version);
+    let mut introduction_hidden = use_signal(home_banner_is_hidden);
+    provide_context(HomeBannerHidden(introduction_hidden));
     let user = use_resource(move || {
         let _ = auth_version();
         async move { api::me().await }
     });
     let mut account_open = use_signal(|| false);
+    let mut utility_open = use_signal(|| false);
     let mut appearance_open = use_signal(|| false);
     let appearance = use_appearance();
     let palette = appearance.preferences().palette.id();
@@ -108,12 +159,12 @@ pub fn Layout() -> Element {
         .as_ref()
         .and_then(|result| result.as_ref().ok())
         .cloned();
-    let menu_label = current_user.as_ref().map_or_else(
-        || "More options".to_string(),
-        |user| format!("Account: {} ({})", user.name, user.user_type),
-    );
+    let account_label = current_user.as_ref().map_or_else(String::new, |user| {
+        format!("Account: {} ({})", user.name, user.user_type)
+    });
     use_effect(use_reactive(&route, move |_| {
         account_open.set(false);
+        utility_open.set(false);
         appearance_open.set(false);
     }));
 
@@ -155,11 +206,13 @@ pub fn Layout() -> Element {
             class: "arctos-app",
             "data-palette": palette, "data-bs-theme": color_scheme,
             onkeydown: move |event| {
-                if event.key() == Key::Escape && (account_open() || appearance_open()) {
+                if event.key() == Key::Escape && (account_open() || utility_open() || appearance_open()) {
                     event.prevent_default();
+                    let trigger = if account_open() { "account-trigger" } else { "utility-trigger" };
                     appearance_open.set(false);
+                    utility_open.set(false);
                     account_open.set(false);
-                    focus_control("account-trigger");
+                    focus_control(trigger);
                 }
             },
             a { class: "skip-link", href: "#page-content", "Skip to content" }
@@ -191,65 +244,43 @@ pub fn Layout() -> Element {
                             i { class: "fa-solid fa-circle-plus", aria_hidden: "true" }
                             span { "Create event" }
                         }
-                        if current_user.is_none() {
-                            Link { to: Route::Login {}, class: "btn btn-outline-secondary app-login", "Log in" }
-                        }
-                        div { class: "account-menu",
-                            button {
-                                class: "app-icon-button account-trigger",
-                                id: "account-trigger",
-                                r#type: "button",
-                                aria_label: "{menu_label}",
-                                aria_expanded: "{account_open() || appearance_open()}",
-                                aria_controls: if appearance_open() { "appearance-options" } else { "account-options" },
-                                onclick: move |_| {
-                                    let was_open = account_open() || appearance_open();
-                                    appearance_open.set(false);
-                                    account_open.set(!was_open);
-                                },
-                                if current_user.is_some() {
-                                    i { class: "fa-regular fa-user", aria_hidden: "true" }
-                                } else {
-                                    i { class: "fa-solid fa-ellipsis", aria_hidden: "true" }
-                                }
-                            }
-                            if account_open() || appearance_open() {
+                        if let Some(u) = current_user.as_ref() {
+                            div { class: "account-menu",
                                 button {
-                                    class: "account-dismiss", r#type: "button", tabindex: "-1", aria_label: "Dismiss menu",
+                                    class: "app-icon-button account-trigger",
+                                    id: "account-trigger", r#type: "button",
+                                    aria_label: "{account_label}", aria_expanded: "{account_open()}",
+                                    aria_controls: "account-options",
                                     onclick: move |_| {
-                                        account_open.set(false);
+                                        utility_open.set(false);
                                         appearance_open.set(false);
-                                        focus_control("account-trigger");
-                                    }
+                                        let was_open = account_open();
+                                        account_open.set(!was_open);
+                                    },
+                                    i { class: "fa-regular fa-user", aria_hidden: "true" }
                                 }
-                            }
-                            if account_open() {
-                                div {
-                                    class: "account-dropdown", id: "account-options",
-                                    onmounted: move |_| focus_control("appearance-menu-item"),
-                                    if let Some(u) = current_user.as_ref() {
+                                if account_open() {
+                                    button {
+                                        class: "account-dismiss", r#type: "button", tabindex: "-1",
+                                        aria_label: "Dismiss account menu",
+                                        onclick: move |_| {
+                                            account_open.set(false);
+                                            focus_control("account-trigger");
+                                        }
+                                    }
+                                    div {
+                                        class: "account-dropdown profile-dropdown", id: "account-options", tabindex: "-1",
+                                        onmounted: move |_| focus_control("account-profile-link"),
                                         div { class: "account-identity",
                                             strong { "{u.name}" }
                                             span { class: "text-muted", "{u.user_type} account · @{u.id}" }
                                         }
                                         if u.user_type == "player" {
-                                            Link { to: Route::PlayerProfilePage { id: u.id.clone() }, class: "dropdown-item", "My profile" }
+                                            Link { to: Route::PlayerProfilePage { id: u.id.clone() }, id: "account-profile-link", class: "dropdown-item", "My profile" }
                                         } else {
-                                            Link { to: Route::TeamProfilePage { id: u.id.clone() }, class: "dropdown-item", "Team profile" }
+                                            Link { to: Route::TeamProfilePage { id: u.id.clone() }, id: "account-profile-link", class: "dropdown-item", "Team profile" }
                                         }
                                         Link { to: Route::DeveloperApps {}, class: "dropdown-item", "Developer apps" }
-                                    }
-                                    button {
-                                        id: "appearance-menu-item", r#type: "button", class: "dropdown-item utility-menu-row",
-                                        aria_haspopup: "dialog", aria_controls: "appearance-options",
-                                        onclick: move |_| { account_open.set(false); appearance_open.set(true); },
-                                        i { class: "fa-solid fa-palette", aria_hidden: "true" }
-                                        span { "Appearance" }
-                                        i { class: "fa-solid fa-chevron-right menu-chevron", aria_hidden: "true" }
-                                    }
-                                    Link { to: Route::Docs {}, class: "dropdown-item", "Help & documentation" }
-                                    Link { to: Route::About {}, class: "dropdown-item", "About Arctos" }
-                                    if current_user.is_some() {
                                         button {
                                             r#type: "button", class: "dropdown-item", disabled: logging_out(),
                                             onclick: move |_| {
@@ -275,7 +306,63 @@ pub fn Layout() -> Element {
                                     }
                                 }
                             }
-                            AppearanceMenu { open: appearance_open, account_open, appearance }
+                        } else {
+                            Link { to: Route::Login {}, class: "btn btn-outline-secondary app-login", "Log in" }
+                        }
+                        div { class: "account-menu utility-menu",
+                            button {
+                                class: "app-icon-button account-trigger utility-trigger",
+                                id: "utility-trigger", r#type: "button", aria_label: "More options",
+                                aria_expanded: "{utility_open() || appearance_open()}",
+                                aria_controls: if appearance_open() { "appearance-options" } else { "utility-options" },
+                                onclick: move |_| {
+                                    let was_open = utility_open() || appearance_open();
+                                    account_open.set(false);
+                                    appearance_open.set(false);
+                                    utility_open.set(!was_open);
+                                },
+                                i { class: "fa-solid fa-ellipsis", aria_hidden: "true" }
+                            }
+                            if utility_open() || appearance_open() {
+                                button {
+                                    class: "account-dismiss utility-dismiss", r#type: "button", tabindex: "-1",
+                                    aria_label: "Dismiss More options",
+                                    onclick: move |_| {
+                                        utility_open.set(false);
+                                        appearance_open.set(false);
+                                        focus_control("utility-trigger");
+                                    }
+                                }
+                            }
+                            if utility_open() {
+                                div {
+                                    class: "account-dropdown utility-dropdown", id: "utility-options", tabindex: "-1",
+                                    onmounted: move |_| focus_control("appearance-menu-item"),
+                                    button {
+                                        id: "appearance-menu-item", r#type: "button", class: "dropdown-item utility-menu-row",
+                                        aria_haspopup: "dialog", aria_controls: "appearance-options",
+                                        onclick: move |_| { utility_open.set(false); appearance_open.set(true); },
+                                        i { class: "fa-solid fa-palette", aria_hidden: "true" }
+                                        span { "Appearance" }
+                                        i { class: "fa-solid fa-chevron-right menu-chevron", aria_hidden: "true" }
+                                    }
+                                    Link { to: Route::Docs {}, class: "dropdown-item", "Help & documentation" }
+                                    Link { to: Route::About {}, class: "dropdown-item", "About Arctos" }
+                                    if path == "/" && introduction_hidden() {
+                                        button {
+                                            id: "arctos-introduction-restore", r#type: "button", class: "dropdown-item",
+                                            onclick: move |_| {
+                                                introduction_hidden.set(false);
+                                                remember_home_banner(false);
+                                                utility_open.set(false);
+                                                focus_restored_home_banner();
+                                            },
+                                            "Show home banner"
+                                        }
+                                    }
+                                }
+                            }
+                            AppearanceMenu { open: appearance_open, utility_open, appearance }
                         }
                     }
                 }
@@ -292,10 +379,6 @@ pub fn Layout() -> Element {
             footer { class: "app-footer",
                 div { class: "container-wide",
                     div { class: "footer-top",
-                        div { class: "footer-brand",
-                            span { class: "brand-mark", aria_hidden: "true", i { class: "fa-solid fa-trophy" } }
-                            span { "Arctos Tournament Operations" }
-                        }
                         nav { class: "footer-links", aria_label: "Help and information",
                             Link { to: Route::About {}, "About" }
                             Link { to: Route::Docs {}, "Documentation" }
@@ -307,7 +390,7 @@ pub fn Layout() -> Element {
                         }
                     }
                     div { class: "footer-bottom",
-                        p { "Made for the Jugger community. " a { href: "https://github.com/reid23/arctos", "Open source" } "." }
+                        p { a { href: "https://github.com/reid23/arctos", "Source code" } }
                         p { "An independent project, not affiliated with CAJA or the US NJA." }
                     }
                 }

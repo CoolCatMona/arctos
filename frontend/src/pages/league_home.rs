@@ -162,10 +162,10 @@ pub fn LeagueHome(league_url: String) -> Element {
                 }
                 if !d.events.is_empty() {
                     div { class: "col-md-4",
-                        div { class: "card",
+                        div { class: "card data-section",
                             div { class: "card-header", h5 { class: "mb-0", "Events" } }
                             div { class: "card-body",
-                                div { class: "list-group list-group-flush league-events",
+                                ul { class: "list-group list-group-flush league-events",
                                     for event in d.events.iter() {
                                         li { key: "{event.url}", class: "list-group-item d-flex justify-content-between align-items-center",
                                             Link { to: Route::TournamentHome { url: event.url.clone() }, class: "text-decoration-none",

@@ -87,9 +87,7 @@ pub fn Login() -> Element {
             div { class: "col-12 auth-column",
                 div { class: "card auth-card",
                     div { class: "card-header",
-                        p { class: "auth-eyebrow", "WELCOME BACK" }
                         h1 { class: "mb-2", "Sign in to Arctos" }
-                        p { class: "text-muted mb-0", "Your events, teams, and match day tools." }
                     }
                     div { class: "card-body",
                         if let Some(e) = err.read().as_ref() {

@@ -2153,7 +2153,7 @@ fn match_page_inner(url: String, match_id: Option<String>, match_name: Option<St
                     }
 
                     // Points Table - update from state
-                    div { class: "card mt-3",
+                    div { class: "card data-section mt-3",
                         div { class: "card-header",
                             h5 { class: "mb-0", "Points" }
                         }

@@ -1783,7 +1783,7 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                         div { class: "row",
                             div { class: "col-md-12",
                                 h2 { "{m.name}" }
-                                p { class: "text-muted mb-3", "Live match controls · record each point, then review and finalize the result." }
+                                p { class: "text-muted mb-3", "Record each point, then review and finalize the result." }
                                 div { class: "row d-none d-md-flex",
                                     div { class: "col-md-4",
                                         p { class: "mb-0",

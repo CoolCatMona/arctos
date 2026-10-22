@@ -30,7 +30,7 @@ pub fn Invitations(url: String) -> Element {
 
             div { class: "row",
                 div { class: "col-12",
-                    div { class: "card",
+                    div { class: "card data-section",
                         div { class: "card-header",
                             h5 { class: "mb-0", "Pending Player Requests" }
                         }
@@ -44,7 +44,7 @@ pub fn Invitations(url: String) -> Element {
                             if d.invitations.is_empty() {
                                 p { class: "text-muted", "No pending requests." }
                             } else {
-                                div { class: "alert alert-info",
+                                p { class: "data-section-summary",
                                     strong { "Current Team Size: " }
                                     "{d.current_team_size}"
                                     if let Some(max) = d.tournament.max_team_size_roster {
@@ -52,7 +52,7 @@ pub fn Invitations(url: String) -> Element {
                                     }
                                 }
                                 div { class: "table-responsive",
-                                    table { class: "table table-striped",
+                                    table { class: "table roster-table",
                                         thead {
                                             tr {
                                                 th { "Player" }
@@ -75,21 +75,21 @@ pub fn Invitations(url: String) -> Element {
                                                                 div { class: "d-flex align-items-center",
                                                                     div { class: "flex-shrink-0 me-2",
                                                                         if let Some(photo) = &invitation.player.profile_photo {
-                                                                            img { src: "{backend}/static/{photo}", alt: "{invitation.player.name}", class: "rounded-circle", style: "width: 40px; height: 40px; object-fit: cover;" }
+                                                                            img { src: "{backend}/static/{photo}", alt: "{invitation.player.name}", class: "rounded-circle", style: "width: 32px; height: 32px; object-fit: cover;" }
                                                                         } else {
-                                                                            div { class: "d-flex align-items-center justify-content-center bg-secondary rounded-circle", style: "width: 40px; height: 40px;",
+                                                                            div { class: "d-flex align-items-center justify-content-center bg-secondary rounded-circle", style: "width: 32px; height: 32px;",
                                                                                 i { class: "fas fa-user text-white" }
                                                                             }
                                                                         }
                                                                     }
                                                                     div { class: "flex-grow-1",
-                                                                        Link { to: Route::PlayerProfilePage { id: invitation.player.id.clone() }, "{invitation.player.name}" }
+                                                                        Link { to: Route::PlayerProfilePage { id: invitation.player.id.clone() }, class: "roster-name", "{invitation.player.name}" }
                                                                     }
                                                                 }
                                                             }
-                                                            td { "{invitation.registration.jersey_name.as_deref().unwrap_or(\"N/A\")}" }
-                                                            td { "{invitation.registration.jersey_number.as_deref().unwrap_or(\"N/A\")}" }
-                                                            td {
+                                                            td { "data-label": "Jersey name", "{invitation.registration.jersey_name.as_deref().unwrap_or(\"N/A\")}" }
+                                                            td { "data-label": "Jersey number", "{invitation.registration.jersey_number.as_deref().unwrap_or(\"N/A\")}" }
+                                                            td { class: "roster-actions", "data-label": "Actions",
                                                                 div { class: "btn-group", role: "group",
                                                                     button {
                                                                         r#type: "button",
@@ -140,13 +140,13 @@ pub fn Invitations(url: String) -> Element {
                     }
 
                     if !d.team_roster.is_empty() {
-                        div { class: "card mt-3",
+                        div { class: "card data-section mt-3",
                             div { class: "card-header",
                                 h5 { class: "mb-0", "Team Roster" }
                             }
                             div { class: "card-body",
                                 div { class: "table-responsive",
-                                    table { class: "table table-striped",
+                                    table { class: "table roster-table",
                                         thead {
                                             tr {
                                                 th { "Player" }
@@ -163,21 +163,21 @@ pub fn Invitations(url: String) -> Element {
                                                         div { class: "d-flex align-items-center",
                                                             div { class: "flex-shrink-0 me-2",
                                                                 if let Some(photo) = &roster_item.player.profile_photo {
-                                                                    img { src: "{backend}/static/{photo}", alt: "{roster_item.player.name}", class: "rounded-circle", style: "width: 40px; height: 40px; object-fit: cover;" }
+                                                                    img { src: "{backend}/static/{photo}", alt: "{roster_item.player.name}", class: "rounded-circle", style: "width: 32px; height: 32px; object-fit: cover;" }
                                                                 } else {
-                                                                    div { class: "d-flex align-items-center justify-content-center bg-secondary rounded-circle", style: "width: 40px; height: 40px;",
+                                                                    div { class: "d-flex align-items-center justify-content-center bg-secondary rounded-circle", style: "width: 32px; height: 32px;",
                                                                         i { class: "fas fa-user text-white" }
                                                                     }
                                                                 }
                                                             }
                                                             div { class: "flex-grow-1",
-                                                                Link { to: Route::PlayerProfilePage { id: roster_item.player.id.clone() }, "{roster_item.player.name}" }
+                                                                Link { to: Route::PlayerProfilePage { id: roster_item.player.id.clone() }, class: "roster-name", "{roster_item.player.name}" }
                                                             }
                                                         }
                                                     }
-                                                    td { "{roster_item.registration.jersey_name.as_deref().unwrap_or(\"N/A\")}" }
-                                                    td { "{roster_item.registration.jersey_number.as_deref().unwrap_or(\"N/A\")}" }
-                                                    td {
+                                                    td { "data-label": "Jersey name", "{roster_item.registration.jersey_name.as_deref().unwrap_or(\"N/A\")}" }
+                                                    td { "data-label": "Jersey number", "{roster_item.registration.jersey_number.as_deref().unwrap_or(\"N/A\")}" }
+                                                    td { "data-label": "Status",
                                                         match roster_item.registration.status.as_str() {
                                                             "CONFIRMED" => rsx! { span { class: "badge bg-success", "Confirmed" } },
                                                             "PENDING_TEAM_APPROVAL" => rsx! { span { class: "badge bg-warning", "Pending Approval" } },
@@ -186,7 +186,7 @@ pub fn Invitations(url: String) -> Element {
                                                             _ => rsx! { span { class: "badge bg-secondary", "{roster_item.registration.status}" } },
                                                         }
                                                     }
-                                                    td {
+                                                    td { "data-label": "Payment",
                                                         if roster_item.registration.paid {
                                                             span { class: "badge bg-success", "Paid" }
                                                             if roster_item.registration.amount_paid > 0.0 {

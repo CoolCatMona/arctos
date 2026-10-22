@@ -1,10 +1,13 @@
 /* Public discovery and event identity for Arctos. */
-.arctos-app .arctos-discovery-hero { text-align: center; max-width: 760px; margin: 0 auto 2.75rem; padding: 1.5rem 0 .5rem; }
-.arctos-app .arctos-discovery-hero h1 { margin: 1.1rem 0 .85rem; font-size: clamp(1.65rem, 3.2vw, 2.25rem); letter-spacing: -.035em; }
-.arctos-app .arctos-discovery-hero > p { color: var(--ui-muted); max-width: 650px; margin: 0 auto 1.5rem; line-height: 1.7; }
+.arctos-app .arctos-discovery-hero { position: relative; max-width: 760px; margin: 0 auto 1.5rem; padding: .5rem 0 1rem; text-align: center; }
+.arctos-app .arctos-discovery-hero h1 { margin: 0 0 .65rem; padding: 0 44px; font-size: clamp(1.65rem, 3.2vw, 2.25rem); letter-spacing: -.035em; }
+.arctos-app .arctos-intro-dismiss { position: absolute; top: 0; right: 0; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: .5rem; background: transparent; color: var(--ui-muted); font-size: 1rem; cursor: pointer; }
+.arctos-app .arctos-intro-dismiss:hover { background: var(--ui-surface-hover); color: var(--ui-text); }
+.arctos-app .arctos-introduction > p { color: var(--ui-muted); max-width: 650px; margin: 0 auto 1rem; line-height: 1.6; }
+.arctos-app .arctos-introduction[hidden] { display: none; }
 .arctos-app .arctos-brand-mark { width: 3.25rem; height: 3.25rem; display: inline-flex; align-items: center; justify-content: center; border-radius: .9rem; color: var(--ui-gradient-contrast); background: linear-gradient(135deg, var(--ui-gradient-start), var(--ui-gradient-end)); font-size: 1.35rem; flex-shrink: 0; }
-.arctos-app .arctos-hero-actions, .arctos-app .arctos-about-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: .75rem; }
-.arctos-app .arctos-hero-actions .btn, .arctos-app .arctos-about-actions .btn, .arctos-app .arctos-card-footer .btn, .arctos-app .arctos-choice-card .btn { display: inline-flex; align-items: center; justify-content: center; gap: .65rem; min-height: 44px; }
+.arctos-app .arctos-hero-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: .75rem; }
+.arctos-app .arctos-hero-actions .btn, .arctos-app .arctos-card-footer .btn, .arctos-app .arctos-choice-card .btn { display: inline-flex; align-items: center; justify-content: center; gap: .65rem; min-height: 44px; }
 .arctos-app .arctos-discovery-toolbar { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
 .arctos-app .arctos-segmented { display: inline-flex; padding: 4px; background: var(--ui-surface-muted); border: 1px solid var(--ui-border); border-radius: .8rem; gap: 4px; }
 .arctos-app .arctos-segment { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; border: 0; background: transparent; color: var(--ui-muted); border-radius: .6rem; min-height: 44px; padding: .6rem 1rem; font-size: .9rem; font-weight: 600; }
@@ -81,20 +84,6 @@
 .arctos-app .arctos-inline-help { display: flex; align-items: flex-start; gap: .75rem; background: var(--ui-accent-soft); color: var(--ui-accent-text); border-radius: .75rem; padding: 1rem 1.25rem; margin-top: 1.5rem; font-size: .9rem; }
 .arctos-app .arctos-inline-help i { margin-top: .2rem; }
 .arctos-app .arctos-inline-help p { margin: 0; }
-.arctos-app .arctos-about { max-width: 1120px; margin: 0 auto; }
-.arctos-app .arctos-about-story { padding: 1.75rem; border-radius: .9rem; margin-bottom: 2.5rem; }
-.arctos-app .arctos-about-story h2 { font-size: 1.35rem; margin-bottom: 1rem; }
-.arctos-app .arctos-about-story p { color: var(--ui-muted); line-height: 1.8; }
-.arctos-app .arctos-about-story p:last-child { margin-bottom: 0; }
-.arctos-app .arctos-about-features { margin-bottom: 2.5rem; }
-.arctos-app .arctos-about-features > h2 { font-size: 1.4rem; text-align: center; margin-bottom: 1.5rem; }
-.arctos-app .arctos-feature-card { padding: 1.5rem; border-radius: .9rem; }
-.arctos-app .arctos-feature-icon { color: var(--ui-accent-text); background: var(--ui-accent-soft); border-radius: .65rem; width: 2.75rem; height: 2.75rem; display: flex; justify-content: center; align-items: center; margin-bottom: 1rem; font-size: 1.1rem; }
-.arctos-app .arctos-feature-card h3 { font-size: 1.05rem; margin-bottom: .65rem; }
-.arctos-app .arctos-feature-card p { font-size: .9rem; color: var(--ui-muted); line-height: 1.7; margin: 0; }
-.arctos-app .arctos-principles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem 2rem; margin: 0; }
-.arctos-app .arctos-principles dt { margin-bottom: .5rem; color: var(--ui-text); }
-.arctos-app .arctos-principles dd { margin: 0; color: var(--ui-muted); font-size: .9rem; line-height: 1.7; }
 .arctos-app .arctos-event-hero { position: relative; display: flex; gap: 1.25rem; align-items: center; padding: 2.5rem; margin-bottom: 1.5rem; border-radius: 1rem; background: linear-gradient(115deg, var(--ui-gradient-start), var(--ui-gradient-end)); color: var(--ui-gradient-contrast); overflow: hidden; }
 .arctos-app .arctos-event-hero::after { content: ""; position: absolute; width: 260px; height: 260px; right: -70px; top: -140px; border: 40px solid var(--ui-on-gradient-soft); border-radius: 50%; pointer-events: none; }
 .arctos-app .arctos-event-hero-mark { width: 4rem; height: 4rem; border-radius: 1rem; background: var(--ui-on-gradient-soft); display: flex; align-items: center; justify-content: center; font-size: 1.6rem; flex-shrink: 0; }
@@ -105,15 +94,13 @@
 .arctos-app .arctos-event-league-badge:hover { background: var(--ui-on-gradient-soft); color: var(--ui-gradient-contrast); }
 @media (max-width: 1100px) { .arctos-app .arctos-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) {
-    .arctos-app .arctos-card-grid, .arctos-app .arctos-choice-grid, .arctos-app .arctos-principles { grid-template-columns: minmax(0, 1fr); }
-    .arctos-app .arctos-discovery-hero { padding-top: .65rem; margin-bottom: 2rem; }
-    .arctos-app .arctos-discovery-hero h1 { margin-top: 1rem; }
-    .arctos-app .arctos-discovery-hero > p { font-size: .95rem; }
+    .arctos-app .arctos-card-grid, .arctos-app .arctos-choice-grid { grid-template-columns: minmax(0, 1fr); }
+    .arctos-app .arctos-introduction > p { font-size: .95rem; }
     .arctos-app .arctos-discovery-toolbar { align-items: stretch; gap: .85rem; }
     .arctos-app .arctos-segmented, .arctos-app .arctos-event-search { width: 100%; flex-basis: 100%; }
     .arctos-app .arctos-segment { flex: 1; padding-left: .5rem; padding-right: .5rem; }
     .arctos-app .arctos-card-grid { gap: 1rem; }
-    .arctos-app .arctos-directory-card, .arctos-app .arctos-choice-card, .arctos-app .arctos-about-story { padding: 1.25rem; }
+    .arctos-app .arctos-directory-card, .arctos-app .arctos-choice-card { padding: 1.25rem; }
     .arctos-app .arctos-event-card .card-body { padding: 1.25rem; }
     .arctos-app .arctos-card-footer { padding: 0 1.25rem 1.25rem; }
     .arctos-app .arctos-event-hero { padding: 1.5rem 1.25rem; align-items: flex-start; gap: .85rem; }
@@ -123,3 +110,68 @@
     .arctos-app .arctos-page-jump { width: 100%; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) { .arctos-app .arctos-event-card, .arctos-app .arctos-directory-card { transition: none; } }
+
+/* Event/team rosters are one section with rows, including on narrow screens. */
+.arctos-app .roster-identity { display: flex; align-items: center; min-width: 0; }
+.arctos-app .roster-name { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; overflow-wrap: anywhere; }
+.arctos-app .roster-count { font-weight: 650; }
+.arctos-app .roster-table td { overflow-wrap: anywhere; }
+.arctos-app .roster-table .roster-actions { white-space: normal; }
+.arctos-app .roster-table .roster-actions .btn-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.arctos-app .roster-table .roster-actions .btn-group .btn { border-radius: 8px; margin: 0; }
+.arctos-app .profile-roster { margin: 0; padding: 0; list-style: none; }
+.arctos-app .profile-roster > li + li { border-top: 1px solid var(--ui-border); }
+.arctos-app .profile-roster-link { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 0; color: var(--ui-text); text-decoration: none; }
+.arctos-app .profile-roster-link:hover { color: var(--ui-link); }
+.arctos-app .profile-roster-copy { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.arctos-app .profile-roster-copy small { color: var(--ui-muted); }
+@media (max-width: 575.98px) {
+  .arctos-app .data-section .roster-table, .arctos-app .data-section .roster-table tbody { display: block; width: 100%; }
+  .arctos-app .roster-table thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+  .arctos-app .data-section .roster-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 12px; border-bottom: 1px solid var(--ui-border); padding: 8px 16px; }
+  .arctos-app .data-section .roster-table tr:last-child { border-bottom: 0; }
+  .arctos-app .data-section .roster-table > tbody > tr > td { display: block; min-width: 0; border: 0; padding: 2px 0; background: transparent; box-shadow: none; font-size: .8125rem; }
+  .arctos-app .data-section .roster-table td[data-label]::before { content: attr(data-label) ": "; color: var(--ui-muted); font-weight: 500; }
+  .arctos-app .data-section .roster-table td:first-child { grid-column: 1 / -1; font-size: .9375rem; }
+  .arctos-app .data-section .roster-table .roster-actions { grid-column: 1 / -1; padding-top: 6px; }
+  .arctos-app .data-section .roster-table .roster-actions::before { display: none; }
+}
+
+/* Profile histories retain desktop columns, with every field and action visible
+   in labeled rows when the profile's content column is narrow. */
+@media (max-width: 991.98px) {
+  .arctos-app .data-section .profile-history-table,
+  .arctos-app .data-section .profile-history-table tbody,
+  .arctos-app .data-section .profile-injury-table,
+  .arctos-app .data-section .profile-injury-table tbody { display: block; width: 100%; }
+  .arctos-app .profile-history-table thead, .arctos-app .profile-injury-table thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+  .arctos-app .data-section .profile-history-table > tbody > tr,
+  .arctos-app .data-section .profile-injury-table > tbody > tr { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; width: 100%; padding: 10px 16px; border-bottom: 1px solid var(--ui-border); }
+  .arctos-app .data-section .profile-history-table > tbody > tr:last-child,
+  .arctos-app .data-section .profile-injury-table > tbody > tr:last-child { border-bottom: 0; }
+  .arctos-app .data-section .profile-history-table > tbody > tr > td,
+  .arctos-app .data-section .profile-injury-table > tbody > tr > td { display: block; min-width: 0; padding: 2px 0; border: 0; background: transparent; box-shadow: none; overflow-wrap: anywhere; }
+  .arctos-app .profile-history-table td[data-label]::before,
+  .arctos-app .profile-injury-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 2px; color: var(--ui-muted); font-size: .75rem; font-weight: 500; }
+  .arctos-app .profile-history-table .profile-record-name,
+  .arctos-app .profile-history-table .profile-record-actions,
+  .arctos-app .profile-injury-table .profile-record-wide,
+  .arctos-app .profile-injury-table .profile-record-actions { grid-column: 1 / -1; }
+  .arctos-app .profile-history-table .profile-record-name a { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; font-weight: 600; }
+  .arctos-app .profile-history-table .profile-record-name::before,
+  .arctos-app .profile-history-table .profile-record-actions::before,
+  .arctos-app .profile-injury-table .profile-record-actions::before { display: none; }
+  .arctos-app .data-section .profile-history-table .profile-history-toggle { position: absolute; top: 10px; left: 12px; width: 44px; padding: 0 !important; }
+  .arctos-app .data-section .profile-history-table .profile-team-record .profile-record-name { padding-left: 48px; }
+  .arctos-app .profile-history-table .profile-record-actions:empty { display: none; }
+  .arctos-app .profile-history-table .profile-record-actions .btn { width: 100%; margin-top: 4px; }
+  .arctos-app .data-section .profile-history-table > tbody > .profile-roster-expanded { display: block; padding-block: 4px; background: var(--ui-surface-muted); }
+  .arctos-app .data-section .profile-history-table .profile-roster-expanded > td { width: 100%; padding: 0; }
+  .arctos-app .profile-history-table .profile-roster-copy small { flex-basis: 100%; }
+  .arctos-app .data-section .profile-injury-table > tbody > tr { padding-inline: 0; }
+  .arctos-app .profile-injury-table .form-control { width: 100%; min-width: 0; max-width: 100%; }
+  .arctos-app .profile-injury-table .form-check-label { display: inline-flex; align-items: center; min-height: 44px; }
+  .arctos-app .profile-injury-table .form-check-input { margin-top: 13px; }
+  .arctos-app .profile-injury-table .profile-record-actions .btn-group { display: flex; flex-wrap: wrap; gap: 6px; }
+  .arctos-app .profile-injury-table .profile-record-actions .btn { flex: 1 1 auto; min-height: 44px; margin: 0; border-radius: 8px; }
+}

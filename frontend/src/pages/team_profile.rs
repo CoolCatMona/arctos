@@ -21,31 +21,37 @@ fn RegistrationRow(
     let league_url = event_key.strip_prefix("league:").unwrap_or(&event_key).to_string();
     rsx! {
         tr {
-            class: if is_expanded { "table-active" } else { "" },
+            class: if is_expanded { "profile-team-record table-active" } else { "profile-team-record" },
             onclick: move |_| on_toggle.call(()),
             style: "cursor: pointer;",
-            td {
-                i {
-                    class: if is_expanded { "fas fa-chevron-down" } else { "fas fa-chevron-right" },
-                    style: "font-size: 0.7rem;"
+            td { class: "profile-history-toggle p-1",
+                button {
+                    r#type: "button", class: "btn btn-link p-0", style: "width: 44px;",
+                    aria_label: if is_expanded { format!("Hide players for {event_key}") } else { format!("Show players for {event_key}") },
+                    aria_expanded: "{is_expanded}",
+                    onclick: move |event| { event.stop_propagation(); on_toggle.call(()); },
+                    i {
+                        class: if is_expanded { "fas fa-chevron-down" } else { "fas fa-chevron-right" },
+                        style: "font-size: 0.7rem;", aria_hidden: "true",
+                    }
                 }
             }
-            td {
+            td { class: "profile-record-name", "data-label": "Tournament",
                 if is_league {
                     Link { to: Route::LeagueHome { league_url: league_url.clone() }, "League: {league_url}" }
                 } else {
                     Link { to: Route::TournamentHome { url: event_key.clone() }, "{event_key}" }
                 }
             }
-            td { strong { "{registration.pseudonym.as_deref().unwrap_or(\"-\")}" } }
-            td {
+            td { "data-label": "Team name", strong { "{registration.pseudonym.as_deref().unwrap_or(\"-\")}" } }
+            td { "data-label": "Date",
                 if let Some(date) = &registration.start_date {
                     "{date.split('T').next().unwrap_or(date)}"
                 } else {
                     "TBA"
                 }
             }
-            td {
+            td { "data-label": "Status",
                 span {
                     class: format!(
                         "badge {}",
@@ -54,7 +60,7 @@ fn RegistrationRow(
                     "{registration.status}"
                 }
             }
-            td {
+            td { "data-label": "Payment",
                 if registration.paid {
                     span { class: "badge bg-success", "Paid" }
                     if registration.amount_paid > 0.0 {
@@ -64,7 +70,7 @@ fn RegistrationRow(
                     span { class: "badge bg-warning", "Unpaid" }
                 }
             }
-            td {
+            td { class: "profile-record-actions", "data-label": "Actions",
                 onclick: move |e: Event<MouseData>| e.stop_propagation(),
                 if is_own_team {
                     if is_league {
@@ -85,8 +91,8 @@ fn RegistrationRow(
         }
         if is_expanded {
             tr {
-                key: "{event_key}-players",
-                td { colspan: 7, class: "bg-light py-3",
+                key: "{event_key}-players", class: "profile-roster-expanded",
+                td { colspan: 7, class: "bg-light",
                     {
                         let ev = registration.event.clone();
                         let cached = players_cache().get(&ev).cloned();
@@ -97,41 +103,28 @@ fn RegistrationRow(
                             Some(Some(Err(_))) => (false, true, None),
                         };
                         rsx! {
-                            div { class: "ps-4", onclick: move |e: Event<MouseData>| e.stop_propagation(),
+                            div { class: "profile-roster-panel", onclick: move |e: Event<MouseData>| e.stop_propagation(),
                                 if let Some(players_list) = players {
                                     if players_list.is_empty() {
                                         p { class: "text-muted mb-0", "No players registered yet." }
                                     } else {
-                                        div { class: "row",
+                                        ul { class: "profile-roster",
                                             for p in players_list.iter() {
-                                                div { class: "col-md-6 mb-2",
+                                                li { key: "{p.registration.player}",
                                                     Link {
                                                         to: Route::PlayerProfilePage { id: p.registration.player.clone() },
-                                                        class: "text-decoration-none text-body",
-                                                        div { class: "card card-body py-2",
-                                                            div { class: "d-flex align-items-center",
-                                                                div { class: "flex-shrink-0 me-2",
-                                                                    if let Some(player) = &p.player {
-                                                                        if let Some(photo) = &player.profile_photo {
-                                                                            img { src: "{backend}/static/{photo}", alt: "{player.name}", class: "rounded-circle", style: "width: 40px; height: 40px; object-fit: cover;" }
-                                                                        } else {
-                                                                            div { class: "d-flex align-items-center justify-content-center bg-secondary rounded-circle", style: "width: 40px; height: 40px;", i { class: "fas fa-user text-white" } }
-                                                                        }
-                                                                    } else {
-                                                                        div { class: "d-flex align-items-center justify-content-center bg-secondary rounded-circle", style: "width: 40px; height: 40px;", i { class: "fas fa-user text-white" } }
-                                                                    }
-                                                                }
-                                                                div { class: "flex-grow-1",
-                                                                    div { class: "d-flex justify-content-between align-items-center",
-                                                                        div {
-                                                                            strong { "{p.registration.jersey_name.as_deref().unwrap_or(\"-\")}" }
-                                                                            if let Some(num) = &p.registration.jersey_number {
-                                                                                span { class: "text-muted ms-1", "#{num}" }
-                                                                            }
-                                                                        }
-                                                                        small { class: "text-muted", "{p.registration.player}" }
-                                                                    }
-                                                                }
+                                                        class: "profile-roster-link",
+                                                        if let Some(player) = &p.player {
+                                                            if let Some(photo) = &player.profile_photo {
+                                                                img { src: "{backend}/static/{photo}", alt: "", class: "rounded-circle", style: "width: 32px; height: 32px; object-fit: cover; flex-shrink: 0;" }
+                                                            }
+                                                        }
+                                                        div { class: "profile-roster-copy",
+                                                            strong { "{p.player.as_ref().map(|player| player.name.as_str()).unwrap_or(&p.registration.player)}" }
+                                                            small {
+                                                                {p.registration.jersey_name.as_deref().unwrap_or("-")}
+                                                                if let Some(num) = &p.registration.jersey_number { " #{num}" }
+                                                                " · @{p.registration.player}"
                                                             }
                                                         }
                                                     }
@@ -292,16 +285,21 @@ pub fn TeamProfile(id: Signal<String>) -> Element {
                         }
                     }
 
-                    div { class: "card mt-3",
-                        div { class: "card-header",
-                            h5 { class: "mb-0", "Tournament Registrations" }
+                    details {
+                        id: "team-tournament-registrations", key: "{d.team.id}-registrations",
+                        class: "card data-section section-disclosure profile-disclosure mt-3",
+                        // Owners need direct access to their Manage Roster actions.
+                        open: me.read().as_ref().and_then(|result| result.as_ref().ok())
+                            .is_some_and(|user| user.user_type == "team" && user.id == d.team.id),
+                        summary { class: "card-header",
+                            h2 { class: "h5 mb-0", "Tournament Registrations ({d.registrations.len()})" }
                         }
                         div { class: "card-body",
                             if d.registrations.is_empty() {
                                 p { class: "text-muted", "No tournament registrations yet." }
                             } else {
                                 div { class: "table-responsive",
-                                    table { class: "table table-striped",
+                                    table { class: "table table-striped profile-history-table",
                                         thead {
                                             tr {
                                                 th { style: "width: 2rem;", "" }
@@ -346,9 +344,11 @@ pub fn TeamProfile(id: Signal<String>) -> Element {
                     }
 
                     if !d.team_notes.is_empty() {
-                        div { class: "card mt-3",
-                            div { class: "card-header",
-                                h5 { class: "mb-0", "Notes Received" }
+                        details {
+                            id: "team-notes", key: "{d.team.id}-notes",
+                            class: "card data-section section-disclosure profile-disclosure mt-3",
+                            summary { class: "card-header",
+                                h2 { class: "h5 mb-0", "Notes Received ({d.team_notes.len()})" }
                             }
                             div { class: "card-body",
                                 div { class: "table-responsive",

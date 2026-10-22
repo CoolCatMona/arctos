@@ -49,8 +49,7 @@ pub fn GoogleChooseAccountType() -> Element {
             div { class: "col-12 auth-column",
                 div { class: "card auth-card",
                     div { class: "card-header",
-                        p { class: "auth-eyebrow", "ONE MORE STEP" }
-                        h1 { class: "mb-0", "How will you join?" }
+                        h1 { class: "mb-0", "Choose an account type" }
                     }
                     div { class: "card-body",
                         p { class: "text-muted",

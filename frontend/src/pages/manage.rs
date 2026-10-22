@@ -214,7 +214,7 @@ pub fn Manage(url: String) -> Element {
 
                 div { class: "row",
                     div { class: "col-12",
-                        div { class: "card",
+                        div { class: "card data-section",
                             div { class: "card-header", h5 { class: "mb-0", "Team Registrations" } }
                             div { class: "card-body",
                                 div { class: "table-responsive management-table-wrap",
@@ -369,7 +369,7 @@ pub fn Manage(url: String) -> Element {
 
                 div { class: "row mt-4",
                     div { class: "col-12",
-                        div { class: "card",
+                        div { class: "card data-section",
                             div { class: "card-header", h5 { class: "mb-0", "Player Registrations" } }
                             div { class: "card-body",
                                 div { class: "table-responsive management-table-wrap",
@@ -988,8 +988,8 @@ pub fn Manage(url: String) -> Element {
 
                         // Session log for this tab session
                         if !session_log().is_empty() {
-                            div { class: "card mb-3",
-                                div { class: "card-header", h5 { class: "mb-0", "Registered this session" } }
+                            details { id: "session-registration-history", class: "card data-section section-disclosure mb-3", open: true,
+                                summary { class: "card-header", h2 { class: "h5 mb-0", "Registered this session ({session_log().len()})" } }
                                 ul { class: "list-group list-group-flush",
                                     for entry in session_log().iter() {
                                         match entry {

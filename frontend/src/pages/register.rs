@@ -85,9 +85,8 @@ fn RegisterPage(account_type: Option<String>) -> Element {
             div { class: "col-12 auth-column",
                 div { class: "card auth-card",
                     div { class: "card-header",
-                        p { class: "auth-eyebrow", "JOIN THE COMMUNITY" }
                         h1 { class: "mb-2", "Create your account" }
-                        p { class: "text-muted mb-0", "Choose how you’ll take part in Arctos." }
+                        p { class: "text-muted mb-0", "Choose a player or team account." }
                     }
                     div { class: "card-body",
                         if let Some(e) = err.read().as_ref() {

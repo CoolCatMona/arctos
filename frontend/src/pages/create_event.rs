@@ -8,7 +8,7 @@ pub fn CreateEvent() -> Element {
             header { class: "arctos-page-intro arctos-centered-intro",
                 div { class: "arctos-brand-mark", aria_hidden: "true", i { class: "fas fa-plus" } }
                 h1 { "Create an event" }
-                p { "Choose the right home for your competition. You can configure registration and event details after creating it." }
+                p { "Choose a tournament or a league." }
             }
             div { class: "arctos-choice-grid",
                 article { class: "card arctos-choice-card",
@@ -16,16 +16,16 @@ pub fn CreateEvent() -> Element {
                     h2 { "Tournament" }
                     p { "A standalone competition with its own registration, schedule, bracket, and results." }
                     ul {
-                        li { "One event, from a single day to a full weekend" }
+                        li { "One tournament" }
                         li { "Independent team and player registration" }
-                        li { "Your own fees, waivers, and roster limits" }
+                        li { "Separate fees, waivers, and roster limits" }
                     }
                     Link { to: Route::NewTournament {}, class: "btn btn-primary", "Create tournament" i { class: "fas fa-arrow-right", aria_hidden: "true" } }
                 }
                 article { class: "card arctos-choice-card",
                     div { class: "arctos-choice-icon", aria_hidden: "true", i { class: "fas fa-award" } }
                     h2 { "League" }
-                    p { "A season or series that brings multiple tournaments together with shared registration and standings." }
+                    p { "A group of tournaments with shared registration and standings." }
                     ul {
                         li { "Multiple events throughout a season" }
                         li { "One registration and roster across league events" }

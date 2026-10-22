@@ -21,7 +21,7 @@ pub fn PlayersList() -> Element {
     rsx! {
         header { class: "arctos-page-intro",
             h1 { "Players" }
-            p { "Meet the Jugger community. Find player profiles, event history, and results." }
+            p { "Find player profiles and results." }
         }
         form {
             class: "arctos-directory-search", role: "search",

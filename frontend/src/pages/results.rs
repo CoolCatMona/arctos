@@ -84,7 +84,7 @@ pub fn Results(url: String) -> Element {
                     });
                     let backend = api::base_url();
                 rsx! {
-                div { class: "card mt-3",
+                div { class: "card data-section mt-3",
                     div { class: "card-body",
                         div { class: "table-responsive",
                             table { class: "table table-striped align-middle mb-0",

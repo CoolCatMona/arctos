@@ -43,7 +43,6 @@ pub fn NewLeague() -> Element {
             div { class: "col-12 form-column",
                 div { class: "card",
                     div { class: "card-header",
-                        p { class: "auth-eyebrow", "BUILD YOUR SEASON" }
                         h1 { class: "mb-2", "Create a league" }
                         p { class: "text-muted mb-0", "Group events under one season, with shared registration and rosters." }
                     }

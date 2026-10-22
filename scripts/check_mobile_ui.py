@@ -54,6 +54,7 @@ PUBLIC_SCREENS = (
     Screen("event-upcoming", "/demo-summer-cup"),
     Screen("event-past", "/demo-spring-cup"),
     Screen("league", "/leagues/demo-coast-league"),
+    Screen("league-event", "/demo-league-round-one"),
     Screen("schedule", "/demo-open/schedule", ".schedule-keyboard-focus"),
     Screen("results", "/demo-open/results"),
     Screen("past-results", "/demo-spring-cup/results"),
@@ -291,6 +292,49 @@ class SmokeCheck:
         await expect(page.locator(".arctos-event-card")).to_have_count(1)
         await expect(page.locator('.arctos-event-card a[href="/demo-summer-cup"]').first).to_be_visible()
 
+    async def introduction_visibility(self, page: Page) -> None:
+        await page.goto(self.base_url, wait_until="domcontentloaded")
+        dismiss = page.locator("#arctos-introduction-dismiss")
+        intro = page.locator("#arctos-introduction")
+        await expect(page.get_by_role("heading", name="Arctos", exact=True)).to_be_visible()
+        await expect(page.locator("#arctos-introduction-toggle")).to_have_count(0)
+        box = await dismiss.bounding_box()
+        assert box and box["width"] >= 44 and box["height"] >= 44, "Banner close target is too small"
+        assert await intro.evaluate("el => getComputedStyle(el).textAlign") == "center"
+        await expect(intro.get_by_role("link", name="jugger", exact=True)).to_have_attribute(
+            "href", "https://en.wikipedia.org/wiki/Jugger"
+        )
+        await page.locator("#event-search").fill("Summer Cup")
+        await expect(page.locator(".arctos-event-card")).to_have_count(1)
+        before = await page.locator("#event-search").bounding_box()
+        await dismiss.focus()
+        await page.keyboard.press("Enter")
+        await expect(intro).to_be_hidden()
+        await expect(page.locator("#event-discovery")).to_be_focused()
+        await expect(page.get_by_role("heading", name="Arctos", exact=True)).to_have_count(0)
+        await expect(page.locator("#event-search")).to_have_value("Summer Cup")
+        await expect(page.locator(".arctos-event-card")).to_have_count(1)
+        after = await page.locator("#event-search").bounding_box()
+        assert before and after and after["y"] < before["y"], "Dismissing the banner did not reveal more events"
+        await (
+            page.get_by_role("navigation", name="Main navigation").get_by_role("link", name="Teams", exact=True).click()
+        )
+        await (
+            page.get_by_role("navigation", name="Main navigation").get_by_role("link", name="Home", exact=True).click()
+        )
+        await expect(intro).to_be_hidden()
+        await page.reload(wait_until="domcontentloaded")
+        await expect(intro).to_be_hidden()
+        await page.locator("#event-search").fill("Summer Cup")
+        await page.locator("#utility-trigger").click()
+        await page.get_by_role("button", name="Show home banner", exact=True).click()
+        await expect(intro).to_be_visible()
+        await expect(page.locator("#arctos-introduction-heading")).to_be_focused()
+        await expect(page.locator("#event-search")).to_have_value("Summer Cup")
+        await expect(page.locator(".arctos-event-card")).to_have_count(1)
+        await page.reload(wait_until="domcontentloaded")
+        await expect(intro).to_be_visible()
+
     async def registration_validation(self, page: Page) -> None:
         await page.goto(self.base_url + "/register/player", wait_until="domcontentloaded")
         await page.locator("#username").fill("demo-validation-only")
@@ -303,6 +347,92 @@ class SmokeCheck:
         await expect(page.locator("#name")).to_have_value("Retain this display name")
         await expect(page.locator("#password")).to_have_value("demo-first-password")
         await expect(page.get_by_role("button", name="Create account", exact=True)).to_be_enabled()
+
+    async def profile_rows_fit(self, page: Page, selector: str) -> None:
+        if page.viewport_size and page.viewport_size["width"] < 992:
+            clipped = await page.locator(selector).evaluate_all("""tables => tables.flatMap(table => {
+                if (!table.getBoundingClientRect().height) return [];
+                const cells = [...table.querySelectorAll('td, input, button, a')].filter(el => {
+                    const r = el.getBoundingClientRect();
+                    return r.width > 0 && (r.left < -1 || r.right > innerWidth + 1);
+                }).map(el => ({tag: el.tagName, text: el.textContent.trim()}));
+                return table.scrollWidth > table.clientWidth + 1 || cells.length
+                    ? [{width: table.clientWidth, scroll: table.scrollWidth, cells}] : [];
+            })""")
+            assert not clipped, f"Profile fields or actions require horizontal scrolling: {clipped}"
+
+    async def player_disclosures(self, page: Page) -> None:
+        await self.login(page, "demo-player")
+        await page.goto(self.base_url + "/players/demo-player", wait_until="domcontentloaded")
+        history = page.locator("#player-tournament-history")
+        await expect(history).to_be_visible()
+        await expect(history).to_have_js_property("open", False)
+        summary = history.locator("summary")
+        await summary.focus()
+        await page.keyboard.press("Enter")
+        await expect(history).to_have_js_property("open", True)
+        await expect(history.locator("tbody tr").first).to_be_visible()
+        await self.profile_rows_fit(page, "#player-tournament-history table")
+        await page.keyboard.press("Space")
+        await expect(history).to_have_js_property("open", False)
+        await expect(summary).to_be_focused()
+
+        injuries = page.locator("#player-injury-history")
+        await expect(injuries).to_have_js_property("open", False)
+        await injuries.locator("summary").click()
+        await injuries.get_by_role("button", name="New Injury", exact=True).click()
+        description = injuries.get_by_label("Injury description", exact=True).last
+        await description.fill("Unsaved injury description")
+        active = injuries.get_by_label("Active", exact=True).last
+        await active.uncheck()
+        await active.check()
+        await self.profile_rows_fit(page, "#player-injury-history table")
+        await injuries.locator("summary").click()
+        await expect(description).to_be_hidden()
+        await expect(injuries.locator("summary")).to_contain_text("active")
+        await injuries.locator("summary").click()
+        await expect(description).to_have_value("Unsaved injury description")
+        await injuries.get_by_role("button", name="Cancel", exact=True).last.click()
+        await expect(description).to_have_count(0)
+        for section in await page.locator("details.section-disclosure").all():
+            box = await section.locator("summary").bounding_box()
+            assert box and box["height"] >= 44, "Disclosure target is too small"
+
+    async def team_disclosures(self, page: Page) -> None:
+        await page.goto(self.base_url + "/teams/demo-team", wait_until="domcontentloaded")
+        registrations = page.locator("#team-tournament-registrations")
+        await expect(registrations).to_have_js_property("open", True)
+        row = registrations.locator("tbody > tr").filter(has=page.locator('a[href="/demo-open"]')).first
+        toggle = row.get_by_role("button")
+        await toggle.focus()
+        await page.keyboard.press("Enter")
+        await expect(toggle).to_have_attribute("aria-expanded", "true")
+        players = registrations.locator(".profile-roster")
+        await expect(players).to_be_visible()
+        await expect(players.get_by_role("link").first).to_be_visible()
+        await self.profile_rows_fit(page, "#team-tournament-registrations table")
+        await registrations.locator("summary").click()
+        await expect(players).to_be_hidden()
+        await registrations.locator("summary").click()
+        await expect(players).to_be_visible()
+        await expect(toggle).to_have_attribute("aria-expanded", "true")
+        await toggle.click()
+        await expect(toggle).to_have_attribute("aria-expanded", "false")
+        await expect(registrations.get_by_role("link", name="Manage Roster").first).to_be_visible()
+
+    async def settings_disclosures(self, page: Page) -> None:
+        for path in ("/demo-open/settings", "/leagues/demo-coast-league/settings"):
+            await page.goto(self.base_url + path, wait_until="domcontentloaded")
+            sections = page.locator("details.section-disclosure")
+            await expect(sections).to_have_count(2)
+            for section in await sections.all():
+                await expect(section).to_have_js_property("open", True)
+                summary = section.locator("summary")
+                await summary.focus()
+                await page.keyboard.press("Enter")
+                await expect(section.locator(".card-body")).to_be_hidden()
+                await page.keyboard.press("Space")
+                await expect(section.locator(".card-body")).to_be_visible()
 
     async def login(self, page: Page, username: str = DEMO_USER) -> None:
         await page.goto(self.base_url + "/login", wait_until="domcontentloaded")
@@ -506,6 +636,9 @@ async def run(args: argparse.Namespace) -> int:
                         await check.visit(page, screen, width)
                     await check.workflow(page, "event-search-and-dates", width, lambda: check.discover_events(page))
                     await check.workflow(
+                        page, "banner-dismissal-and-restore", width, lambda: check.introduction_visibility(page)
+                    )
+                    await check.workflow(
                         page, "registration-validation", width, lambda: check.registration_validation(page)
                     )
                     await check.workflow(page, "organizer-login", width, lambda: check.login(page))
@@ -539,6 +672,7 @@ async def run(args: argparse.Namespace) -> int:
                     )
                     for screen in (*AUTH_SCREENS, *dynamic):
                         await check.visit(page, screen, width)
+                    await check.workflow(page, "settings-disclosures", width, lambda: check.settings_disclosures(page))
                     await check.workflow(page, "bracket-view-controls", width, lambda: check.bracket_controls(page))
                     if width < 768:
                         await check.workflow(page, "bracket-touch-and-cancel", width, lambda: check.bracket_touch(page))
@@ -552,6 +686,8 @@ async def run(args: argparse.Namespace) -> int:
                         Screen("team-profile-edit", "/teams/demo-team/edit", "main form"),
                     ):
                         await check.visit(page, screen, width)
+                    await check.workflow(page, "team-disclosures", width, lambda: check.team_disclosures(page))
+                    await check.workflow(page, "player-disclosures", width, lambda: check.player_disclosures(page))
                 finally:
                     if check.mock_gate:
                         check.mock_gate.set()

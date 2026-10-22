@@ -146,6 +146,14 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
         };
         let can_edit_profile = can_edit_injuries;
         let player_id = d.player.id.clone();
+        let (injury_total, active_injuries) = if can_edit_injuries
+            && injuries_initialized_for().as_deref() == Some(player_id.as_str())
+        {
+            let injuries = injuries_state.read();
+            (injuries.len(), injuries.iter().filter(|injury| injury.active).count())
+        } else {
+            (d.injuries.len(), d.injuries.iter().filter(|injury| injury.active).count())
+        };
         let penalty_rows: Vec<PenaltyRow> = d.player_notes.iter().map(|note| {
             let date_str = stamp_to_date(&note.created_at);
             let date_display = if date_str.is_empty() { "-".to_string() } else { date_str };
@@ -255,16 +263,18 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                         }
                     }
 
-                    div { class: "card mt-3",
-                        div { class: "card-header",
-                            h5 { class: "mb-0", "Tournament History" }
+                    details {
+                        id: "player-tournament-history", key: "{d.player.id}-history",
+                        class: "card data-section section-disclosure profile-disclosure mt-3",
+                        summary { class: "card-header",
+                            h2 { class: "h5 mb-0", "Tournament History ({d.registrations.len()})" }
                         }
                         div { class: "card-body",
                             if d.registrations.is_empty() {
                                 p { class: "text-muted", "No tournament registrations yet." }
                             } else {
                                 div { class: "table-responsive",
-                                    table { class: "table table-striped",
+                                    table { class: "table table-striped profile-history-table",
                                         thead {
                                             tr {
                                                 th { "Tournament" }
@@ -283,21 +293,21 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                                                     let league_url = ev.strip_prefix("league:").unwrap_or(&ev).to_string();
                                                     rsx! {
                                                 tr { key: "{ev}-{r.team.as_deref().unwrap_or(\"\")}",
-                                                    td {
+                                                    td { class: "profile-record-name", "data-label": "Tournament",
                                                         if is_league {
                                                             Link { to: Route::LeagueHome { league_url: league_url.clone() }, "League: {league_url}" }
                                                         } else {
                                                             Link { to: Route::TournamentHome { url: ev.clone() }, "{ev}" }
                                                         }
                                                     }
-                                                    td {
+                                                    td { "data-label": "Team",
                                                         if let (Some(team), Some(id)) = (&r.team_pseudonym, &r.team) {
                                                             Link { to: Route::TeamProfilePage { id: id.clone() }, "{team}" }
                                                         } else {
                                                             "Unattached"
                                                         }
                                                     }
-                                                    td {
+                                                    td { "data-label": "Jersey",
                                                         Link {
                                                             to: Route::PlayerProfilePage { id: d.player.id.clone() },
                                                             class: "text-decoration-none",
@@ -311,17 +321,17 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                                                             }
                                                         }
                                                     }
-                                                    td {
+                                                    td { "data-label": "Status",
                                                         span { class: if r.status == "CONFIRMED" { "badge bg-success" } else { "badge bg-warning" },
                                                             "{r.status}"
                                                         }
                                                     }
-                                                    td {
+                                                    td { "data-label": "Payment",
                                                         span { class: if r.paid { "badge bg-success" } else { "badge bg-warning text-dark" },
                                                             if r.paid { "Paid" } else { "Unpaid" }
                                                         }
                                                     }
-                                                    td {
+                                                    td { "data-label": "Waiver",
                                                         if r.waiver_required {
                                                             {
                                                                 let ws = r.waiver_status.as_deref().unwrap_or("NOT_SIGNED");
@@ -349,16 +359,21 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                     }
 
                     if can_edit_injuries || !d.injuries.is_empty() {
-                        div { class: "card mt-3",
-                            div { class: "card-header",
-                                h5 { class: "mb-0", "Injury History" }
+                        details {
+                            id: "player-injury-history", key: "{d.player.id}-injuries",
+                            class: "card data-section data-section-editor section-disclosure profile-disclosure mt-3",
+                            summary { class: "card-header",
+                                h2 { class: "h5 mb-0", "Injury History ({injury_total})" }
+                                if active_injuries > 0 {
+                                    span { class: "badge bg-warning profile-disclosure-status", "{active_injuries} active" }
+                                }
                             }
                             div { class: "card-body",
                                 if let Some(err) = injury_error() {
                                     div { class: "alert alert-danger", "{err}" }
                                 }
                                 div { class: "table-responsive",
-                                    table { class: "table table-striped",
+                                    table { class: "table table-striped profile-injury-table",
                                         thead {
                                             tr {
                                                 th { "Date" }
@@ -382,11 +397,11 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                                                         let player_id_for_save = player_id.clone();
                                                         let player_id_for_delete = player_id.clone();
                                                         rsx! { tr { key: "{row_key}",
-                                                        td {
+                                                        td { "data-label": "Date", class: "profile-record-wide",
                                                             if inj.editing {
                                                                 input {
                                                                     class: "form-control form-control-sm",
-                                                                    "type": "date",
+                                                                    "type": "date", aria_label: "Injury date",
                                                                     value: "{inj.date}",
                                                                     oninput: move |e| {
                                                                         let mut rows = injuries_state.write();
@@ -401,11 +416,11 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                                                                 "{inj.date}"
                                                             }
                                                         }
-                                                        td {
+                                                        td { "data-label": "Description", class: "profile-record-wide",
                                                             if inj.editing {
                                                                 input {
                                                                     class: "form-control form-control-sm",
-                                                                    "type": "text",
+                                                                    "type": "text", aria_label: "Injury description",
                                                                     value: "{inj.message}",
                                                                     oninput: move |e| {
                                                                         let mut rows = injuries_state.write();
@@ -418,12 +433,12 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                                                                 "{inj.message}"
                                                             }
                                                         }
-                                                        td {
+                                                        td { "data-label": "Status",
                                                             if inj.editing {
                                                                 div { class: "form-check",
                                                                     input {
                                                                         class: "form-check-input",
-                                                                        "type": "checkbox",
+                                                                        "type": "checkbox", id: "{row_key}-active",
                                                                         checked: inj.active,
                                                                         onchange: move |e| {
                                                                             let mut rows = injuries_state.write();
@@ -432,7 +447,7 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                                                                             }
                                                                         }
                                                                     }
-                                                                    label { class: "form-check-label", "Active" }
+                                                                    label { r#for: "{row_key}-active", class: "form-check-label", "Active" }
                                                                 }
                                                             } else if inj.active {
                                                                 span { class: "badge bg-warning", "Active" }
@@ -440,12 +455,12 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                                                                 span { class: "badge bg-success", "Healed" }
                                                             }
                                                         }
-                                                        td {
+                                                        td { "data-label": "Visibility",
                                                             if inj.editing {
                                                                 div { class: "form-check",
                                                                     input {
                                                                         class: "form-check-input",
-                                                                        "type": "checkbox",
+                                                                        "type": "checkbox", id: "{row_key}-public",
                                                                         checked: inj.show,
                                                                         onchange: move |e| {
                                                                             let mut rows = injuries_state.write();
@@ -454,7 +469,7 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                                                                             }
                                                                         }
                                                                     }
-                                                                    label { class: "form-check-label", "Public" }
+                                                                    label { r#for: "{row_key}-public", class: "form-check-label", "Public" }
                                                                 }
                                                             } else if inj.show {
                                                                 span { class: "badge bg-info", "Public" }
@@ -463,7 +478,7 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                                                             }
                                                         }
                                                         if can_edit_injuries {
-                                                            td {
+                                                            td { "data-label": "Actions", class: "profile-record-actions",
                                                                 div { class: "btn-group btn-group-sm",
                                                                     if inj.editing {
                                                                         button {
@@ -586,16 +601,16 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                                             } else {
                                                 for inj in d.injuries.iter() {
                                                     tr { key: "{inj.id}",
-                                                        td { "{inj.stamp.as_deref().unwrap_or(\"-\")}" }
-                                                        td { "{inj.message}" }
-                                                        td {
+                                                        td { class: "profile-record-wide", "data-label": "Date", "{inj.stamp.as_deref().unwrap_or(\"-\")}" }
+                                                        td { class: "profile-record-wide", "data-label": "Description", "{inj.message}" }
+                                                        td { "data-label": "Status",
                                                             if inj.active {
                                                                 span { class: "badge bg-warning", "Active" }
                                                             } else {
                                                                 span { class: "badge bg-success", "Healed" }
                                                             }
                                                         }
-                                                        td {
+                                                        td { "data-label": "Visibility",
                                                             if inj.show {
                                                                 span { class: "badge bg-info", "Public" }
                                                             } else {
@@ -638,9 +653,11 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                     }
 
                     if !penalty_rows_empty {
-                        div { class: "card mt-3",
-                            div { class: "card-header",
-                                h5 { class: "mb-0", "Penalties" }
+                        details {
+                            id: "player-penalties", key: "{d.player.id}-penalties",
+                            class: "card data-section section-disclosure profile-disclosure mt-3",
+                            summary { class: "card-header",
+                                h2 { class: "h5 mb-0", "Penalties ({penalty_row_elements.len()})" }
                             }
                             div { class: "card-body",
                                 div { class: "table-responsive",

@@ -116,33 +116,37 @@ pub fn SideCompDetail(url: String, comp_id: i32) -> Element {
                                     }
                                 }
                             }
-                            h2 { "Registrants ({registrants.len()})" }
-                            if registrants.is_empty() {
-                                p { class: "text-muted", "No registrants yet." }
-                            } else {
-                                div { class: "table-responsive", role: "region", "aria-label": "Side competition registrants", tabindex: "0",
-                                    table { class: "table",
-                                        thead {
-                                            tr {
-                                                th { "#" }
-                                                th { "Player" }
-                                                th { "Role" }
-                                                th { "Registered" }
-                                                th { "Source" }
-                                            }
-                                        }
-                                        tbody {
-                                            for r in registrants.iter() {
-                                                tr {
-                                                    td { "{r.entry_number}" }
-                                                    td { "{r.player_name}" }
-                                                    td {
-                                                        if let Some(weapon) = r.weapon.as_ref() {
-                                                            PompfenIcon { weapon: weapon.clone(), size: "1.75em".to_string() }
+                            section { class: "card data-section",
+                                div { class: "card-header", h2 { class: "h5 mb-0", "Registrants ({registrants.len()})" } }
+                                div { class: "card-body",
+                                    if registrants.is_empty() {
+                                        p { class: "text-muted", "No registrants yet." }
+                                    } else {
+                                        div { class: "table-responsive", role: "region", "aria-label": "Side competition registrants", tabindex: "0",
+                                            table { class: "table roster-table",
+                                                thead {
+                                                    tr {
+                                                        th { "Player" }
+                                                        th { "Entry #" }
+                                                        th { "Role" }
+                                                        th { "Registered" }
+                                                        th { "Source" }
+                                                    }
+                                                }
+                                                tbody {
+                                                    for r in registrants.iter() {
+                                                        tr { key: "{r.player_id}",
+                                                            td { Link { to: Route::PlayerProfilePage { id: r.player_id.clone() }, class: "roster-name", "{r.player_name}" } }
+                                                            td { "data-label": "Entry #", "{r.entry_number}" }
+                                                            td { "data-label": "Role",
+                                                                if let Some(weapon) = r.weapon.as_ref() {
+                                                                    PompfenIcon { weapon: weapon.clone(), size: "1.5em".to_string() }
+                                                                }
+                                                            }
+                                                            td { "data-label": "Registered", {crate::time_format::format_registration_timestamp(r.registered_at.as_deref().unwrap_or("—"))} }
+                                                            td { "data-label": "Source", if r.registered_by_to { "TO" } else { "Self" } }
                                                         }
                                                     }
-                                                    td { "{r.registered_at.clone().unwrap_or_default()}" }
-                                                    td { if r.registered_by_to { "TO" } else { "Self" } }
                                                 }
                                             }
                                         }

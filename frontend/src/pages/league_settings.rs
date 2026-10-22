@@ -403,8 +403,8 @@ pub fn LeagueSettings(league_url: String) -> Element {
 
                 }
                 div { class: "col-md-4",
-            div { class: "card mb-3",
-                div { class: "card-header", h5 { class: "mb-0", "Penalty Types" } }
+            details { class: "card section-disclosure mb-3", open: true,
+                summary { class: "card-header", h2 { class: "h5 mb-0", "Penalty Types ({d.penalty_types.len()})" } }
                 div { class: "card-body",
                     div { class: "table-responsive",
                         table { class: "table table-sm",
@@ -428,8 +428,8 @@ pub fn LeagueSettings(league_url: String) -> Element {
                 }
             }
 
-            div { class: "card mb-3",
-                div { class: "card-header", h5 { class: "mb-0", "League Organizers" } }
+            details { class: "card section-disclosure mb-3", open: true,
+                summary { class: "card-header", h2 { class: "h5 mb-0", "League Organizers ({d.to_entries.len()})" } }
                 div { class: "card-body",
                     ul { class: "list-group list-group-flush mb-3",
                         for to_entry in &d.to_entries {

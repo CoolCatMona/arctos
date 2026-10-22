@@ -123,7 +123,7 @@ fn EligibleRow(
     let name_edit = comp_name.clone();
 
     rsx! {
-        li { class: "list-group-item d-flex justify-content-between align-items-center",
+        li { class: "list-group-item data-list-row d-flex justify-content-between align-items-center",
             div {
                 strong { "{p_render.player_name}" }
                 if let Some(team) = p_render.team_pseudonym.as_ref() {

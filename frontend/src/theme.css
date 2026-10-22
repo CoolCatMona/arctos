@@ -1,8 +1,7 @@
 /* Full color themes stay on the app wrapper so OBS and offline frames retain
-   their independent colors. Small previews share tokens, never app layout.
-   Status colors remain semantic across palettes. Bright accent fills have
-   separate link colors and contrasting button labels. */
-.arctos-app, .theme-preview {
+   their independent colors. Status colors remain semantic across themes.
+   Bright accent fills have separate link colors and contrasting button labels. */
+.arctos-app {
   color-scheme: light;
   --ui-icon-filter: none;
   --ui-on-gradient-soft: #ffffff1a;
@@ -63,12 +62,12 @@
   --ui-gradient-start: #1e1d1a;
   --ui-gradient-end: #446c73;
   --ui-nav-surface: #e3e8e0;
-  --ui-nav-hover: #d0dbd5;
+
   --ui-nav-text: #1e1d1a;
   --ui-nav-muted: #505e55;
   --ui-nav-border: #b0c1b7;
-  --ui-secondary-accent: #446c73;
-  --ui-secondary-contrast: #ffffff;
+
+
   --ui-text-rgb: 30, 29, 26;
   --ui-muted-rgb: 97, 88, 73;
   --ui-surface-rgb: 255, 250, 240;
@@ -76,16 +75,15 @@
   --ui-link-rgb: 143, 53, 24;
   --ui-link-hover-rgb: 116, 43, 22;
   --ui-accent-border: #8f3518;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
+  --ui-nav-active-bg: #446c73;
+  --ui-nav-active-text: #ffffff;
   --ui-gradient-contrast: #ffffff;
   --ui-inverse-text: #ffffff;
   --ui-neutral-fill: #615849;
   --ui-media-bg: #1e1d1a;
   --ui-shadow: #1e1d1a18;
   --ui-shadow-strong: #1e1d1a30;
-}
-.arctos-app {
+
   --field-green: var(--ui-accent);
   --turf-teal: var(--ui-gradient-end);
   --graphite: var(--ui-inverse-bg);
@@ -154,9 +152,9 @@
   font: 400 1rem/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-text-size-adjust: 100%;
   accent-color: var(--ui-link);
+
 }
-.arctos-app[data-palette="california"],
-.theme-preview[data-palette="california"] {
+.arctos-app[data-palette="california"] {
   --ui-bg: #f5efe3;
   --ui-surface: #fffaf0;
   --ui-surface-muted: #e9dfcd;
@@ -177,12 +175,12 @@
   --ui-gradient-start: #1e1d1a;
   --ui-gradient-end: #446c73;
   --ui-nav-surface: #e3e8e0;
-  --ui-nav-hover: #d0dbd5;
+
   --ui-nav-text: #1e1d1a;
   --ui-nav-muted: #505e55;
   --ui-nav-border: #b0c1b7;
-  --ui-secondary-accent: #446c73;
-  --ui-secondary-contrast: #ffffff;
+
+
   --ui-text-rgb: 30, 29, 26;
   --ui-muted-rgb: 97, 88, 73;
   --ui-surface-rgb: 255, 250, 240;
@@ -190,61 +188,58 @@
   --ui-link-rgb: 143, 53, 24;
   --ui-link-hover-rgb: 116, 43, 22;
   --ui-accent-border: #8f3518;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
+  --ui-nav-active-bg: #446c73;
+  --ui-nav-active-text: #ffffff;
   --ui-gradient-contrast: #ffffff;
   --ui-inverse-text: #ffffff;
   --ui-neutral-fill: #615849;
   --ui-media-bg: #1e1d1a;
   --ui-shadow: #1e1d1a18;
   --ui-shadow-strong: #1e1d1a30;
+
 }
-.arctos-app[data-palette="field-chalk"],
-.theme-preview[data-palette="field-chalk"] {
-  --ui-bg: #e8ddc9;
-  --ui-surface: #f8f4ea;
-  --ui-surface-muted: #e1d5bf;
-  --ui-surface-hover: #ded2bd;
-  --ui-border: #b6aa94;
-  --ui-control-border: #796b57;
-  --ui-text: #20201d;
-  --ui-muted: #55504a;
-  --ui-inverse-bg: #20201d;
-  --ui-accent: #b83a32;
-  --ui-accent-hover: #9e302a;
-  --ui-accent-active: #862923;
-  --ui-accent-soft: #f4dcd3;
-  --ui-accent-text: #8d2924;
+.arctos-app[data-palette="field"] {
+  --ui-bg: #eef4e6;
+  --ui-surface: #fbfff5;
+  --ui-surface-muted: #dce9cf;
+  --ui-surface-hover: #cfdfbf;
+  --ui-border: #a9bf96;
+  --ui-control-border: #687d56;
+  --ui-text: #22331d;
+  --ui-muted: #4e6241;
+  --ui-inverse-bg: #203a19;
+  --ui-accent: #347b30;
+  --ui-accent-hover: #2b6727;
+  --ui-accent-active: #245922;
+  --ui-accent-soft: #dcebd0;
+  --ui-accent-text: #285721;
   --ui-accent-contrast: #ffffff;
-  --ui-link: #922c26;
-  --ui-link-hover: #78221e;
-  --ui-gradient-start: #20201d;
-  --ui-gradient-end: #55504a;
-  --ui-nav-surface: #ddd0b8;
-  --ui-nav-hover: #d4c7af;
-  --ui-nav-text: #20201d;
-  --ui-nav-muted: #55504a;
-  --ui-nav-border: #b6aa94;
-  --ui-secondary-accent: #dba326;
-  --ui-secondary-contrast: #20201d;
-  --ui-text-rgb: 32, 32, 29;
-  --ui-muted-rgb: 85, 80, 74;
-  --ui-surface-rgb: 248, 244, 234;
-  --ui-accent-rgb: 184, 58, 50;
-  --ui-link-rgb: 146, 44, 38;
-  --ui-link-hover-rgb: 120, 34, 30;
-  --ui-accent-border: #922c26;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
+  --ui-link: #2d6124;
+  --ui-link-hover: #244e1d;
+  --ui-gradient-start: #245922;
+  --ui-gradient-end: #476e2d;
+  --ui-nav-surface: #deead1;
+  --ui-nav-text: #21351a;
+  --ui-nav-muted: #456238;
+  --ui-nav-border: #a5bd91;
+  --ui-nav-active-bg: #476e2d;
+  --ui-nav-active-text: #ffffff;
+  --ui-text-rgb: 34, 51, 29;
+  --ui-muted-rgb: 78, 98, 65;
+  --ui-surface-rgb: 251, 255, 245;
+  --ui-accent-rgb: 52, 123, 48;
+  --ui-link-rgb: 45, 97, 36;
+  --ui-link-hover-rgb: 36, 78, 29;
+  --ui-accent-border: #2d6124;
   --ui-gradient-contrast: #ffffff;
   --ui-inverse-text: #ffffff;
-  --ui-neutral-fill: #55504a;
-  --ui-media-bg: #20201d;
-  --ui-shadow: #20201d18;
-  --ui-shadow-strong: #20201d30;
+  --ui-neutral-fill: #4e6241;
+  --ui-media-bg: #203a19;
+  --ui-shadow: #22331d18;
+  --ui-shadow-strong: #22331d30;
+
 }
-.arctos-app[data-palette="neutral"],
-.theme-preview[data-palette="neutral"] {
+.arctos-app[data-palette="neutral"] {
   --ui-bg: #f8f6f1;
   --ui-surface: #fffdf8;
   --ui-surface-muted: #e8e1d6;
@@ -265,12 +260,12 @@
   --ui-gradient-start: #242629;
   --ui-gradient-end: #607176;
   --ui-nav-surface: #e1e7e5;
-  --ui-nav-hover: #d1dcda;
+
   --ui-nav-text: #242629;
   --ui-nav-muted: #4f5f63;
   --ui-nav-border: #b9c7c5;
-  --ui-secondary-accent: #607176;
-  --ui-secondary-contrast: #ffffff;
+
+
   --ui-text-rgb: 55, 50, 44;
   --ui-muted-rgb: 96, 91, 84;
   --ui-surface-rgb: 255, 253, 248;
@@ -278,192 +273,17 @@
   --ui-link-rgb: 136, 69, 35;
   --ui-link-hover-rgb: 112, 57, 29;
   --ui-accent-border: #884523;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
+  --ui-nav-active-bg: #607176;
+  --ui-nav-active-text: #ffffff;
   --ui-gradient-contrast: #ffffff;
   --ui-inverse-text: #ffffff;
   --ui-neutral-fill: #605b54;
   --ui-media-bg: #242629;
   --ui-shadow: #37322c18;
   --ui-shadow-strong: #37322c30;
+
 }
-.arctos-app[data-palette="forest"],
-.theme-preview[data-palette="forest"] {
-  --ui-bg: #eef4ec;
-  --ui-surface: #fbfdf9;
-  --ui-surface-muted: #e2ecdf;
-  --ui-surface-hover: #d4e3d0;
-  --ui-border: #bfd0ba;
-  --ui-control-border: #6a8063;
-  --ui-text: #203022;
-  --ui-muted: #4c614e;
-  --ui-inverse-bg: #20372b;
-  --ui-accent: #15803d;
-  --ui-accent-hover: #166534;
-  --ui-accent-active: #14532d;
-  --ui-accent-soft: #eaf5eb;
-  --ui-accent-text: #14532d;
-  --ui-accent-contrast: #ffffff;
-  --ui-link: #166534;
-  --ui-link-hover: #14532d;
-  --ui-gradient-start: #15803d;
-  --ui-gradient-end: #0f766e;
-  --ui-nav-surface: #e0ece5;
-  --ui-nav-hover: #cbded2;
-  --ui-nav-text: #203022;
-  --ui-nav-muted: #465e51;
-  --ui-nav-border: #b7cdc0;
-  --ui-secondary-accent: #0f766e;
-  --ui-secondary-contrast: #ffffff;
-  --ui-text-rgb: 32, 48, 34;
-  --ui-muted-rgb: 76, 97, 78;
-  --ui-surface-rgb: 251, 253, 249;
-  --ui-accent-rgb: 21, 128, 61;
-  --ui-link-rgb: 22, 101, 52;
-  --ui-link-hover-rgb: 20, 83, 45;
-  --ui-accent-border: #166534;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
-  --ui-gradient-contrast: #ffffff;
-  --ui-inverse-text: #ffffff;
-  --ui-neutral-fill: #4c614e;
-  --ui-media-bg: #20372b;
-  --ui-shadow: #20302218;
-  --ui-shadow-strong: #20302230;
-}
-.arctos-app[data-palette="ocean"],
-.theme-preview[data-palette="ocean"] {
-  --ui-bg: #edf4f6;
-  --ui-surface: #f9fdfe;
-  --ui-surface-muted: #dfebef;
-  --ui-surface-hover: #d0e1e7;
-  --ui-border: #b6cdd6;
-  --ui-control-border: #627e8b;
-  --ui-text: #203239;
-  --ui-muted: #49636e;
-  --ui-inverse-bg: #203b46;
-  --ui-accent: #0369a1;
-  --ui-accent-hover: #075985;
-  --ui-accent-active: #0c4a6e;
-  --ui-accent-soft: #e8f4fc;
-  --ui-accent-text: #075985;
-  --ui-accent-contrast: #ffffff;
-  --ui-link: #075985;
-  --ui-link-hover: #0c4a6e;
-  --ui-gradient-start: #0369a1;
-  --ui-gradient-end: #0f766e;
-  --ui-nav-surface: #e0eceb;
-  --ui-nav-hover: #ccdedb;
-  --ui-nav-text: #203239;
-  --ui-nav-muted: #45605f;
-  --ui-nav-border: #b3ceca;
-  --ui-secondary-accent: #0f766e;
-  --ui-secondary-contrast: #ffffff;
-  --ui-text-rgb: 32, 50, 57;
-  --ui-muted-rgb: 73, 99, 110;
-  --ui-surface-rgb: 249, 253, 254;
-  --ui-accent-rgb: 3, 105, 161;
-  --ui-link-rgb: 7, 89, 133;
-  --ui-link-hover-rgb: 12, 74, 110;
-  --ui-accent-border: #075985;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
-  --ui-gradient-contrast: #ffffff;
-  --ui-inverse-text: #ffffff;
-  --ui-neutral-fill: #49636e;
-  --ui-media-bg: #203b46;
-  --ui-shadow: #20323918;
-  --ui-shadow-strong: #20323930;
-}
-.arctos-app[data-palette="plum"],
-.theme-preview[data-palette="plum"] {
-  --ui-bg: #f4eef6;
-  --ui-surface: #fdfaff;
-  --ui-surface-muted: #e9dfed;
-  --ui-surface-hover: #ded0e3;
-  --ui-border: #cfbdd6;
-  --ui-control-border: #83698f;
-  --ui-text: #35263d;
-  --ui-muted: #65516e;
-  --ui-inverse-bg: #38253e;
-  --ui-accent: #7e22ce;
-  --ui-accent-hover: #6b21a8;
-  --ui-accent-active: #581c87;
-  --ui-accent-soft: #f5edfc;
-  --ui-accent-text: #6b21a8;
-  --ui-accent-contrast: #ffffff;
-  --ui-link: #6b21a8;
-  --ui-link-hover: #581c87;
-  --ui-gradient-start: #7e22ce;
-  --ui-gradient-end: #9d174d;
-  --ui-nav-surface: #f0e0e7;
-  --ui-nav-hover: #e6cdd8;
-  --ui-nav-text: #35263d;
-  --ui-nav-muted: #735166;
-  --ui-nav-border: #d7b5c5;
-  --ui-secondary-accent: #9d174d;
-  --ui-secondary-contrast: #ffffff;
-  --ui-text-rgb: 53, 38, 61;
-  --ui-muted-rgb: 101, 81, 110;
-  --ui-surface-rgb: 253, 250, 255;
-  --ui-accent-rgb: 126, 34, 206;
-  --ui-link-rgb: 107, 33, 168;
-  --ui-link-hover-rgb: 88, 28, 135;
-  --ui-accent-border: #6b21a8;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
-  --ui-gradient-contrast: #ffffff;
-  --ui-inverse-text: #ffffff;
-  --ui-neutral-fill: #65516e;
-  --ui-media-bg: #38253e;
-  --ui-shadow: #35263d18;
-  --ui-shadow-strong: #35263d30;
-}
-.arctos-app[data-palette="ember"],
-.theme-preview[data-palette="ember"] {
-  --ui-bg: #f8f0e5;
-  --ui-surface: #fffaf2;
-  --ui-surface-muted: #efdfc8;
-  --ui-surface-hover: #e6d2b5;
-  --ui-border: #d7bd99;
-  --ui-control-border: #8b6b45;
-  --ui-text: #3b2b1d;
-  --ui-muted: #6c553f;
-  --ui-inverse-bg: #432a1e;
-  --ui-accent: #b45309;
-  --ui-accent-hover: #92400e;
-  --ui-accent-active: #78350f;
-  --ui-accent-soft: #fff4e5;
-  --ui-accent-text: #92400e;
-  --ui-accent-contrast: #ffffff;
-  --ui-link: #92400e;
-  --ui-link-hover: #78350f;
-  --ui-gradient-start: #b45309;
-  --ui-gradient-end: #c2410c;
-  --ui-nav-surface: #f1ded2;
-  --ui-nav-hover: #e7cbb9;
-  --ui-nav-text: #3b2b1d;
-  --ui-nav-muted: #724d3d;
-  --ui-nav-border: #d6b09a;
-  --ui-secondary-accent: #9b3e23;
-  --ui-secondary-contrast: #ffffff;
-  --ui-text-rgb: 59, 43, 29;
-  --ui-muted-rgb: 108, 85, 63;
-  --ui-surface-rgb: 255, 250, 242;
-  --ui-accent-rgb: 180, 83, 9;
-  --ui-link-rgb: 146, 64, 14;
-  --ui-link-hover-rgb: 120, 53, 15;
-  --ui-accent-border: #92400e;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
-  --ui-gradient-contrast: #ffffff;
-  --ui-inverse-text: #ffffff;
-  --ui-neutral-fill: #6c553f;
-  --ui-media-bg: #432a1e;
-  --ui-shadow: #3b2b1d18;
-  --ui-shadow-strong: #3b2b1d30;
-}
-.arctos-app[data-bs-theme="dark"], .theme-preview[data-bs-theme="dark"] {
+.arctos-app[data-bs-theme="dark"] {
   color-scheme: dark;
   --ui-icon-filter: brightness(0) invert(1);
   --ui-success: #4ade80;
@@ -518,12 +338,12 @@
   --ui-gradient-start: #1e1d1a;
   --ui-gradient-end: #36565b;
   --ui-nav-surface: #243336;
-  --ui-nav-hover: #334449;
+
   --ui-nav-text: #f1f0e6;
   --ui-nav-muted: #b7c8c4;
   --ui-nav-border: #52686a;
-  --ui-secondary-accent: #91b4b8;
-  --ui-secondary-contrast: #1b2b2e;
+
+
   --ui-text-rgb: 245, 239, 227;
   --ui-muted-rgb: 194, 183, 162;
   --ui-surface-rgb: 41, 39, 34;
@@ -531,17 +351,17 @@
   --ui-link-rgb: 255, 164, 119;
   --ui-link-hover-rgb: 255, 189, 152;
   --ui-accent-border: #ffa477;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
+  --ui-nav-active-bg: #91b4b8;
+  --ui-nav-active-text: #1b2b2e;
   --ui-gradient-contrast: #ffffff;
   --ui-inverse-text: #ffffff;
   --ui-neutral-fill: #615849;
   --ui-media-bg: #151411;
   --ui-shadow: #00000040;
   --ui-shadow-strong: #00000070;
+
 }
-.arctos-app[data-bs-theme="dark"][data-palette="california"],
-.theme-preview[data-bs-theme="dark"][data-palette="california"] {
+.arctos-app[data-bs-theme="dark"][data-palette="california"] {
   --ui-bg: #1e1d1a;
   --ui-surface: #292722;
   --ui-surface-muted: #343127;
@@ -562,12 +382,12 @@
   --ui-gradient-start: #1e1d1a;
   --ui-gradient-end: #36565b;
   --ui-nav-surface: #243336;
-  --ui-nav-hover: #334449;
+
   --ui-nav-text: #f1f0e6;
   --ui-nav-muted: #b7c8c4;
   --ui-nav-border: #52686a;
-  --ui-secondary-accent: #91b4b8;
-  --ui-secondary-contrast: #1b2b2e;
+
+
   --ui-text-rgb: 245, 239, 227;
   --ui-muted-rgb: 194, 183, 162;
   --ui-surface-rgb: 41, 39, 34;
@@ -575,61 +395,58 @@
   --ui-link-rgb: 255, 164, 119;
   --ui-link-hover-rgb: 255, 189, 152;
   --ui-accent-border: #ffa477;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
+  --ui-nav-active-bg: #91b4b8;
+  --ui-nav-active-text: #1b2b2e;
   --ui-gradient-contrast: #ffffff;
   --ui-inverse-text: #ffffff;
   --ui-neutral-fill: #615849;
   --ui-media-bg: #151411;
   --ui-shadow: #00000040;
   --ui-shadow-strong: #00000070;
+
 }
-.arctos-app[data-bs-theme="dark"][data-palette="field-chalk"],
-.theme-preview[data-bs-theme="dark"][data-palette="field-chalk"] {
-  --ui-bg: #1c1c19;
-  --ui-surface: #20201d;
-  --ui-surface-muted: #2e2c26;
-  --ui-surface-hover: #3b382f;
-  --ui-border: #615c4e;
-  --ui-control-border: #948974;
-  --ui-text: #f8f4ea;
-  --ui-muted: #c5baa6;
-  --ui-inverse-bg: #151512;
-  --ui-accent: #ef8278;
-  --ui-accent-hover: #f8a198;
-  --ui-accent-active: #ffc2ba;
-  --ui-accent-soft: #422623;
-  --ui-accent-text: #ffc2ba;
-  --ui-accent-contrast: #321612;
-  --ui-link: #ffaca3;
-  --ui-link-hover: #ffc2ba;
-  --ui-gradient-start: #20201d;
-  --ui-gradient-end: #55504a;
-  --ui-nav-surface: #303025;
-  --ui-nav-hover: #414030;
-  --ui-nav-text: #f8f4ea;
-  --ui-nav-muted: #c8c3a9;
-  --ui-nav-border: #66634c;
-  --ui-secondary-accent: #e6b849;
-  --ui-secondary-contrast: #20201d;
-  --ui-text-rgb: 248, 244, 234;
-  --ui-muted-rgb: 197, 186, 166;
-  --ui-surface-rgb: 32, 32, 29;
-  --ui-accent-rgb: 239, 130, 120;
-  --ui-link-rgb: 255, 172, 163;
-  --ui-link-hover-rgb: 255, 194, 186;
-  --ui-accent-border: #ffaca3;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
+.arctos-app[data-bs-theme="dark"][data-palette="field"] {
+  --ui-bg: #152011;
+  --ui-surface: #1d2c17;
+  --ui-surface-muted: #293a21;
+  --ui-surface-hover: #374b2c;
+  --ui-border: #506b41;
+  --ui-control-border: #8ea57c;
+  --ui-text: #f0f6e8;
+  --ui-muted: #becfae;
+  --ui-inverse-bg: #0e160b;
+  --ui-accent: #9bd178;
+  --ui-accent-hover: #b3e191;
+  --ui-accent-active: #ceeeba;
+  --ui-accent-soft: #2b411f;
+  --ui-accent-text: #c2e7a7;
+  --ui-accent-contrast: #1d3015;
+  --ui-link: #b3e191;
+  --ui-link-hover: #ceeeba;
+  --ui-gradient-start: #245922;
+  --ui-gradient-end: #3f6126;
+  --ui-nav-surface: #21331b;
+  --ui-nav-text: #f0f6e8;
+  --ui-nav-muted: #bfd2ae;
+  --ui-nav-border: #567048;
+  --ui-nav-active-bg: #b2cf7c;
+  --ui-nav-active-text: #253417;
+  --ui-text-rgb: 240, 246, 232;
+  --ui-muted-rgb: 190, 207, 174;
+  --ui-surface-rgb: 29, 44, 23;
+  --ui-accent-rgb: 155, 209, 120;
+  --ui-link-rgb: 179, 225, 145;
+  --ui-link-hover-rgb: 206, 238, 186;
+  --ui-accent-border: #b3e191;
   --ui-gradient-contrast: #ffffff;
   --ui-inverse-text: #ffffff;
-  --ui-neutral-fill: #55504a;
-  --ui-media-bg: #151512;
+  --ui-neutral-fill: #4e6241;
+  --ui-media-bg: #0e160b;
   --ui-shadow: #00000040;
   --ui-shadow-strong: #00000070;
+
 }
-.arctos-app[data-bs-theme="dark"][data-palette="neutral"],
-.theme-preview[data-bs-theme="dark"][data-palette="neutral"] {
+.arctos-app[data-bs-theme="dark"][data-palette="neutral"] {
   --ui-bg: #242629;
   --ui-surface: #2e3032;
   --ui-surface-muted: #37383a;
@@ -650,12 +467,12 @@
   --ui-gradient-start: #242629;
   --ui-gradient-end: #475c63;
   --ui-nav-surface: #2d3b3f;
-  --ui-nav-hover: #3b4b50;
+
   --ui-nav-text: #f8f6f1;
   --ui-nav-muted: #bccbd0;
   --ui-nav-border: #607176;
-  --ui-secondary-accent: #b0c3c9;
-  --ui-secondary-contrast: #253338;
+
+
   --ui-text-rgb: 248, 246, 241;
   --ui-muted-rgb: 200, 192, 180;
   --ui-surface-rgb: 46, 48, 50;
@@ -663,190 +480,15 @@
   --ui-link-rgb: 237, 189, 149;
   --ui-link-hover-rgb: 245, 208, 174;
   --ui-accent-border: #edbd95;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
+  --ui-nav-active-bg: #b0c3c9;
+  --ui-nav-active-text: #253338;
   --ui-gradient-contrast: #ffffff;
   --ui-inverse-text: #ffffff;
   --ui-neutral-fill: #605b54;
   --ui-media-bg: #161719;
   --ui-shadow: #00000040;
   --ui-shadow-strong: #00000070;
-}
-.arctos-app[data-bs-theme="dark"][data-palette="forest"],
-.theme-preview[data-bs-theme="dark"][data-palette="forest"] {
-  --ui-bg: #101b15;
-  --ui-surface: #19271e;
-  --ui-surface-muted: #243429;
-  --ui-surface-hover: #304234;
-  --ui-border: #47664d;
-  --ui-control-border: #7d9a7f;
-  --ui-text: #eaf4e8;
-  --ui-muted: #b4c9b1;
-  --ui-inverse-bg: #0b130e;
-  --ui-accent: #4ade80;
-  --ui-accent-hover: #86efac;
-  --ui-accent-active: #bbf7d0;
-  --ui-accent-soft: #153326;
-  --ui-accent-text: #86efac;
-  --ui-accent-contrast: #062713;
-  --ui-link: #86efac;
-  --ui-link-hover: #bbf7d0;
-  --ui-gradient-start: #166534;
-  --ui-gradient-end: #115e59;
-  --ui-nav-surface: #17322c;
-  --ui-nav-hover: #24443c;
-  --ui-nav-text: #e7f4ef;
-  --ui-nav-muted: #b0cdc2;
-  --ui-nav-border: #42695c;
-  --ui-secondary-accent: #6bd1be;
-  --ui-secondary-contrast: #07352b;
-  --ui-text-rgb: 234, 244, 232;
-  --ui-muted-rgb: 180, 201, 177;
-  --ui-surface-rgb: 25, 39, 30;
-  --ui-accent-rgb: 74, 222, 128;
-  --ui-link-rgb: 134, 239, 172;
-  --ui-link-hover-rgb: 187, 247, 208;
-  --ui-accent-border: #86efac;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
-  --ui-gradient-contrast: #ffffff;
-  --ui-inverse-text: #ffffff;
-  --ui-neutral-fill: #4c614e;
-  --ui-media-bg: #0b130e;
-  --ui-shadow: #00000040;
-  --ui-shadow-strong: #00000070;
-}
-.arctos-app[data-bs-theme="dark"][data-palette="ocean"],
-.theme-preview[data-bs-theme="dark"][data-palette="ocean"] {
-  --ui-bg: #101c23;
-  --ui-surface: #192a33;
-  --ui-surface-muted: #233943;
-  --ui-surface-hover: #2f4853;
-  --ui-border: #4a6c7b;
-  --ui-control-border: #7ba1b1;
-  --ui-text: #edf7fa;
-  --ui-muted: #b2cbd4;
-  --ui-inverse-bg: #0a141a;
-  --ui-accent: #7dd3fc;
-  --ui-accent-hover: #bae6fd;
-  --ui-accent-active: #e0f2fe;
-  --ui-accent-soft: #143042;
-  --ui-accent-text: #7dd3fc;
-  --ui-accent-contrast: #082c40;
-  --ui-link: #bae6fd;
-  --ui-link-hover: #e0f2fe;
-  --ui-gradient-start: #075985;
-  --ui-gradient-end: #115e59;
-  --ui-nav-surface: #173238;
-  --ui-nav-hover: #25464b;
-  --ui-nav-text: #eaf8f6;
-  --ui-nav-muted: #b0cfcc;
-  --ui-nav-border: #416e71;
-  --ui-secondary-accent: #6dcfc4;
-  --ui-secondary-contrast: #073335;
-  --ui-text-rgb: 237, 247, 250;
-  --ui-muted-rgb: 178, 203, 212;
-  --ui-surface-rgb: 25, 42, 51;
-  --ui-accent-rgb: 125, 211, 252;
-  --ui-link-rgb: 186, 230, 253;
-  --ui-link-hover-rgb: 224, 242, 254;
-  --ui-accent-border: #bae6fd;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
-  --ui-gradient-contrast: #ffffff;
-  --ui-inverse-text: #ffffff;
-  --ui-neutral-fill: #49636e;
-  --ui-media-bg: #0a141a;
-  --ui-shadow: #00000040;
-  --ui-shadow-strong: #00000070;
-}
-.arctos-app[data-bs-theme="dark"][data-palette="plum"],
-.theme-preview[data-bs-theme="dark"][data-palette="plum"] {
-  --ui-bg: #201725;
-  --ui-surface: #2b2033;
-  --ui-surface-muted: #382a41;
-  --ui-surface-hover: #483551;
-  --ui-border: #72577f;
-  --ui-control-border: #a184ae;
-  --ui-text: #f6edf9;
-  --ui-muted: #cdb8d5;
-  --ui-inverse-bg: #160f1a;
-  --ui-accent: #d8b4fe;
-  --ui-accent-hover: #e9d5ff;
-  --ui-accent-active: #f3e8ff;
-  --ui-accent-soft: #30203f;
-  --ui-accent-text: #e9d5ff;
-  --ui-accent-contrast: #29113d;
-  --ui-link: #e9d5ff;
-  --ui-link-hover: #f3e8ff;
-  --ui-gradient-start: #6b21a8;
-  --ui-gradient-end: #831843;
-  --ui-nav-surface: #3a2432;
-  --ui-nav-hover: #4c3043;
-  --ui-nav-text: #f9edf3;
-  --ui-nav-muted: #d5b8c9;
-  --ui-nav-border: #795466;
-  --ui-secondary-accent: #efa7c6;
-  --ui-secondary-contrast: #3b1830;
-  --ui-text-rgb: 246, 237, 249;
-  --ui-muted-rgb: 205, 184, 213;
-  --ui-surface-rgb: 43, 32, 51;
-  --ui-accent-rgb: 216, 180, 254;
-  --ui-link-rgb: 233, 213, 255;
-  --ui-link-hover-rgb: 243, 232, 255;
-  --ui-accent-border: #e9d5ff;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
-  --ui-gradient-contrast: #ffffff;
-  --ui-inverse-text: #ffffff;
-  --ui-neutral-fill: #65516e;
-  --ui-media-bg: #160f1a;
-  --ui-shadow: #00000040;
-  --ui-shadow-strong: #00000070;
-}
-.arctos-app[data-bs-theme="dark"][data-palette="ember"],
-.theme-preview[data-bs-theme="dark"][data-palette="ember"] {
-  --ui-bg: #241a13;
-  --ui-surface: #30231a;
-  --ui-surface-muted: #3d2e21;
-  --ui-surface-hover: #4e3b2a;
-  --ui-border: #7b5e41;
-  --ui-control-border: #aa8966;
-  --ui-text: #fff1df;
-  --ui-muted: #d5bca0;
-  --ui-inverse-bg: #180f0b;
-  --ui-accent: #fdba74;
-  --ui-accent-hover: #fed7aa;
-  --ui-accent-active: #ffedd5;
-  --ui-accent-soft: #3b291c;
-  --ui-accent-text: #fed7aa;
-  --ui-accent-contrast: #3a1b06;
-  --ui-link: #fed7aa;
-  --ui-link-hover: #ffedd5;
-  --ui-gradient-start: #92400e;
-  --ui-gradient-end: #9a3412;
-  --ui-nav-surface: #3c2822;
-  --ui-nav-hover: #50372d;
-  --ui-nav-text: #fff1e8;
-  --ui-nav-muted: #dabbb0;
-  --ui-nav-border: #805a49;
-  --ui-secondary-accent: #f3a182;
-  --ui-secondary-contrast: #432018;
-  --ui-text-rgb: 255, 241, 223;
-  --ui-muted-rgb: 213, 188, 160;
-  --ui-surface-rgb: 48, 35, 26;
-  --ui-accent-rgb: 253, 186, 116;
-  --ui-link-rgb: 254, 215, 170;
-  --ui-link-hover-rgb: 255, 237, 213;
-  --ui-accent-border: #fed7aa;
-  --ui-nav-active-bg: var(--ui-secondary-accent);
-  --ui-nav-active-text: var(--ui-secondary-contrast);
-  --ui-gradient-contrast: #ffffff;
-  --ui-inverse-text: #ffffff;
-  --ui-neutral-fill: #6c553f;
-  --ui-media-bg: #180f0b;
-  --ui-shadow: #00000040;
-  --ui-shadow-strong: #00000070;
+
 }
 .arctos-app *, .arctos-app *::before, .arctos-app *::after { box-sizing: border-box; }
 .arctos-app :focus-visible { outline: 3px solid var(--ui-link); outline-offset: 3px; }
@@ -897,6 +539,34 @@
 .arctos-app .card-header { padding: 18px 24px; border-bottom-color: var(--bs-border-color); }
 .arctos-app .card-footer { padding: 16px 24px; background: var(--ui-surface-muted); border-top-color: var(--bs-border-color); }
 .arctos-app .card-title { line-height: 1.4; }
+/* Repeated records share one parent surface. Opt in per section so editors and
+   unrelated groups keep their own boundaries. */
+.arctos-app .data-section > .card-header { padding: 12px 16px; }
+.arctos-app .data-section > .card-body { padding: 0; }
+.arctos-app .data-section .table-responsive { border: 0; border-radius: 0; background: transparent; }
+.arctos-app .data-section > .card-body:first-child > .table-responsive:first-child { border-top-left-radius: 11px; border-top-right-radius: 11px; }
+.arctos-app .data-section > .card-body > .table-responsive:last-child { border-radius: 0 0 11px 11px; }
+.arctos-app .data-section .table { margin: 0; }
+.arctos-app .data-section .table tbody tr:last-child > td { border-bottom: 0; }
+.arctos-app .data-section .table:where(:not(.management-table)) > :not(caption) > * > * { padding: 9px 16px; }
+.arctos-app .data-section > .card-body > p { margin: 0; padding: 12px 16px; }
+.arctos-app .data-section > .card-body > .alert { margin: 12px 16px; }
+.arctos-app .data-section .list-group-flush > .list-group-item { padding: 10px 16px; }
+.arctos-app .data-section .list-group-flush { margin: 0; }
+.arctos-app .data-section .list-group-flush:last-child { border-radius: 0 0 11px 11px; }
+.arctos-app .data-section .data-section-summary { color: var(--ui-muted); font-size: .875rem; border-bottom: 1px solid var(--ui-border); }
+.arctos-app .data-section-editor > .card-body { padding: 12px 16px; }
+/* Native disclosures keep secondary records and edits available on demand. */
+.arctos-app .section-disclosure { display: block; }
+.arctos-app .section-disclosure > summary.card-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-height: 52px; padding: 12px 16px; cursor: pointer; list-style: none; }
+.arctos-app .section-disclosure > summary::-webkit-details-marker { display: none; }
+.arctos-app .section-disclosure > summary::before { content: ""; width: 8px; height: 8px; flex: 0 0 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; margin-right: 4px; transform: rotate(-45deg); }
+.arctos-app .section-disclosure[open] > summary::before { transform: rotate(45deg); }
+.arctos-app .section-disclosure > summary h2 { flex: 1; min-width: 0; font-size: 1rem; }
+.arctos-app .section-disclosure:not([open]) > summary { border-bottom: 0; border-radius: 11px; }
+.arctos-app .section-disclosure > summary:focus-visible { outline-offset: 3px; }
+.arctos-app .list-group-item.data-list-row { flex-wrap: wrap; padding: 10px 16px; gap: 8px 12px; }
+.arctos-app .data-list-row > div:first-child { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
 .arctos-app .btn {
   --bs-btn-border-radius: 8px; --bs-btn-font-weight: 600;
   min-height: 44px; padding: 9px 16px; font-size: .875rem;
@@ -1151,11 +821,4 @@
   .arctos-app .app-nav-link { flex: 1 1 0; flex-direction: column; gap: 3px; min-width: 0; min-height: 50px; padding: 6px 2px; font-size: .75rem; }
   .arctos-app .app-nav-link i { font-size: .875rem; }
   .arctos-app .league-events .list-group-item { display: flex; flex-direction: column; align-items: flex-start !important; gap: 6px; padding-inline: 0; }
-  .arctos-app .roster-table, .arctos-app .roster-table tbody { display: block; width: 100%; }
-  .arctos-app .roster-table thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
-  .arctos-app .roster-table tr { display: flex; flex-direction: column; border-bottom: 1px solid var(--bs-border-color); padding: 12px 0; }
-  .arctos-app .roster-table tr:last-child { border-bottom: 0; }
-  .arctos-app .roster-table td { display: block; border: 0; padding: 6px 14px; background: var(--ui-surface); box-shadow: none; }
-  .arctos-app .roster-table td[data-label]::before { content: attr(data-label) ": "; color: var(--ui-muted); font-weight: 500; }
-  .arctos-app .roster-table td:first-child { padding-bottom: 10px; font-size: 1rem; }
 }
