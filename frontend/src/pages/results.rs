@@ -102,14 +102,16 @@ fn ResultsContent(url: String) -> Element {
                 rsx! {
                 div { class: "data-section mt-3",
                     div {
-                        div { class: "table-responsive",
-                            table { class: "table table-striped align-middle mb-0",
-                                caption { class: "caption-top text-muted small pt-0", "Ranked by match win percentage, then point win percentage. Ties share a rank." }
+                        p { id: "standings-ranking-help", class: "text-muted small mb-2", "Ranked by match win percentage, then point win percentage. Ties share a rank." }
+                        div { class: "table-responsive", role: "region", aria_label: "Tournament standings", tabindex: "0",
+                            table { class: "table table-striped align-middle mb-0", aria_describedby: "standings-ranking-help",
+                                caption { class: "visually-hidden", "Tournament standings" }
                                 thead {
                                     tr {
                                         th { scope: "col", style: "width: 1%;", span { class: "visually-hidden", "Match details" } }
                                         ResultsSortHeader {
                                             label: "Rank",
+                                            numeric: true,
                                             active: sort_column() == "rank",
                                             ascending: sort_asc(),
                                             onsort: move |_| {
@@ -136,6 +138,7 @@ fn ResultsContent(url: String) -> Element {
                                         }
                                         ResultsSortHeader {
                                             label: "Matches (W–L)",
+                                            numeric: true,
                                             active: sort_column() == "matches",
                                             ascending: sort_asc(),
                                             onsort: move |_| {
@@ -149,6 +152,7 @@ fn ResultsContent(url: String) -> Element {
                                         }
                                         ResultsSortHeader {
                                             label: "Points (W–L)",
+                                            numeric: true,
                                             active: sort_column() == "points",
                                             ascending: sort_asc(),
                                             onsort: move |_| {
@@ -213,8 +217,8 @@ fn ResultsContent(url: String) -> Element {
                                                     if is_expanded { "−" } else { "+" }
                                                 }
                                             }
-                                            td { ResultsRank { rank: ranks.get(&tid).copied() } }
-                                            td {
+                                            td { class: "table-number", ResultsRank { rank: ranks.get(&tid).copied() } }
+                                            td { class: "table-copy table-identity",
                                                 Link {
                                                     to: Route::TeamProfilePage { id: row_team.id.clone() },
                                                     class: "text-decoration-none d-inline-flex align-items-center",
@@ -224,7 +228,7 @@ fn ResultsContent(url: String) -> Element {
                                                             src: "{backend}/static/{ph}",
                                                             alt: "",
                                                             class: "rounded-circle me-2",
-                                                            style: "width: 28px; height: 28px; object-fit: cover;"
+                                                            style: "width: 28px; height: 28px; flex-shrink: 0; object-fit: cover;"
                                                         }
                                                     } else {
                                                         div {
@@ -237,8 +241,8 @@ fn ResultsContent(url: String) -> Element {
                                                     span { "{row_team.pseudonym}" }
                                                 }
                                             }
-                                            td { "{row_team.matches_won}–{row_team.matches_lost}" }
-                                            td { "{row_team.points_won}–{row_team.points_lost}" }
+                                            td { class: "table-number", "{row_team.matches_won}–{row_team.matches_lost}" }
+                                            td { class: "table-number", "{row_team.points_won}–{row_team.points_lost}" }
                                         }
                                         if is_expanded {
                                             tr {

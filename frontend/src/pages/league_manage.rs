@@ -98,16 +98,16 @@ pub fn LeagueManage(league_url: String) -> Element {
                                 table { class: "table table-striped management-table",
                                     thead {
                                         tr {
-                                            th { "Team Name" }
-                                            th { "Status" }
-                                            th { "Registration Date" }
-                                            th { "Actions" }
+                                            th { class: "table-nowrap", "Team Name" }
+                                            th { class: "table-nowrap", "Status" }
+                                            th { class: "table-nowrap", "Registration Date" }
+                                            th { class: "table-nowrap", "Actions" }
                                         }
                                     }
                                     tbody {
                                         for (url_dereg, url_save, team_id_dereg, reg_id_save, team_data) in d.team_registrations.iter().map(|t| (league_url.clone(), league_url.clone(), t.registration.team.clone(), t.registration.id, t)) {
                                             tr { key: "{team_data.registration.id}",
-                                                td { "data-label": "Team",
+                                                td { class: "table-copy", "data-label": "Team",
                                                     a { href: "/teams/{team_data.registration.team}", class: "text-decoration-none",
                                                         strong { "{team_data.registration.pseudonym}" }
                                                     }
@@ -115,7 +115,7 @@ pub fn LeagueManage(league_url: String) -> Element {
                                                 td { "data-label": "Status",
                                                     span {
                                                         class: format!(
-                                                            "badge {}",
+                                                            "badge table-nowrap {}",
                                                             match team_data.registration.status.as_str() {
                                                                 "CONFIRMED" => "bg-success",
                                                                 "CANCELLED" => "bg-danger",
@@ -125,12 +125,12 @@ pub fn LeagueManage(league_url: String) -> Element {
                                                         "{team_data.registration.status}"
                                                     }
                                                     if team_data.registration.paid {
-                                                        span { class: "badge bg-primary ms-1", "Paid" }
+                                                        span { class: "badge table-nowrap bg-primary ms-1", "Paid" }
                                                     } else {
-                                                        span { class: "badge bg-secondary ms-1", "Unpaid" }
+                                                        span { class: "badge table-nowrap bg-secondary ms-1", "Unpaid" }
                                                     }
                                                 }
-                                                td { "data-label": "Registered", {crate::time_format::format_registration_timestamp(team_data.registration.registered_at.as_deref().unwrap_or("—"))} }
+                                                td { class: "table-nowrap", "data-label": "Registered", {crate::time_format::format_registration_timestamp(team_data.registration.registered_at.as_deref().unwrap_or("—"))} }
                                                 td { "data-label": "Actions", class: "management-actions",
                                                     if team_data.registration.status == "CONFIRMED" {
                                                         button {
@@ -253,48 +253,51 @@ pub fn LeagueManage(league_url: String) -> Element {
                                 table { class: "table table-striped management-table",
                                     thead {
                                         tr {
-                                            th { "Player Name" }
-                                            th { "Team" }
-                                            th { "Jersey" }
+                                            th { class: "table-nowrap", "Player Name" }
+                                            th { class: "table-nowrap", "Team" }
+                                            th { class: "table-nowrap", "Jersey" }
                                             if d.tournament.waiver_required {
-                                                th { "Waiver Signed Name" }
-                                                th { "Waiver Status" }
+                                                th { class: "table-nowrap", "Waiver Signed Name" }
+                                                th { class: "table-nowrap", "Waiver Status" }
                                             }
-                                            th { "Status" }
-                                            th { "Registration Date" }
-                                            th { "Actions" }
+                                            th { class: "table-nowrap", "Status" }
+                                            th { class: "table-nowrap", "Registration Date" }
+                                            th { class: "table-nowrap", "Actions" }
                                         }
                                     }
                                     tbody {
                                         for (url_dereg, url_save, player_id_dereg, reg_id_save, player_data) in d.player_registrations.iter().map(|p| (league_url.clone(), league_url.clone(), p.registration.player.clone(), p.registration.id, p)) {
                                             tr { key: "{player_data.registration.id}",
-                                                td { "data-label": "Player",
+                                                td { class: "table-copy", "data-label": "Player",
                                                     a { href: "/players/{player_data.registration.player}", class: "text-decoration-none",
                                                         strong { "{player_data.player.name}" }
                                                     }
                                                 }
-                                                td { "data-label": "Team",
+                                                td { class: "table-copy", "data-label": "Team",
                                                     if let Some(team) = &player_data.team {
                                                         a { href: "/teams/{team.id}", class: "text-decoration-none", "{team.name}" }
                                                     } else {
                                                         span { class: "text-muted", "Unattached" }
                                                     }
                                                 }
-                                                td { "data-label": "Jersey",
+                                                td { class: "table-copy", "data-label": "Jersey",
                                                     if player_data.registration.jersey_name.is_some()
-                                                        && player_data.registration.jersey_number.is_some()
+                                                        || player_data.registration.jersey_number.is_some()
                                                     {
-                                                        "#{player_data.registration.jersey_number.as_deref().unwrap_or(\"\")} {player_data.registration.jersey_name.as_deref().unwrap_or(\"\")}"
-                                                    } else if let Some(name) = &player_data.registration.jersey_name {
-                                                        "{name}"
-                                                    } else if let Some(num) = &player_data.registration.jersey_number {
-                                                        "#{num}"
+                                                        span { class: "table-jersey",
+                                                            if let Some(name) = &player_data.registration.jersey_name {
+                                                                span { class: "table-copy", "{name}" }
+                                                            }
+                                                            if let Some(num) = &player_data.registration.jersey_number {
+                                                                span { class: "table-nowrap", "#{num}" }
+                                                            }
+                                                        }
                                                     } else {
                                                         span { class: "text-muted", "No jersey info" }
                                                     }
                                                 }
                                                 if d.tournament.waiver_required {
-                                                    td { "data-label": "Signed waiver name",
+                                                    td { class: "table-copy", "data-label": "Signed waiver name",
                                                         span { class: "text-muted",
                                                             "{player_data.registration.waiver_legal_name_signature.as_deref().unwrap_or(\"-\")}"
                                                         }
@@ -309,7 +312,7 @@ pub fn LeagueManage(league_url: String) -> Element {
                                                                     "NOT_SIGNED" => ("bg-danger", "Waiver not signed"),
                                                                     _ => ("bg-secondary", "Waiver status unknown"),
                                                                 };
-                                                                rsx! { span { class: "badge {cls}", "{label}" } }
+                                                                rsx! { span { class: "badge table-nowrap {cls}", "{label}" } }
                                                             }
                                                         } else {
                                                             span { class: "text-muted", "-" }
@@ -319,7 +322,7 @@ pub fn LeagueManage(league_url: String) -> Element {
                                                 td { "data-label": "Status",
                                                     span {
                                                         class: format!(
-                                                            "badge {}",
+                                                            "badge table-nowrap {}",
                                                             match player_data.registration.status.as_str() {
                                                                 "CONFIRMED" => "bg-success",
                                                                 "CANCELLED" => "bg-danger",
@@ -330,12 +333,12 @@ pub fn LeagueManage(league_url: String) -> Element {
                                                         "{player_data.registration.status}"
                                                     }
                                                     if player_data.registration.paid {
-                                                        span { class: "badge bg-primary ms-1", "Paid" }
+                                                        span { class: "badge table-nowrap bg-primary ms-1", "Paid" }
                                                     } else {
-                                                        span { class: "badge bg-secondary ms-1", "Unpaid" }
+                                                        span { class: "badge table-nowrap bg-secondary ms-1", "Unpaid" }
                                                     }
                                                 }
-                                                td { "data-label": "Registered", {crate::time_format::format_registration_timestamp(player_data.registration.registered_at.as_deref().unwrap_or("—"))} }
+                                                td { class: "table-nowrap", "data-label": "Registered", {crate::time_format::format_registration_timestamp(player_data.registration.registered_at.as_deref().unwrap_or("—"))} }
                                                 td { "data-label": "Actions", class: "management-actions",
                                                     if player_data.registration.status == "PENDING_TEAM_APPROVAL"
                                                         || player_data.registration.status == "CONFIRMED"

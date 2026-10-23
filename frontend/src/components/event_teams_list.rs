@@ -41,17 +41,17 @@ pub fn EventTeamsList(props: EventTeamsListProps) -> Element {
                             table { class: "table roster-table",
                                 thead {
                                     tr {
-                                        th { "Team Name" }
-                                        th { "Players" }
+                                        th { scope: "col", "Team Name" }
+                                        th { scope: "col", class: "table-number", "Players" }
                                         if show_registered_at {
-                                            th { "Registration Date" }
+                                            th { scope: "col", class: "table-nowrap", "Registration Date" }
                                         }
                                     }
                                 }
                                 tbody {
                                     for team in teams.iter() {
                                         tr { key: "{team.team_id}",
-                                            td {
+                                            td { class: "table-copy",
                                                 div { class: "roster-identity",
                                                     if let Some(photo) = &team.profile_photo {
                                                         img { src: "{backend}/static/{photo}", alt: "", class: "rounded-circle me-2", style: "width: 32px; height: 32px; object-fit: cover; flex-shrink: 0;" }
@@ -63,14 +63,16 @@ pub fn EventTeamsList(props: EventTeamsListProps) -> Element {
                                                     }
                                                 }
                                             }
-                                            td { "data-label": "Players",
-                                                span { class: "roster-count", "{team.player_count}" }
-                                                if let Some(max) = max_team_size_roster {
-                                                    span { " / {max}" }
+                                            td { class: "table-number", "data-label": "Players",
+                                                span { class: "table-nowrap",
+                                                    span { class: "roster-count", "{team.player_count}" }
+                                                    if let Some(max) = max_team_size_roster {
+                                                        span { " / {max}" }
+                                                    }
                                                 }
                                             }
                                             if show_registered_at {
-                                                td { "data-label": "Registered", {crate::time_format::format_registration_timestamp(team.registered_at.as_deref().unwrap_or("—"))} }
+                                                td { class: "table-nowrap roster-wide", "data-label": "Registered", {crate::time_format::format_registration_timestamp(team.registered_at.as_deref().unwrap_or("—"))} }
                                             }
                                         }
                                     }

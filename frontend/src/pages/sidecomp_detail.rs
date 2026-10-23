@@ -143,25 +143,25 @@ pub fn SideCompDetail(url: String, comp_id: i32) -> Element {
                                             table { class: "table roster-table",
                                                 thead {
                                                     tr {
-                                                        th { "Player" }
-                                                        th { "Entry #" }
-                                                        th { "Role" }
-                                                        th { "Registered" }
-                                                        th { "Source" }
+                                                        th { class: "table-nowrap", "Player" }
+                                                        th { class: "table-number", "Entry #" }
+                                                        th { class: "table-nowrap", "Role" }
+                                                        th { class: "table-nowrap", "Registered" }
+                                                        th { class: "table-nowrap", "Source" }
                                                     }
                                                 }
                                                 tbody {
                                                     for r in registrants.iter() {
                                                         tr { key: "{r.player_id}",
-                                                            td { Link { to: Route::PlayerProfilePage { id: r.player_id.clone() }, class: "roster-name", "{r.player_name}" } }
-                                                            td { "data-label": "Entry #", "{r.entry_number}" }
-                                                            td { "data-label": "Role",
+                                                            td { class: "table-copy", Link { to: Route::PlayerProfilePage { id: r.player_id.clone() }, class: "roster-name", "{r.player_name}" } }
+                                                            td { class: "table-number", "data-label": "Entry #", "{r.entry_number}" }
+                                                            td { class: "table-nowrap", "data-label": "Role",
                                                                 if let Some(weapon) = r.weapon.as_ref() {
                                                                     PompfenIcon { weapon: weapon.clone(), size: "1.5em".to_string() }
                                                                 }
                                                             }
-                                                            td { "data-label": "Registered", {crate::time_format::format_registration_timestamp(r.registered_at.as_deref().unwrap_or("—"))} }
-                                                            td { "data-label": "Source", if r.registered_by_to { "TO" } else { "Self" } }
+                                                            td { class: "table-nowrap roster-wide", "data-label": "Registered", {crate::time_format::format_registration_timestamp(r.registered_at.as_deref().unwrap_or("—"))} }
+                                                            td { class: "table-nowrap", "data-label": "Source", if r.registered_by_to { "TO" } else { "Self" } }
                                                         }
                                                     }
                                                 }

@@ -147,6 +147,7 @@
     .arctos-app .management-table tr { display: flex; flex-direction: column; width: 100%; padding: 12px 0; border-bottom: 1px solid var(--bs-border-color); }
     .arctos-app .management-table tr:last-child { border-bottom: 0; }
     .arctos-app .management-table td { display: block; min-width: 0; width: 100%; border: 0; padding: 7px 14px; background: var(--ui-surface); box-shadow: none; overflow-wrap: anywhere; }
+    .arctos-app .management-table td.table-number { text-align: left; }
     .arctos-app .management-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; color: var(--bs-secondary-color); font-size: .75rem; font-weight: 600; }
     .arctos-app .management-table td:first-child { font-size: 1rem; }
     .arctos-app .management-table .management-actions { border-top: 1px solid var(--bs-border-color); margin-top: 8px; padding-top: 12px; }

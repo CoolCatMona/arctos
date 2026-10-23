@@ -11,6 +11,8 @@
 .arctos-app .penalty-types-toggle:focus-visible { outline: 3px solid var(--ui-accent); outline-offset: 3px; }
 .arctos-app .penalty-types-add { flex: 0 0 auto; min-height: 44px; margin-left: auto; }
 .arctos-app #penalty-types-content[hidden] { display: none; }
+/* Read-only rows must not widen a neighbouring full-width penalty editor. */
+.arctos-app .penalty-types-section .table td.table-copy { min-width: 0; }
 .arctos-app .penalty-edit-cell { padding-block: 1rem; }
 .arctos-app .penalty-edit-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; text-align: left; }
 .arctos-app .penalty-edit-grid > div { min-width: 0; }

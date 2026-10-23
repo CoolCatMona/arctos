@@ -94,10 +94,10 @@ pub fn FinalizeMatch(url: String, match_id: String) -> Element {
                                 table { class: "table table-sm",
                                     thead {
                                         tr {
-                                            th { "Set" }
-                                            th { "Point" }
+                                            th { class: "table-number", "Set" }
+                                            th { class: "table-number", "Point" }
                                             th { "Winner" }
-                                            th { "🪨" }
+                                            th { class: "table-number", "🪨" }
                                             th { "Rerun?" }
                                             th { "Notes" }
                                         }
@@ -109,8 +109,8 @@ pub fn FinalizeMatch(url: String, match_id: String) -> Element {
                                                 let notes = d.point_notes_map.get(&point.uuid).cloned().unwrap_or_default();
                                                 rsx! {
                                                     tr { key: "{point.uuid}",
-                                                        td { "{point.set_number.unwrap_or(1)}" }
-                                                        td { "{idx + 1}" }
+                                                        td { class: "table-number", "{point.set_number.unwrap_or(1)}" }
+                                                        td { class: "table-number", "{idx + 1}" }
                                                         td {
                                                             if point.winner.as_deref() == Some("TEAM1") {
                                                                 "{d.match_info.team1_name}"
@@ -120,7 +120,7 @@ pub fn FinalizeMatch(url: String, match_id: String) -> Element {
                                                                 "None"
                                                             }
                                                         }
-                                                        td { "{stones}" }
+                                                        td { class: "table-number", "{stones}" }
                                                         td {
                                                             if point.rerolled {
                                                                 span { class: "badge bg-warning", "Rerun" }

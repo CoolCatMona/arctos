@@ -37,22 +37,22 @@ fn RegistrationRow(
                     }
                 }
             }
-            td { class: "profile-record-name", "data-label": "Tournament",
+            td { class: "profile-record-name table-copy", "data-label": "Tournament",
                 if is_league {
                     Link { to: Route::LeagueHome { league_url: league_url.clone() }, "League: {league_url}" }
                 } else {
                     Link { to: Route::TournamentHome { url: event_key.clone() }, "{event_key}" }
                 }
             }
-            td { "data-label": "Team name", strong { "{registration.pseudonym.as_deref().unwrap_or(\"-\")}" } }
-            td { "data-label": "Date",
+            td { class: "table-copy", "data-label": "Team name", strong { "{registration.pseudonym.as_deref().unwrap_or(\"-\")}" } }
+            td { class: "table-nowrap", "data-label": "Date",
                 if let Some(date) = &registration.start_date {
                     "{date.split('T').next().unwrap_or(date)}"
                 } else {
                     "TBA"
                 }
             }
-            td { "data-label": "Status",
+            td { class: "table-nowrap", "data-label": "Status",
                 span {
                     class: format!(
                         "badge {}",
@@ -61,7 +61,7 @@ fn RegistrationRow(
                     "{registration.status}"
                 }
             }
-            td { "data-label": "Payment",
+            td { class: "table-nowrap", "data-label": "Payment",
                 if registration.paid {
                     span { class: "badge bg-success", "Paid" }
                     if registration.amount_paid > 0.0 {
@@ -71,7 +71,7 @@ fn RegistrationRow(
                     span { class: "badge bg-warning", "Unpaid" }
                 }
             }
-            td { class: "profile-record-actions", "data-label": "Actions",
+            td { class: "profile-record-actions table-nowrap", "data-label": "Actions",
                 onclick: move |e: Event<MouseData>| e.stop_propagation(),
                 if is_own_team {
                     if is_league {
@@ -122,10 +122,12 @@ fn RegistrationRow(
                                                         }
                                                         div { class: "profile-roster-copy",
                                                             strong { "{p.player.as_ref().map(|player| player.name.as_str()).unwrap_or(&p.registration.player)}" }
-                                                            small {
-                                                                {p.registration.jersey_name.as_deref().unwrap_or("-")}
-                                                                if let Some(num) = &p.registration.jersey_number { " #{num}" }
-                                                                " · @{p.registration.player}"
+                                                            small { class: "profile-roster-meta",
+                                                                span { class: "table-jersey",
+                                                                    span { class: "table-copy", {p.registration.jersey_name.as_deref().unwrap_or("-")} }
+                                                                    if let Some(num) = &p.registration.jersey_number { span { class: "table-nowrap", "#{num}" } }
+                                                                }
+                                                                span { class: "profile-roster-handle", "@{p.registration.player}" }
                                                             }
                                                         }
                                                     }
@@ -276,10 +278,10 @@ pub fn TeamProfile(id: Signal<String>, tab: String) -> Element {
                                                 th { scope: "col", "Players" }
                                                 th { scope: "col", "Tournament" }
                                                 th { scope: "col", "Team Name" }
-                                                th { scope: "col", "Date" }
-                                                th { scope: "col", "Status" }
-                                                th { scope: "col", "Payment" }
-                                                th { scope: "col", "Actions" }
+                                                th { scope: "col", class: "table-nowrap", "Date" }
+                                                th { scope: "col", class: "table-nowrap", "Status" }
+                                                th { scope: "col", class: "table-nowrap", "Payment" }
+                                                th { scope: "col", class: "table-nowrap", "Actions" }
                                             }
                                         }
                                         tbody {
@@ -328,19 +330,19 @@ pub fn TeamProfile(id: Signal<String>, tab: String) -> Element {
                                     table { class: "table table-sm", aria_label: "Notes received",
                                         thead {
                                             tr {
-                                                th { scope: "col", "Date" }
-                                                th { scope: "col", "Note" }
-                                                th { scope: "col", "Point #" }
-                                                th { scope: "col", "Match" }
+                                                th { scope: "col", class: "table-nowrap", "Date" }
+                                                th { scope: "col", class: "table-copy", "Note" }
+                                                th { scope: "col", class: "table-number", "Point #" }
+                                                th { scope: "col", class: "table-copy", "Match" }
                                             }
                                         }
                                         tbody {
                                             for note in d.team_notes.iter() {
                                                 tr { key: "{note.created_at.as_deref().unwrap_or(\"-\")}-{note.point_index}",
-                                                    td { "{note.created_at.as_deref().unwrap_or(\"-\")}" }
-                                                    td { "{note.text}" }
-                                                    td { "{note.point_index}" }
-                                                    td {
+                                                    td { class: "table-nowrap", "{note.created_at.as_deref().unwrap_or(\"-\")}" }
+                                                    td { class: "table-copy", "{note.text}" }
+                                                    td { class: "table-number", "{note.point_index}" }
+                                                    td { class: "table-copy",
                                                         a { href: "/{note.match_info.event}/match/{note.match_info.uuid}", "{note.match_info.name}" }
                                                     }
                                                 }

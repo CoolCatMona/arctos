@@ -186,8 +186,8 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                 let match_info = row.match_info.clone();
                 rsx! {
                     tr { key: "{key}",
-                        td { "{date_display}" }
-                        td {
+                        td { class: "table-nowrap", "{date_display}" }
+                        td { class: "table-copy",
                             PenaltyDisplay {
                                 border_color,
                                 display_text,
@@ -197,8 +197,8 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                 on_description_click: move |desc: Option<String>| penalty_desc_modal.set(desc),
                             }
                         }
-                        td { "{point_index}" }
-                        td {
+                        td { class: "table-number", "{point_index}" }
+                        td { class: "table-copy",
                             if let Some(ref match_info) = match_info {
                                 a { href: "/{match_info.event}/match/{match_info.uuid}", "{match_info.name}" }
                             } else {
@@ -254,9 +254,9 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                                 th { scope: "col", "Tournament" }
                                                 th { scope: "col", "Team" }
                                                 th { scope: "col", "Jersey" }
-                                                th { scope: "col", "Status" }
-                                                th { scope: "col", "Payment" }
-                                                th { scope: "col", "Waiver" }
+                                                th { scope: "col", class: "table-nowrap", "Status" }
+                                                th { scope: "col", class: "table-nowrap", "Payment" }
+                                                th { scope: "col", class: "table-nowrap", "Waiver" }
                                             }
                                         }
                                         tbody {
@@ -267,14 +267,14 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                                     let league_url = ev.strip_prefix("league:").unwrap_or(&ev).to_string();
                                                     rsx! {
                                                 tr { key: "{ev}-{r.team.as_deref().unwrap_or(\"\")}",
-                                                    td { class: "profile-record-name", "data-label": "Tournament",
+                                                    td { class: "profile-record-name table-copy", "data-label": "Tournament",
                                                         if is_league {
                                                             Link { to: Route::LeagueHome { league_url: league_url.clone() }, "League: {league_url}" }
                                                         } else {
                                                             Link { to: Route::TournamentHome { url: ev.clone() }, "{ev}" }
                                                         }
                                                     }
-                                                    td { "data-label": "Team",
+                                                    td { class: "table-copy", "data-label": "Team",
                                                         if let (Some(team), Some(id)) = (&r.team_pseudonym, &r.team) {
                                                             Link { to: Route::TeamProfilePage { id: id.clone() }, "{team}" }
                                                         } else {
@@ -284,28 +284,26 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                                     td { "data-label": "Jersey",
                                                         Link {
                                                             to: Route::PlayerProfilePage { id: d.player.id.clone() },
-                                                            class: "text-decoration-none",
-                                                            if let Some(jersey_name) = &r.jersey_name {
-                                                                "{jersey_name}"
-                                                                if let Some(jersey_number) = &r.jersey_number {
-                                                                    span { class: "text-muted", " #{jersey_number}" }
-                                                                }
+                                                            class: "table-jersey text-decoration-none",
+                                                            if r.jersey_name.is_some() || r.jersey_number.is_some() {
+                                                                if let Some(jersey_name) = &r.jersey_name { span { class: "table-copy", "{jersey_name}" } }
+                                                                if let Some(jersey_number) = &r.jersey_number { span { class: "table-nowrap text-muted", "#{jersey_number}" } }
                                                             } else {
                                                                 "-"
                                                             }
                                                         }
                                                     }
-                                                    td { "data-label": "Status",
+                                                    td { class: "table-nowrap", "data-label": "Status",
                                                         span { class: if r.status == "CONFIRMED" { "badge bg-success" } else { "badge bg-warning" },
                                                             "{r.status}"
                                                         }
                                                     }
-                                                    td { "data-label": "Payment",
+                                                    td { class: "table-nowrap", "data-label": "Payment",
                                                         span { class: if r.paid { "badge bg-success" } else { "badge bg-warning text-dark" },
                                                             if r.paid { "Paid" } else { "Unpaid" }
                                                         }
                                                     }
-                                                    td { "data-label": "Waiver",
+                                                    td { class: "table-nowrap", "data-label": "Waiver",
                                                         if r.waiver_required {
                                                             {
                                                                 let ws = r.waiver_status.as_deref().unwrap_or("NOT_SIGNED");
@@ -351,12 +349,12 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                     table { class: "table profile-injury-table", aria_label: "Injury history",
                                         thead {
                                             tr {
-                                                th { scope: "col", "Date" }
-                                                th { scope: "col", "Description" }
-                                                th { scope: "col", "Status" }
-                                                th { scope: "col", "Public" }
+                                                th { scope: "col", class: "table-nowrap", "Date" }
+                                                th { scope: "col", class: "table-copy", "Description" }
+                                                th { scope: "col", class: "table-nowrap", "Status" }
+                                                th { scope: "col", class: "table-nowrap", "Public" }
                                                 if can_edit_injuries {
-                                                    th { scope: "col", "Actions" }
+                                                    th { scope: "col", class: "table-nowrap", "Actions" }
                                                 }
                                             }
                                         }
@@ -372,7 +370,7 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                                         let player_id_for_save = player_id.clone();
                                                         let player_id_for_delete = player_id.clone();
                                                         rsx! { tr { key: "{row_key}",
-                                                        td { "data-label": "Date", class: "profile-record-wide",
+                                                        td { "data-label": "Date", class: "profile-record-wide table-nowrap",
                                                             if inj.editing {
                                                                 input {
                                                                     class: "form-control form-control-sm",
@@ -391,7 +389,7 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                                                 "{inj.date}"
                                                             }
                                                         }
-                                                        td { "data-label": "Description", class: "profile-record-wide",
+                                                        td { "data-label": "Description", class: "profile-record-wide table-copy",
                                                             if inj.editing {
                                                                 input {
                                                                     class: "form-control form-control-sm",
@@ -408,7 +406,7 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                                                 "{inj.message}"
                                                             }
                                                         }
-                                                        td { "data-label": "Status",
+                                                        td { class: "table-nowrap", "data-label": "Status",
                                                             if inj.editing {
                                                                 div { class: "form-check",
                                                                     input {
@@ -430,7 +428,7 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                                                 span { class: "badge bg-success", "Healed" }
                                                             }
                                                         }
-                                                        td { "data-label": "Visibility",
+                                                        td { class: "table-nowrap", "data-label": "Visibility",
                                                             if inj.editing {
                                                                 div { class: "form-check",
                                                                     input {
@@ -453,7 +451,7 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                                             }
                                                         }
                                                         if can_edit_injuries {
-                                                            td { "data-label": "Actions", class: "profile-record-actions",
+                                                            td { "data-label": "Actions", class: "profile-record-actions table-nowrap",
                                                                 div { class: "btn-group btn-group-sm",
                                                                     if inj.editing {
                                                                         button {
@@ -576,16 +574,16 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                             } else {
                                                 for inj in d.injuries.iter() {
                                                     tr { key: "{inj.id}",
-                                                        td { class: "profile-record-wide", "data-label": "Date", "{inj.stamp.as_deref().unwrap_or(\"-\")}" }
-                                                        td { class: "profile-record-wide", "data-label": "Description", "{inj.message}" }
-                                                        td { "data-label": "Status",
+                                                        td { class: "profile-record-wide table-nowrap", "data-label": "Date", "{inj.stamp.as_deref().unwrap_or(\"-\")}" }
+                                                        td { class: "profile-record-wide table-copy", "data-label": "Description", "{inj.message}" }
+                                                        td { class: "table-nowrap", "data-label": "Status",
                                                             if inj.active {
                                                                 span { class: "badge bg-warning", "Active" }
                                                             } else {
                                                                 span { class: "badge bg-success", "Healed" }
                                                             }
                                                         }
-                                                        td { "data-label": "Visibility",
+                                                        td { class: "table-nowrap", "data-label": "Visibility",
                                                             if inj.show {
                                                                 span { class: "badge bg-info", "Public" }
                                                             } else {
@@ -641,10 +639,10 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                     table { class: "table table-sm", aria_label: "Infractions",
                                         thead {
                                             tr {
-                                                th { scope: "col", "Date" }
-                                                th { scope: "col", "Note" }
-                                                th { scope: "col", "Point #" }
-                                                th { scope: "col", "Match" }
+                                                th { scope: "col", class: "table-nowrap", "Date" }
+                                                th { scope: "col", class: "table-copy", "Note" }
+                                                th { scope: "col", class: "table-number", "Point #" }
+                                                th { scope: "col", class: "table-copy", "Match" }
                                             }
                                         }
                                         tbody {

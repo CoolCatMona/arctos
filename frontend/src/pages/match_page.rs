@@ -2202,9 +2202,9 @@ fn match_page_inner(url: String, match_id: Option<String>, match_name: Option<St
                                             table { class: "table table-sm",
                                                 thead {
                                                     tr {
-                                                        th { "#" }
-                                                        th { "Set" }
-                                                        th { "Stones Elapsed" }
+                                                        th { class: "table-number", "#" }
+                                                        th { class: "table-number", "Set" }
+                                                        th { class: "table-number", "Stones Elapsed" }
                                                         th { "Winner" }
                                                         th { "Rerun" }
                                                         if d.is_head_ref {
@@ -2215,10 +2215,11 @@ fn match_page_inner(url: String, match_id: Option<String>, match_name: Option<St
                                                 tbody { id: "live-points-table",
                                                     for (idx, (pt, note_elems)) in points_with_note_displays.iter().enumerate() {
                                                         tr { key: "{pt.uuid}", id: "live-point-row-{pt.uuid}",
-                                                            td { "{idx + 1}" }
-                                                            td { "{pt.set_number.unwrap_or(1)}" }
+                                                            td { class: "table-number", "{idx + 1}" }
+                                                            td { class: "table-number", "{pt.set_number.unwrap_or(1)}" }
                                                             td {
                                                                 id: "live-stones-{pt.uuid}",
+                                                                class: "table-number",
                                                                 "data-stamp": pt.stamp.as_deref().unwrap_or(""),
                                                                 "data-end": pt.end_stamp.as_deref().unwrap_or(""),
                                                                 "data-stones-at-start": pt.stones_at_start.map(|s: u32| s.to_string()).unwrap_or_default(),

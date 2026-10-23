@@ -4245,7 +4245,7 @@ fn TableView(
                                     }
                                 }
                                 td { "{m.field.as_deref().unwrap_or(\"\")}" }
-                                td {
+                                td { class: "table-nowrap",
                                     if let Some((start_utc, _)) = display_interval_utc(m, show_as_happened) {
                                         span { "{format_naive_utc_time_local(start_utc, tz_offset)}" }
                                     } else { "-" }
@@ -4284,10 +4284,10 @@ fn TableView(
                                     td { class: "small", "{fmt_str(&m.team1_initial)}" }
                                     td { class: "small", "{fmt_str(&m.team2_initial)}" }
                                     td { class: "small", "{fmt_str(&m.refs_initial)}" }
-                                    td { class: "small", "{fmt_dt(&m.scheduled_start_time)}" }
-                                    td { class: "small", "{fmt_dt(&m.nominal_start_time)}" }
-                                    td { class: "small", "{fmt_dt(&m.confirmed_start_time)}" }
-                                    td { class: "small", "{fmt_dt(&m.completed_time)}" }
+                                    td { class: "small table-nowrap", "{fmt_dt(&m.scheduled_start_time)}" }
+                                    td { class: "small table-nowrap", "{fmt_dt(&m.nominal_start_time)}" }
+                                    td { class: "small table-nowrap", "{fmt_dt(&m.confirmed_start_time)}" }
+                                    td { class: "small table-nowrap", "{fmt_dt(&m.completed_time)}" }
                                     td { class: "small", "{fmt_u32(&m.nominal_length)}" }
                                     td { class: "small", "{fmt_str(&m.set_type)}" }
                                     td { class: "small", "{fmt_u32(&m.nsets)}" }

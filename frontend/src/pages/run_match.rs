@@ -2295,10 +2295,10 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                                                             tr {
                                                                                 td { style: format!("border-left: 8px solid #{}; background-color: #{}22;", row_color, row_color), "{item.penalty_type_name}" }
                                                                                 td { "{item.match_name}" }
-                                                                                td { "{item.date}" }
+                                                                                td { class: "table-nowrap", "{item.date}" }
                                                                                 td {
                                                                                     if item.is_current_match {
-                                                                                        span { class: "badge bg-info", "current match" }
+                                                                                        span { class: "badge bg-info table-nowrap", "current match" }
                                                                                     }
                                                                                 }
                                                                                 td { class: "text-end align-middle",

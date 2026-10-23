@@ -55,10 +55,10 @@ pub fn Invitations(url: String) -> Element {
                                     table { class: "table roster-table",
                                         thead {
                                             tr {
-                                                th { "Player" }
-                                                th { "Jersey Name" }
-                                                th { "Jersey Number" }
-                                                th { "Actions" }
+                                                th { class: "table-nowrap", "Player" }
+                                                th { class: "table-nowrap", "Jersey Name" }
+                                                th { class: "table-number", "Jersey Number" }
+                                                th { class: "table-nowrap", "Actions" }
                                             }
                                         }
                                         tbody {
@@ -71,7 +71,7 @@ pub fn Invitations(url: String) -> Element {
                                                     let at_cap = d.tournament.max_team_size_roster.map(|max| d.current_team_size >= max).unwrap_or(false);
                                                     rsx! {
                                                         tr { key: "{invitation.registration.id}",
-                                                            td {
+                                                            td { class: "table-copy",
                                                                 div { class: "d-flex align-items-center",
                                                                     div { class: "flex-shrink-0 me-2",
                                                                         if let Some(photo) = &invitation.player.profile_photo {
@@ -87,8 +87,8 @@ pub fn Invitations(url: String) -> Element {
                                                                     }
                                                                 }
                                                             }
-                                                            td { "data-label": "Jersey name", "{invitation.registration.jersey_name.as_deref().unwrap_or(\"N/A\")}" }
-                                                            td { "data-label": "Jersey number", "{invitation.registration.jersey_number.as_deref().unwrap_or(\"N/A\")}" }
+                                                            td { class: "table-copy", "data-label": "Jersey name", "{invitation.registration.jersey_name.as_deref().unwrap_or(\"N/A\")}" }
+                                                            td { class: "table-number", "data-label": "Jersey number", "{invitation.registration.jersey_number.as_deref().unwrap_or(\"N/A\")}" }
                                                             td { class: "roster-actions", "data-label": "Actions",
                                                                 div { class: "btn-group", role: "group",
                                                                     button {
@@ -149,17 +149,17 @@ pub fn Invitations(url: String) -> Element {
                                     table { class: "table roster-table",
                                         thead {
                                             tr {
-                                                th { "Player" }
-                                                th { "Jersey Name" }
-                                                th { "Jersey Number" }
-                                                th { "Status" }
-                                                th { "Payment" }
+                                                th { class: "table-nowrap", "Player" }
+                                                th { class: "table-nowrap", "Jersey Name" }
+                                                th { class: "table-number", "Jersey Number" }
+                                                th { class: "table-nowrap", "Status" }
+                                                th { class: "table-nowrap", "Payment" }
                                             }
                                         }
                                         tbody {
                                             for roster_item in d.team_roster.iter() {
                                                 tr { key: "{roster_item.registration.id}",
-                                                    td {
+                                                    td { class: "table-copy",
                                                         div { class: "d-flex align-items-center",
                                                             div { class: "flex-shrink-0 me-2",
                                                                 if let Some(photo) = &roster_item.player.profile_photo {
@@ -175,28 +175,28 @@ pub fn Invitations(url: String) -> Element {
                                                             }
                                                         }
                                                     }
-                                                    td { "data-label": "Jersey name", "{roster_item.registration.jersey_name.as_deref().unwrap_or(\"N/A\")}" }
-                                                    td { "data-label": "Jersey number", "{roster_item.registration.jersey_number.as_deref().unwrap_or(\"N/A\")}" }
-                                                    td { "data-label": "Status",
+                                                    td { class: "table-copy", "data-label": "Jersey name", "{roster_item.registration.jersey_name.as_deref().unwrap_or(\"N/A\")}" }
+                                                    td { class: "table-number", "data-label": "Jersey number", "{roster_item.registration.jersey_number.as_deref().unwrap_or(\"N/A\")}" }
+                                                    td { class: "roster-wide", "data-label": "Status",
                                                         match roster_item.registration.status.as_str() {
-                                                            "CONFIRMED" => rsx! { span { class: "badge bg-success", "Confirmed" } },
-                                                            "PENDING_TEAM_APPROVAL" => rsx! { span { class: "badge bg-warning", "Pending Approval" } },
-                                                            "REJECTED" => rsx! { span { class: "badge bg-danger", "Rejected" } },
-                                                            "CANCELLED" => rsx! { span { class: "badge bg-secondary", "Cancelled" } },
-                                                            _ => rsx! { span { class: "badge bg-secondary", "{roster_item.registration.status}" } },
+                                                            "CONFIRMED" => rsx! { span { class: "badge table-nowrap bg-success", "Confirmed" } },
+                                                            "PENDING_TEAM_APPROVAL" => rsx! { span { class: "badge table-nowrap bg-warning", "Pending Approval" } },
+                                                            "REJECTED" => rsx! { span { class: "badge table-nowrap bg-danger", "Rejected" } },
+                                                            "CANCELLED" => rsx! { span { class: "badge table-nowrap bg-secondary", "Cancelled" } },
+                                                            _ => rsx! { span { class: "badge table-nowrap bg-secondary", "{roster_item.registration.status}" } },
                                                         }
                                                     }
                                                     td { "data-label": "Payment",
                                                         if roster_item.registration.paid {
-                                                            span { class: "badge bg-success", "Paid" }
+                                                            span { class: "badge table-nowrap bg-success", "Paid" }
                                                             if roster_item.registration.amount_paid > 0.0 {
                                                                 {
                                                                     let paid_amount = format!("${:.2}", roster_item.registration.amount_paid);
-                                                                    rsx! { small { class: "text-muted ms-1", "{paid_amount}" } }
+                                                                    rsx! { small { class: "text-muted ms-1 table-number", "{paid_amount}" } }
                                                                 }
                                                             }
                                                         } else {
-                                                            span { class: "badge bg-warning", "Unpaid" }
+                                                            span { class: "badge table-nowrap bg-warning", "Unpaid" }
                                                         }
                                                     }
                                                 }

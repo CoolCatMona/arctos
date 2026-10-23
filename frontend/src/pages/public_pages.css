@@ -74,7 +74,7 @@
 .arctos-app .arctos-directory-action { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 1.25rem; color: var(--ui-link); font-size: .85rem; font-weight: 600; }
 .arctos-app .arctos-pagination { margin: 1.75rem 0 0; display: flex; align-items: center; justify-content: center; gap: .75rem; flex-wrap: wrap; }
 .arctos-app .arctos-pagination .btn, .arctos-app .arctos-pagination .form-select { min-height: 44px; }
-.arctos-app .arctos-page-position { font-size: .875rem; color: var(--ui-muted); }
+.arctos-app .arctos-page-position { font-size: .875rem; color: var(--ui-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .arctos-app .arctos-page-jump { display: flex; align-items: center; gap: .6rem; font-size: .875rem; font-weight: 400; color: var(--ui-muted); margin: 0; }
 .arctos-app .arctos-page-jump select { width: auto; min-width: 75px; }
 .arctos-app .arctos-league-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -131,7 +131,6 @@
 .arctos-app .roster-identity { display: flex; align-items: center; min-width: 0; }
 .arctos-app .roster-name { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; overflow-wrap: anywhere; }
 .arctos-app .roster-count { font-weight: 650; }
-.arctos-app .roster-table td { overflow-wrap: anywhere; }
 .arctos-app .roster-table .roster-actions { white-space: normal; }
 .arctos-app .roster-table .roster-actions .btn-group { display: flex; flex-wrap: wrap; gap: 6px; }
 .arctos-app .roster-table .roster-actions .btn-group .btn { border-radius: 8px; margin: 0; }
@@ -147,6 +146,8 @@
   .arctos-app .data-section .roster-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 12px; border-bottom: 1px solid var(--ui-border); padding: 8px 16px; }
   .arctos-app .data-section .roster-table tr:last-child { border-bottom: 0; }
   .arctos-app .data-section .roster-table > tbody > tr > td { display: block; min-width: 0; border: 0; padding: 2px 0; background: transparent; box-shadow: none; font-size: .8125rem; }
+  .arctos-app .data-section .roster-table > tbody > tr > td.table-number { text-align: left; }
+  .arctos-app .data-section .roster-table .roster-wide { grid-column: 1 / -1; }
   .arctos-app .data-section .roster-table td[data-label]::before { content: attr(data-label) ": "; color: var(--ui-muted); font-weight: 500; }
   .arctos-app .data-section .roster-table td:first-child { grid-column: 1 / -1; font-size: .9375rem; }
   .arctos-app .data-section .roster-table .roster-actions { grid-column: 1 / -1; padding-top: 6px; }
@@ -160,6 +161,6 @@
 .arctos-app .profile-event-stat dt { color: var(--ui-muted); font-size: inherit; font-weight: 400; }
 .arctos-app .profile-event-stat dd { margin: 0; color: var(--ui-text); font-size: inherit; font-weight: 500; line-height: inherit; font-variant-numeric: tabular-nums; }
 .arctos-app .arctos-directory-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; margin-top: auto; padding-top: 1rem; }
-.arctos-app .arctos-directory-event-count { display: inline-flex; align-items: baseline; gap: .35rem; color: var(--ui-muted); font-size: .875rem; line-height: 1.5; }
+.arctos-app .arctos-directory-event-count { display: inline-flex; align-items: baseline; gap: .35rem; color: var(--ui-muted); font-size: .875rem; line-height: 1.5; white-space: nowrap; }
 .arctos-app .arctos-directory-event-count strong { color: var(--ui-text); font-size: inherit; font-weight: 500; line-height: inherit; font-variant-numeric: tabular-nums; }
 .arctos-app .arctos-directory-footer .arctos-directory-action { gap: .65rem; margin: 0; padding: 0; min-height: 44px; }

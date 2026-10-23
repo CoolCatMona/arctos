@@ -226,14 +226,14 @@ fn PenaltyTypesTableBody(
                 };
             let view_tr = rsx! {
                                                 tr { key: "{pt_id}",
-                                                    td { "{name}" }
+                                                    td { class: "table-copy", "{name}" }
                                                     td {
                                                         div {
                                                             class: "rounded border d-inline-block",
                                                             style: format!("width: 20px; height: 20px; background-color: #{};", color)
                                                         }
                                                     }
-                                                    td { class: "small text-muted", "{preview}" }
+                                                    td { class: "table-copy small text-muted", "{preview}" }
                                                     td {
                                                         button {
                                                             class: "btn btn-sm btn-outline-primary me-1",
@@ -941,10 +941,10 @@ pub fn TournamentSettings(url: String) -> Element {
                                 table { class: "table table-sm",
                                     thead {
                                         tr {
-                                            th { "Name" }
-                                            th { "Color" }
-                                            th { "Description" }
-                                            th { style: "width: 1%; white-space: nowrap;", "Actions" }
+                                            th { class: "table-nowrap", "Name" }
+                                            th { class: "table-nowrap", "Color" }
+                                            th { class: "table-nowrap", "Description" }
+                                            th { class: "table-nowrap", style: "width: 1%;", "Actions" }
                                         }
                                     }
                                     tbody {

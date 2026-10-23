@@ -293,15 +293,15 @@ pub fn TournamentHomeContent(
                                     table { class: "table roster-table",
                                         thead {
                                             tr {
-                                                th { "Player Name" }
-                                                th { "Jersey" }
-                                                th { "Registration Date" }
+                                                th { scope: "col", "Player Name" }
+                                                th { scope: "col", "Jersey" }
+                                                th { scope: "col", class: "table-nowrap", "Registration Date" }
                                             }
                                         }
                                         tbody {
                                             for p in d.unattached_players.iter() {
                                                 tr { key: "{p.player_id}",
-                                                    td {
+                                                    td { class: "table-copy",
                                                         div { class: "roster-identity",
                                                             if let Some(photo) = &p.profile_photo {
                                                                 img { src: "{backend}/static/{photo}", alt: "", class: "rounded-circle me-2", style: "width: 32px; height: 32px; object-fit: cover; flex-shrink: 0;" }
@@ -313,18 +313,17 @@ pub fn TournamentHomeContent(
                                                             }
                                                         }
                                                     }
-                                                    td { "data-label": "Jersey",
-                                                        if let (Some(num), Some(name)) = (&p.jersey_number, &p.jersey_name) {
-                                                            "#{num} {name}"
-                                                        } else if let Some(name) = &p.jersey_name {
-                                                            "{name}"
-                                                        } else if let Some(num) = &p.jersey_number {
-                                                            "#{num}"
+                                                    td { class: "roster-wide", "data-label": "Jersey",
+                                                        if p.jersey_name.is_some() || p.jersey_number.is_some() {
+                                                            span { class: "table-jersey",
+                                                                if let Some(name) = &p.jersey_name { span { class: "table-copy", "{name}" } }
+                                                                if let Some(num) = &p.jersey_number { span { class: "table-nowrap", "#{num}" } }
+                                                            }
                                                         } else {
                                                             span { class: "text-muted", "No jersey info" }
                                                         }
                                                     }
-                                                    td { "data-label": "Registered", {crate::time_format::format_registration_timestamp(p.registered_at.as_deref().unwrap_or("—"))} }
+                                                    td { class: "table-nowrap roster-wide", "data-label": "Registered", {crate::time_format::format_registration_timestamp(p.registered_at.as_deref().unwrap_or("—"))} }
                                                 }
                                             }
                                         }

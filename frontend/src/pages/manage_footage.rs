@@ -75,18 +75,18 @@ pub fn ManageFootage(url: String) -> Element {
                 div { class: "col-12",
                     div { class: "card data-section",
                         div { class: "card-body",
-                            div { class: "table-responsive",
-                                table { class: "table table-striped align-middle",
+                            div { class: "table-responsive", role: "region", "aria-label": "Recorded match footage", tabindex: "0",
+                                table { class: "table table-striped align-middle footage-table",
                                     thead {
                                         tr {
-                                            th { "Match" }
-                                            th { "Field" }
-                                            th { "Camera" }
-                                            th { "Status" }
-                                            th { "User" }
-                                            th { "World Start Timestamp" }
-                                            th { "Link" }
-                                            th { "" }
+                                            th { class: "table-nowrap", "Match" }
+                                            th { class: "table-nowrap", "Field" }
+                                            th { class: "table-nowrap", "Camera" }
+                                            th { class: "table-nowrap", "Status" }
+                                            th { class: "table-nowrap", "User" }
+                                            th { class: "table-nowrap", "World Start Timestamp" }
+                                            th { class: "table-nowrap", "Link" }
+                                            th { class: "table-nowrap", "Actions" }
                                         }
                                     }
                                     tbody {
@@ -108,13 +108,13 @@ pub fn ManageFootage(url: String) -> Element {
                                             hay.contains(&q)
                                         }) {
                                             tr { key: "{cam.uuid}",
-                                                td { "{cam.match_name}" }
-                                                td { "{cam.field_name}" }
-                                                td { "{cam.camera_name}" }
-                                                td { "{cam.status}" }
-                                                td { "{cam.user.clone().unwrap_or_else(|| \"-\".to_string())}" }
-                                                td { "{cam.world_start_timestamp.clone().unwrap_or_else(|| \"-\".to_string())}" }
-                                                td {
+                                                td { class: "table-copy", "{cam.match_name}" }
+                                                td { class: "table-copy", "{cam.field_name}" }
+                                                td { class: "table-copy", "{cam.camera_name}" }
+                                                td { class: "table-nowrap", "{cam.status}" }
+                                                td { class: "table-copy", "{cam.user.clone().unwrap_or_else(|| \"-\".to_string())}" }
+                                                td { class: "table-nowrap", "{cam.world_start_timestamp.clone().unwrap_or_else(|| \"-\".to_string())}" }
+                                                td { class: "table-nowrap",
                                                     if let Some(link) = &cam.link {
                                                         a {
                                                             href: "{youtube_href(link)}",
@@ -126,7 +126,7 @@ pub fn ManageFootage(url: String) -> Element {
                                                         span { class: "text-muted", "-" }
                                                     }
                                                 }
-                                                td {
+                                                td { class: "table-nowrap",
                                                     button {
                                                         class: "btn btn-sm btn-outline-danger",
                                                         disabled: deleting().is_some(),
