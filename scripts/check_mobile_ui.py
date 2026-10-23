@@ -406,7 +406,7 @@ class SmokeCheck:
             for width in (320, 360):
                 await page.set_viewport_size({"width": width, "height": 900})
                 for path, label, destination in (
-                    ("/", "Create a tournament", "/new-tournament"),
+                    ("/", "Create an Event", "/new-tournament"),
                     ("/leagues", "Create a league", "/leagues/new"),
                 ):
                     await page.goto(self.base_url + path, wait_until="domcontentloaded")
@@ -428,13 +428,13 @@ class SmokeCheck:
                     options = page.locator("#organize-options")
                     await expect(options).to_be_hidden()
                     await expect(
-                        page.get_by_role("link", name=re.compile(r"^Create a (tournament|league)"))
+                        page.get_by_role("link", name=re.compile(r"^Create (?:an Event|a league)"))
                     ).to_have_count(0)
                     await trigger.focus()
                     await page.keyboard.press("Enter")
                     await expect(trigger).to_have_attribute("aria-expanded", "true")
                     await expect(trigger).to_be_focused()
-                    other = "Create a league" if path == "/" else "Create a tournament"
+                    other = "Create a league" if path == "/" else "Create an Event"
                     await expect(options.get_by_role("link", name=label, exact=True)).to_be_visible()
                     await expect(options.get_by_role("link", name=other, exact=True)).to_have_count(0)
                     links = await options.get_by_role("link").evaluate_all("""els => els.map(el => {
@@ -894,16 +894,56 @@ class SmokeCheck:
         for path in ("/demo-open/settings", "/leagues/demo-coast-league/settings"):
             await page.goto(self.base_url + path, wait_until="domcontentloaded")
             sections = page.locator("details.section-disclosure")
-            await expect(sections).to_have_count(2)
+            await expect(sections).to_have_count(1)
             for section in await sections.all():
-                initially_open = "penalty-types-section" not in (await section.get_attribute("class") or "")
-                await expect(section).to_have_js_property("open", initially_open)
+                await expect(section).to_have_js_property("open", True)
                 summary = section.locator("summary")
                 await summary.focus()
                 await page.keyboard.press("Enter")
-                await expect(section).to_have_js_property("open", not initially_open)
+                await expect(section).to_have_js_property("open", False)
                 await page.keyboard.press("Space")
-                await expect(section).to_have_js_property("open", initially_open)
+                await expect(section).to_have_js_property("open", True)
+            toggle = page.locator("#penalty-types-toggle")
+            content = page.locator("#penalty-types-content")
+            add = page.get_by_role("button", name="Add penalty type", exact=True)
+            await expect(toggle).to_have_attribute("aria-expanded", "false")
+            await expect(content).to_be_hidden()
+            await expect(add).to_be_visible()
+            assert await add.evaluate("el => !!el.closest('.penalty-types-heading') && !el.closest('table')")
+            await page.evaluate("document.fonts.ready")
+            # Keyboard focus can still be scrolling the page. Sample both
+            # controls in one frame so their viewport coordinates are comparable.
+            heading_bounds, add_bounds = await page.locator(".penalty-types-heading").evaluate(
+                """el => ['#penalty-types-toggle', '#penalty-types-add'].map(selector =>
+                    el.querySelector(selector).getBoundingClientRect().toJSON())"""
+            )
+            for bounds in (heading_bounds, add_bounds):
+                assert bounds["width"] >= 44 and bounds["height"] >= 44, bounds
+            assert (
+                abs(heading_bounds["y"] + heading_bounds["height"] / 2 - add_bounds["y"] - add_bounds["height"] / 2)
+                <= 1
+            ), (heading_bounds, add_bounds)
+            await toggle.focus()
+            await page.keyboard.press("Enter")
+            await expect(toggle).to_have_attribute("aria-expanded", "true")
+            await page.keyboard.press("Space")
+            await expect(content).to_be_hidden()
+            await add.click()
+            name = page.get_by_role("textbox", name="Penalty type name", exact=True)
+            await expect(name).to_be_focused()
+            await expect(content).to_be_visible()
+            await expect(add).to_be_disabled()
+            name_bounds = await name.bounding_box()
+            assert name_bounds and name_bounds["width"] >= 160, name_bounds
+            await expect(content.get_by_label("Description (optional)", exact=True)).to_be_visible()
+            await name.fill("Unsaved penalty type")
+            await toggle.click()
+            await expect(content).to_be_hidden()
+            await toggle.click()
+            await expect(name).to_have_value("Unsaved penalty type")
+            await name.locator("xpath=ancestor::tr").get_by_role("button", name="Cancel", exact=True).click()
+            await expect(name).to_have_count(0)
+            await expect(add).to_be_enabled()
             if path == "/demo-open/settings":
                 advanced = page.locator("#head-ref-options")
                 await expect(advanced).to_have_js_property("open", False)

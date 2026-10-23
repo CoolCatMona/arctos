@@ -1,5 +1,7 @@
 use crate::api;
 use super::image_crop::crop_rect;
+#[cfg(target_arch = "wasm32")]
+use super::image_crop::focus_crop;
 use dioxus::prelude::*;
 use std::{cell::RefCell, rc::Rc};
 
@@ -95,7 +97,7 @@ fn ImageUpload(kind: BannerAccountKind, account_id: String, mut photo: Signal<Op
     let mut zoom = use_signal(|| 1.0_f64);
     let mut horizontal = use_signal(|| 50.0_f64);
     let mut vertical = use_signal(|| 50.0_f64);
-    let mut drag = use_signal(|| None::<(i32, f64, f64, f64, f64)>);
+    let mut drag = use_signal(|| None::<(i32, f64, f64, f64, f64, bool)>);
     let urls: OwnedUrl = use_hook(|| Rc::new(RefCell::new(None)));
     let dropped_urls = urls.clone();
     use_drop(move || clear_url(&dropped_urls));
@@ -196,18 +198,37 @@ fn ImageUpload(kind: BannerAccountKind, account_id: String, mut photo: Signal<Op
             }
             if let Some(image) = selection() {
                 div { class: "image-crop-editor",
-                    p { class: "form-text", id: "{crop_id}-help", "Drag the image to position it, then save your crop." }
+                    p { class: "form-text", id: "{crop_id}-help", "Drag or tap to position."
+                        span { class: "visually-hidden", " You can also focus the image and use arrow keys. Reset position centers the image without changing zoom." }
+                    }
+                    div { class: if avatar { "image-crop-frame is-avatar" } else { "image-crop-frame" },
                     div { id: crop_id, class: if avatar { "image-crop-viewport is-avatar" } else { "image-crop-viewport" },
-                        style: "aspect-ratio:{aspect};", aria_label: "Crop preview", aria_describedby: "{crop_id}-help",
+                        style: "aspect-ratio:{aspect};", tabindex: "0", role: "group", aria_label: "Crop preview", aria_describedby: "{crop_id}-help",
+                        onkeydown: move |event| {
+                            if working() { return; }
+                            let delta = match event.key() {
+                                Key::ArrowLeft => Some((5.0, 0.0)), Key::ArrowRight => Some((-5.0, 0.0)),
+                                Key::ArrowUp => Some((0.0, 5.0)), Key::ArrowDown => Some((0.0, -5.0)), _ => None,
+                            };
+                            if let Some((x, y)) = delta {
+                                event.prevent_default(); horizontal.set((horizontal() + x).clamp(0.0, 100.0)); vertical.set((vertical() + y).clamp(0.0, 100.0));
+                            }
+                        },
                         onpointerdown: move |event: Event<PointerData>| {
                             if working() || drag().is_some() { return; }
+                            if event.trigger_button() != Some(dioxus::html::input_data::MouseButton::Primary) { return; }
                             event.prevent_default(); pointer_capture(&event, true);
-                            drag.set(Some((event.pointer_id(), event.client_coordinates().x, event.client_coordinates().y, horizontal(), vertical())));
+                            crate::appearance::focus_control(crop_id);
+                            drag.set(Some((event.pointer_id(), event.client_coordinates().x, event.client_coordinates().y, horizontal(), vertical(), false)));
                         },
                         onpointermove: move |event: Event<PointerData>| {
                             if working() { return; }
-                            if let Some((pointer, start_x, start_y, initial_x, initial_y)) = drag() {
+                            if let Some((pointer, start_x, start_y, initial_x, initial_y, moved)) = drag() {
                                 if pointer != event.pointer_id() { return; }
+                                if !moved {
+                                    if (event.client_coordinates().x - start_x).hypot(event.client_coordinates().y - start_y) < 4.0 { return; }
+                                    drag.set(Some((pointer, start_x, start_y, initial_x, initial_y, true)));
+                                }
                                 #[cfg(target_arch = "wasm32")]
                                 if let (Some(image), Some(element)) = (selection(), web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id(crop_id))) {
                                     let bounds = element.get_bounding_client_rect();
@@ -221,26 +242,42 @@ fn ImageUpload(kind: BannerAccountKind, account_id: String, mut photo: Signal<Op
                                 }
                             }
                         },
-                        onpointerup: move |event: Event<PointerData>| { if drag().is_some_and(|d| d.0 == event.pointer_id()) { drag.set(None); pointer_capture(&event, false); } },
+                        onpointerup: move |event: Event<PointerData>| {
+                            if let Some((pointer, _, _, _, _, moved)) = drag() {
+                                if pointer != event.pointer_id() { return; }
+                                if !moved && !working() {
+                                    #[cfg(target_arch = "wasm32")]
+                                    if let (Some(image), Some(element)) = (selection(), web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id(crop_id))) {
+                                        let bounds = element.get_bounding_client_rect();
+                                        if bounds.width() > 0.0 && bounds.height() > 0.0 {
+                                            let crop = crop_rect(image.width, image.height, aspect, zoom(), horizontal(), vertical());
+                                            let (x, y) = focus_crop(image.width, image.height, crop,
+                                                (event.client_coordinates().x - bounds.left()) / bounds.width(),
+                                                (event.client_coordinates().y - bounds.top()) / bounds.height());
+                                            horizontal.set(x); vertical.set(y);
+                                        }
+                                    }
+                                }
+                                drag.set(None); pointer_capture(&event, false);
+                            }
+                        },
                         onpointercancel: move |event: Event<PointerData>| { drag.set(None); pointer_capture(&event, false); },
                         onlostpointercapture: move |_| drag.set(None),
                         img { src: "{image.url}", style: "{preview_style}", alt: "", draggable: "false" }
                     }
+                    button { class: "image-position-reset", r#type: "button", disabled: working(),
+                        aria_label: "Reset position", title: "Reset position",
+                        onclick: move |_| {
+                            // Reset pan only: keep the user's chosen zoom level.
+                            horizontal.set(50.0); vertical.set(50.0);
+                        },
+                        i { class: "fas fa-rotate-left", aria_hidden: "true" }
+                    }
+                    }
                     label { class: "form-label", r#for: "{crop_id}-zoom", "Zoom" }
                     input { id: "{crop_id}-zoom", class: "form-range", r#type: "range", min: "1", max: "3", step: "0.01", value: "{zoom}", disabled: working(),
                         oninput: move |event| zoom.set(event.value().parse::<f64>().unwrap_or(1.0)) }
-                    details { class: "image-crop-position",
-                        summary { "Position controls" }
-                        label { class: "form-label", r#for: "{crop_id}-horizontal", "Horizontal position" }
-                        input { id: "{crop_id}-horizontal", class: "form-range", r#type: "range", min: "0", max: "100", step: "1", value: "{horizontal}", disabled: working(),
-                            oninput: move |event| horizontal.set(event.value().parse::<f64>().unwrap_or(50.0)) }
-                        label { class: "form-label", r#for: "{crop_id}-vertical", "Vertical position" }
-                        input { id: "{crop_id}-vertical", class: "form-range", r#type: "range", min: "0", max: "100", step: "1", value: "{vertical}", disabled: working(),
-                            oninput: move |event| vertical.set(event.value().parse::<f64>().unwrap_or(50.0)) }
-                    }
                     div { class: "image-crop-actions",
-                        button { r#type: "button", class: "btn btn-outline-secondary", disabled: working(),
-                            onclick: move |_| { horizontal.set(50.0); vertical.set(50.0); }, "Center" }
                         button { r#type: "button", class: "btn btn-outline-secondary", disabled: working(),
                             onclick: move |_| { clear_url(&cancel_urls); selection.set(None); drag.set(None); error.set(None); busy.set(false); focus_after_render(input_id); }, "Cancel" }
                         button { r#type: "button", class: "btn btn-primary", disabled: working(),

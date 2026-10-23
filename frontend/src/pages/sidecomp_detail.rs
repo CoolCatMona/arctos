@@ -44,82 +44,94 @@ pub fn SideCompDetail(url: String, comp_id: i32) -> Element {
                         let viewer_weapon = d.viewer_weapon.clone();
                         let results_page_enabled = d.results_page_enabled;
                         rsx! {
-                            div { class: "sidecomp-heading",
-                                h2 { "{d.name}" }
-                            if viewer_is_to {
-                                OrganizerTools {
-                                    id_prefix: "sidecomp-organizer-tools".to_string(),
-                                    label: "Side competition tools".to_string(),
-                                    Link {
-                                        to: Route::SideCompEdit { url: url_for_edit.clone(), comp_id },
-                                        class: "dropdown-item",
-                                        "Edit"
-                                    }
-                                    Link {
-                                        to: Route::SideCompRegisterAsTo { url: url_for_register.clone(), comp_id },
-                                        class: "dropdown-item",
-                                        "Quick Register players"
-                                    }
-                                    Link {
-                                        to: Route::SideCompManageResults { url: url_for_manage.clone(), comp_id },
-                                        class: "dropdown-item",
-                                        "Manage results"
+                            div { class: "sidecomp-heading sidecomp-registration-header",
+                                div { class: "sidecomp-identity",
+                                    h2 { "{d.name}" }
+                                    p { class: "sidecomp-badges",
+                                        span { class: "badge bg-secondary", "{d.type_}" }
+                                        if registration_open {
+                                            span { class: "badge bg-success", "Registration open" }
+                                        } else {
+                                            span { class: "badge bg-secondary", "Registration closed" }
+                                        }
+                                        if finalized { span { class: "badge bg-dark", "Finalized" } }
                                     }
                                 }
-                            }
-                            }
-                            p {
-                                span { class: "badge bg-secondary me-2", "{d.type_}" }
-                                if registration_open {
-                                    span { class: "badge bg-success me-2", "Open" }
-                                } else {
-                                    span { class: "badge bg-secondary me-2", "Closed" }
-                                }
-                                if finalized {
-                                    span { class: "badge bg-dark", "Finalized" }
+                                div { class: "sidecomp-actions",
+                                    div { class: "event-participant-actions", role: "group", aria_label: "Side competition registration",
+                                        if viewer_registration_incomplete {
+                                            button {
+                                                r#type: "button", class: "btn btn-primary event-registration-action",
+                                                onclick: move |_| show_edit_modal.set(true),
+                                                "Complete registration"
+                                            }
+                                        } else if viewer_is_registered_in_comp {
+                                            button {
+                                                r#type: "button", class: "btn btn-outline-secondary",
+                                                onclick: move |_| show_edit_modal.set(true),
+                                                "Edit registration"
+                                            }
+                                        } else if viewer_can_register {
+                                            button {
+                                                r#type: "button", class: "btn btn-primary event-registration-action",
+                                                onclick: move |_| show_register_modal.set(true),
+                                                "Register"
+                                            }
+                                        } else if !registration_open {
+                                            button { r#type: "button", class: "btn btn-secondary", disabled: true, "Registration closed" }
+                                        } else if matches!(me.read().as_ref(), Some(Err(_))) {
+                                            a {
+                                                href: format!("/login?next={}", urlencoding::encode(&format!("/{url}/sidecomps/{comp_id}"))),
+                                                class: "btn btn-primary event-registration-action",
+                                                "Log in to register"
+                                            }
+                                        } else if matches!(me.read().as_ref(), Some(Ok(user)) if user.user_type == "player") {
+                                            Link {
+                                                to: Route::TournamentRegister { url: url.clone() },
+                                                class: "btn btn-outline-primary",
+                                                "Register for event"
+                                            }
+                                            small { class: "text-muted", "Event registration is required first." }
+                                        }
+                                    }
+                                    div { class: "sidecomp-result-actions",
+                                        if signed_in && active {
+                                            Link {
+                                                to: Route::SideCompEnterResults { url: url_for_enter.clone(), comp_id },
+                                                class: if viewer_can_register || viewer_registration_incomplete { "btn btn-outline-secondary" } else { "btn btn-primary" },
+                                                "Enter results"
+                                            }
+                                        }
+                                        if results_page_enabled {
+                                            Link {
+                                                to: Route::SideCompResults { url: url_for_results.clone(), comp_id },
+                                                class: "btn btn-outline-secondary",
+                                                "Results"
+                                            }
+                                        }
+                                    }
+                                    if viewer_is_to {
+                                        OrganizerTools {
+                                            id_prefix: "sidecomp-organizer-tools".to_string(),
+                                            label: "Side competition tools".to_string(),
+                                            Link {
+                                                to: Route::SideCompEdit { url: url_for_edit.clone(), comp_id },
+                                                class: "dropdown-item", "Edit"
+                                            }
+                                            Link {
+                                                to: Route::SideCompRegisterAsTo { url: url_for_register.clone(), comp_id },
+                                                class: "dropdown-item", "Quick Register players"
+                                            }
+                                            Link {
+                                                to: Route::SideCompManageResults { url: url_for_manage.clone(), comp_id },
+                                                class: "dropdown-item", "Manage results"
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             if let Some(desc) = description.as_ref() {
-                                if !desc.is_empty() {
-                                    p { style: "white-space: pre-wrap;", "{desc}" }
-                                }
-                            }
-                            div { class: "mb-3 d-flex flex-wrap gap-2",
-                                if viewer_can_register {
-                                    button {
-                                        class: "btn btn-success",
-                                        onclick: move |_| show_register_modal.set(true),
-                                        "Register"
-                                    }
-                                }
-                                if viewer_registration_incomplete {
-                                    button {
-                                        class: "btn btn-warning",
-                                        onclick: move |_| show_edit_modal.set(true),
-                                        i { class: "fas fa-exclamation-triangle me-1" }
-                                        "Complete registration"
-                                    }
-                                } else if viewer_is_registered_in_comp {
-                                    button {
-                                        class: "btn btn-outline-secondary",
-                                        onclick: move |_| show_edit_modal.set(true),
-                                        "Edit registration"
-                                    }
-                                }
-                                if signed_in && active {
-                                    Link {
-                                        to: Route::SideCompEnterResults { url: url_for_enter.clone(), comp_id },
-                                        class: "btn btn-primary",
-                                        "Enter results"
-                                    }
-                                }
-                                if results_page_enabled {
-                                    Link {
-                                        to: Route::SideCompResults { url: url_for_results.clone(), comp_id },
-                                        class: "btn btn-outline-dark",
-                                        "Results"
-                                    }
-                                }
+                                if !desc.is_empty() { p { style: "white-space: pre-wrap;", "{desc}" } }
                             }
                             section { class: "card data-section",
                                 div { class: "card-header", h2 { class: "h5 mb-0", "Registrants ({registrants.len()})" } }

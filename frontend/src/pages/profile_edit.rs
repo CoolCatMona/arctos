@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::{ChangePasswordCard, ConnectedAppsCard, ImageDraft, ProfileImageControls, ProfileImageEditor};
+use crate::components::{ChangePasswordCard, ConnectedAppsCard, ImageDraft, ProfileBio, ProfileImageControls, ProfileImageEditor};
 use crate::Route;
 use dioxus::prelude::*;
 
@@ -141,15 +141,6 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
             }
         });
     };
-    let bio_html = use_resource(move || {
-        let markdown = fields().about;
-        async move {
-            #[cfg(target_arch = "wasm32")]
-            gloo_timers::future::TimeoutFuture::new(250).await;
-            if markdown.trim().is_empty() { Ok(String::new()) }
-            else { api::render_markdown(&markdown).await }
-        }
-    });
     rsx! {
         style { {include_str!("../components/profile_details.css")} }
         style { {include_str!("profile_edit.css")} }
@@ -198,9 +189,7 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
                                 if team && !fields().website.trim().is_empty() { p { strong { "Website: " } span { class: "profile-preview-link", "{fields().website}" } } }
                                 if team && !fields().email.trim().is_empty() { p { strong { "Email: " } "{fields().email}" } }
                                 if !fields().about.trim().is_empty() {
-                                    if let Some(Ok(html)) = &*bio_html.read() {
-                                        div { class: "markdown-content", dangerous_inner_html: "{html}", onclick: move |event| event.prevent_default() }
-                                    } else { p { style: "white-space: pre-wrap;", "{fields().about}" } }
+                                    ProfileBio { source: fields().about, preview: true }
                                 } else { p { class: "text-muted", "No profile details added yet." } }
                             }
                         }
@@ -208,7 +197,8 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
                     section { class: "profile-edit-fields", aria_label: "Profile details",
                         ProfileField { state: fields, field: Field::Name, label: if team { "Team name" } else { "Display name" }, required: true, disabled: saving() }
                         ProfileField { state: fields, field: Field::Location, label: "Location", disabled: saving() }
-                        ProfileField { state: fields, field: Field::About, label: if team { "About" } else { "Bio" }, multiline: true, disabled: saving() }
+                        ProfileField { state: fields, field: Field::About, label: if team { "About" } else { "Bio" }, multiline: true,
+                            help: "Markdown supported: **bold**, *italic*, headings, lists, and [links](https://example.com).", disabled: saving() }
                         if team {
                             ProfileField { state: fields, field: Field::Website, label: "Website", input_type: "url", disabled: saving() }
                             ProfileField { state: fields, field: Field::Email, label: "Email", input_type: "email", disabled: saving() }
@@ -260,12 +250,13 @@ fn ProfileField(mut state: Signal<ProfileFields>, field: Field, label: String,
             label { class: "form-label", r#for: id, "{label}" }
             if multiline {
                 textarea { id, class: "form-control", rows: "5", value, disabled,
+                    aria_describedby: (!help.is_empty()).then(|| format!("{id}-help")),
                     oninput: move |event| field.set(&mut state.write(), event.value()) }
             } else {
                 input { id, class: "form-control", r#type: input_type, value, required, disabled, maxlength: field.limit(),
                     oninput: move |event| field.set(&mut state.write(), event.value()) }
             }
-            if !help.is_empty() { p { class: "form-text", "{help}" } }
+            if !help.is_empty() { p { id: "{id}-help", class: "form-text", "{help}" } }
         }
     }
 }

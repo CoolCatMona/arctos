@@ -197,6 +197,8 @@ Image tests exercise raw-byte avatar and banner uploads independently of the
 browser crop editor. They cover file and decoded-pixel limits, still-image
 validation, metadata removal, typed account ownership and organizer access,
 failed writes, unique image URLs, and conservative cleanup of existing files.
+`tests/unit/test_markdown.py` checks supported formatting, existing documentation,
+and removal of unsafe HTML, attributes, and URL schemes through the shared renderer.
 `tests/test_profile_edits.py` covers atomic multipart text/avatar/cover updates,
 existing JSON clients, malformed and conflicting fields, model limits, partial
 image failures, and cleanup after database or rollback failures.
@@ -296,6 +298,17 @@ player/team profile and directory counts with the
 API, including zero and nonzero values supplied through GET-only browser
 fixtures. Desktop views are checked at 1280px.
 
+Check contextual registration actions with:
+
+```bash
+uv run python scripts/check_registration_ui.py --screenshots /tmp/arctos-registration
+```
+
+GET-only browser fixtures cover guest, player, and team actions; open and closed
+registration; league registration destinations; and side-competition eligibility.
+The checks verify one relevant primary action, preserved edit/roster access,
+login return paths, and responsive placement and contrast across all themes.
+
 Check page banners, profile navigation, uploads, and organizer access with:
 
 ```bash
@@ -310,11 +323,12 @@ or restore control. Profile geometry checks cover
 the 3:1 cover, overlapping avatar, left-aligned identity, 900px desktop column,
 and panels without card frames at 320px, 360px, and 1280px. Back/Forward checks
 preserve unsaved injury inputs and expanded team rosters. Player and team edits
-check live text previews, the phone Preview/Edit switch, private phone exclusion,
+check live Markdown previews, the phone Preview/Edit switch, private phone exclusion,
 validation while fields are hidden, and staged removal/cropping without writes.
 Intercepted multipart saves verify that text and both images travel together,
 duplicate submissions are blocked, failures retain drafts, and retry sends the
-same content. Crop checks cover keyboard, mouse, touch, and button positioning,
+same content. Markdown checks cover formatting, sanitization, delayed responses,
+empty drafts, and retry after a rendering failure. Crop checks cover keyboard, mouse, touch, tap-to-center, position reset,
 one shared Zoom control, exported PNG dimensions/pixels, and object URL cleanup.
 Tournament and league banner uploads retain separate checks for failure,
 success, removal, retained form input, and form blocking during a pending crop.

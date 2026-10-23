@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::{EventTab, EventTabs, ProfileHeader};
+use crate::components::{EventTab, EventTabs, ProfileHeader, ProfileBio};
 use crate::types::{TeamRegItem, TournamentPlayerItem};
 use crate::Route;
 use dioxus::prelude::*;
@@ -179,24 +179,6 @@ pub fn TeamProfile(id: Signal<String>, tab: String) -> Element {
     let me = use_resource(move || async move { api::me().await });
     let val = data.value();
     let backend = api::base_url();
-    let mut about_markdown = use_signal(|| Option::<String>::None);
-    use_effect(move || {
-        let v = val.read();
-        if let Some(Ok(d)) = v.as_ref() {
-            about_markdown.set(d.team.about.clone());
-        } else {
-            about_markdown.set(None);
-        }
-    });
-    let about_html = use_resource(use_reactive(&about_markdown, move |md| {
-        let md = md().clone();
-        async move {
-            match md.as_deref() {
-                Some(m) if !m.is_empty() => api::render_markdown(m).await,
-                _ => Ok(String::new()),
-            }
-        }
-    }));
 
     let mut expanded_event = use_signal(|| Option::<String>::None);
     let mut players_cache = use_signal(|| PlayersCache::new());
@@ -265,18 +247,8 @@ pub fn TeamProfile(id: Signal<String>, tab: String) -> Element {
                             if let Some(email) = d.team.email.as_ref().filter(|value| !value.trim().is_empty()) {
                                 p { strong { "Email: " } "{email}" }
                             }
-                            if let Some(about) = &d.team.about {
-                                if !about.is_empty() {
-                                    if let Some(Ok(html)) = about_html.value().read().as_ref() {
-                                        if html.is_empty() {
-                                            div { class: "markdown-content", style: "white-space: pre-wrap;", "{about}" }
-                                        } else {
-                                            div { class: "markdown-content", dangerous_inner_html: "{html}" }
-                                        }
-                                    } else {
-                                        div { class: "markdown-content", style: "white-space: pre-wrap;", "{about}" }
-                                    }
-                                }
+                            if let Some(source) = d.team.about.as_ref().filter(|value| !value.trim().is_empty()) {
+                                ProfileBio { source: source.clone() }
                             }
                             if d.team.website.as_ref().is_none_or(|value| value.trim().is_empty())
                                 && d.team.email.as_ref().is_none_or(|value| value.trim().is_empty())

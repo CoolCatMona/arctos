@@ -25,7 +25,7 @@ async def composition(page: Page, tab: str, prefix: str = "event") -> None:
     await expect(page.locator("#page-banner-dismiss")).to_have_count(0)
     geometry = await page.locator(".event-detail-hero").evaluate("""hero => {
         const rect = selector => hero.querySelector(selector).getBoundingClientRect().toJSON();
-        return {cover:rect('.event-banner-image'),name:rect('h1'),meta:rect('.event-hero-meta'),
+        return {cover:rect('.event-banner-image'),name:rect('h1'),main:rect('.event-hero-main'),meta:rect('.event-hero-meta'),
             badges:rect('.event-hero-badges'),actions:rect('.event-hero-actions'),
             alignment:getComputedStyle(hero.querySelector('.event-hero-inner')).textAlign};
     }""")
@@ -34,7 +34,11 @@ async def composition(page: Page, tab: str, prefix: str = "event") -> None:
     assert geometry["cover"]["bottom"] <= geometry["name"]["top"], geometry
     assert geometry["name"]["bottom"] <= geometry["meta"]["top"], geometry
     assert geometry["meta"]["bottom"] <= geometry["badges"]["top"], geometry
-    assert geometry["badges"]["bottom"] <= geometry["actions"]["top"], geometry
+    if geometry["actions"]["height"]:
+        if page.viewport_size["width"] >= 768:
+            assert geometry["actions"]["left"] >= geometry["main"]["right"] - 1, geometry
+        else:
+            assert geometry["badges"]["bottom"] <= geometry["actions"]["top"], geometry
     assert abs(geometry["name"]["left"] - geometry["meta"]["left"]) <= 1, geometry
 
 
@@ -70,6 +74,83 @@ async def settings_state(check: SmokeCheck, page: Page) -> None:
         await expect(section).to_have_js_property("open", not initial)
         await page.keyboard.press("Space")
         await expect(section).to_have_js_property("open", initial)
+    await check.settings_disclosures(page)
+    await penalty_edit_state(check, page)
+
+
+async def penalty_edit_state(check: SmokeCheck, page: Page) -> None:
+    """Existing penalty edits stay intact while their section is closed."""
+    for kind, path, endpoint in (
+        ("event", "/demo-open/settings", "/_api/tournaments/demo-open"),
+        ("league", "/leagues/demo-coast-league/settings", "/_api/leagues/demo-coast-league"),
+    ):
+        payload = await api_json(page.context, check.base_url, endpoint)
+        payload["penalty_types"] = [
+            {"id": 987601, "name": "Browser-only first penalty", "color": "808080", "desc": "Local fixture"},
+            {"id": 987602, "name": "Browser-only second penalty", "color": "808080", "desc": None},
+        ]
+
+        async def fixture(route) -> None:
+            if route.request.method == "GET":
+                await route.fulfill(json=payload)
+            else:
+                await route.fallback()
+
+        url = check.base_url + endpoint
+        await page.context.route(url, fixture)
+        try:
+            await page.goto(check.base_url + path, wait_until="domcontentloaded")
+            toggle = page.locator("#penalty-types-toggle")
+            await toggle.click()
+            content = page.locator("#penalty-types-content")
+            await content.get_by_role("button", name="Edit", exact=True).first.click()
+            name = content.get_by_placeholder("Name (max 50)", exact=True)
+            await name.fill("Unsaved existing penalty")
+            bounds = await name.bounding_box()
+            assert bounds and bounds["width"] >= 160, bounds
+            description = content.get_by_label("Description (optional)", exact=True)
+            await description.fill("Keep this penalty description.")
+            color = content.get_by_role("button", name="Choose penalty color", exact=True)
+            await color.click()
+            palette = content.locator(".penalty-color-options")
+            await expect(palette).to_be_visible()
+            choices = await palette.get_by_role("button", name="Use color #", exact=False).evaluate_all(
+                """els => els.map(el => {
+                    const r = el.getBoundingClientRect();
+                    return {width:r.width,height:r.height,left:r.left,right:r.right};
+                })"""
+            )
+            assert len(choices) == 14 and all(
+                choice["width"] >= 44
+                and choice["height"] >= 44
+                and choice["left"] >= 0
+                and choice["right"] <= page.viewport_size["width"] + 1
+                for choice in choices
+            ), choices
+            await palette.get_by_role("button", name="Use color #1E90FF", exact=True).click()
+            await expect(palette.get_by_role("textbox", name="Hex color", exact=True)).to_have_value("1E90FF")
+            await palette.get_by_role("button", name="Apply", exact=True).click()
+            await expect(palette).to_have_count(0)
+            await expect(color).to_have_css("background-color", "rgb(30, 144, 255)")
+            await expect(page.get_by_role("button", name="Add penalty type", exact=True)).to_be_disabled()
+            await expect(content.get_by_role("button", name="Edit", exact=True)).to_be_disabled()
+            await toggle.click()
+            await expect(content).to_be_hidden()
+            await toggle.click()
+            await expect(name).to_have_value("Unsaved existing penalty")
+            await expect(description).to_have_value("Keep this penalty description.")
+            await check.check_layout(page, f"{kind}-penalty-edit", page.viewport_size["width"])
+            if check.screenshots:
+                await page.locator(".penalty-types-section").screenshot(
+                    path=str(check.screenshots / f"{page.viewport_size['width']:04d}-{kind}-penalty-section.png"),
+                    animations="disabled",
+                )
+            await content.get_by_role("button", name="Cancel", exact=True).click()
+            await expect(name).to_have_count(0)
+            await expect(content.get_by_text("Browser-only first penalty", exact=True)).to_be_visible()
+            await expect(page.get_by_role("button", name="Add penalty type", exact=True)).to_be_enabled()
+        finally:
+            await page.context.unroute(url, fixture)
 
 
 async def sidecomp_menus(check: SmokeCheck, page: Page, comp_id: int) -> None:

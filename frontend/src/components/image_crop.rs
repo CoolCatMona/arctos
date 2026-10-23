@@ -18,6 +18,24 @@ pub fn crop_rect(width: f64, height: f64, aspect: f64, zoom: f64, x: f64, y: f64
     }
 }
 
+/// Center the visible point selected by a tap, without changing crop size or zoom.
+/// Coordinates are fractions of the viewport; panning stops at the source edges.
+pub fn focus_crop(width: f64, height: f64, crop: CropRect, x: f64, y: f64) -> (f64, f64) {
+    let position = |size: f64, origin: f64, extent: f64, point: f64| {
+        let available = size - extent;
+        if available <= 0.0 {
+            50.0
+        } else {
+            ((origin + point.clamp(0.0, 1.0) * extent - extent / 2.0) / available * 100.0)
+                .clamp(0.0, 100.0)
+        }
+    };
+    (
+        position(width, crop.x, crop.width, x),
+        position(height, crop.y, crop.height, y),
+    )
+}
+
 /// Check dimensions from file headers before a browser allocates decoded pixels.
 pub fn validate_source(bytes: &[u8]) -> Result<&'static str, String> {
     if bytes.is_empty() || bytes.len() > 8 * 1024 * 1024 {
@@ -135,6 +153,33 @@ pub async fn encode_crop(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tap_centers_visible_point_and_preserves_crop_size() {
+        let before = crop_rect(1200.0, 800.0, 3.0, 2.0, 50.0, 50.0);
+        let (x, y) = focus_crop(1200.0, 800.0, before, 0.75, 0.25);
+        let after = crop_rect(1200.0, 800.0, 3.0, 2.0, x, y);
+        assert_eq!((after.width, after.height), (before.width, before.height));
+        assert!((after.x + after.width / 2.0 - before.x - before.width * 0.75).abs() < 1e-6);
+        assert!((after.y + after.height / 2.0 - before.y - before.height * 0.25).abs() < 1e-6);
+        assert_eq!(focus_crop(1200.0, 800.0, before, 0.5, 0.5), (50.0, 50.0));
+    }
+
+    #[test]
+    fn repeated_taps_reach_source_edges_without_dragging() {
+        for aspect in [1.0, 3.0] {
+            for edge in [0.0, 1.0] {
+                let (mut x, mut y) = (50.0, 50.0);
+                for _ in 0..30 {
+                    let crop = crop_rect(1200.0, 800.0, aspect, 3.0, x, y);
+                    (x, y) = focus_crop(1200.0, 800.0, crop, edge, edge);
+                }
+                assert_eq!((x, y), (edge * 100.0, edge * 100.0));
+            }
+        }
+        let crop = crop_rect(600.0, 200.0, 3.0, 1.0, 50.0, 50.0);
+        assert_eq!(focus_crop(600.0, 200.0, crop, -1.0, 2.0), (50.0, 50.0));
+    }
 
     #[test]
     fn oversized_source_is_rejected_before_decoding() {

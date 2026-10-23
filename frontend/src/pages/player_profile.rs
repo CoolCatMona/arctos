@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::{EventTab, EventTabs, PenaltyDisplay, ProfileHeader};
+use crate::components::{EventTab, EventTabs, PenaltyDisplay, ProfileHeader, ProfileBio};
 use crate::types::{NoteMatchInfo, PlayerInjury, PlayerNoteItem};
 use crate::Route;
 use dioxus::prelude::*;
@@ -109,25 +109,7 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
     let val = data.value();
     let mut injury_error = use_signal(|| None::<String>);
     let mut injury_saving = use_signal(|| false);
-    let mut bio_markdown = use_signal(|| Option::<String>::None);
     let mut penalty_desc_modal = use_signal(|| None::<String>);
-    use_effect(move || {
-        let v = val.read();
-        if let Some(Ok(d)) = v.as_ref() {
-            bio_markdown.set(d.player.bio.clone());
-        } else {
-            bio_markdown.set(None);
-        }
-    });
-    let bio_html = use_resource(use_reactive(&bio_markdown, move |md| {
-        let md = md().clone();
-        async move {
-            match md.as_deref() {
-                Some(m) if !m.is_empty() => api::render_markdown(m).await,
-                _ => Ok(String::new()),
-            }
-        }
-    }));
 
     use_effect(move || {
         if let Some(Ok(d)) = val.read().as_ref() {
@@ -242,20 +224,8 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                             if let Some(phone) = d.player.phone.as_ref().filter(|value| !value.trim().is_empty()) {
                                 p { strong { "Phone: " } "{phone}" }
                             }
-                            if let Some(bio) = &d.player.bio {
-                                if !bio.is_empty() {
-                                    div { class: "profile-bio",
-                                        if let Some(Ok(html)) = bio_html.value().read().as_ref() {
-                                            if html.is_empty() {
-                                                div { class: "markdown-content", style: "white-space: pre-wrap;", "{bio}" }
-                                            } else {
-                                                div { class: "markdown-content", dangerous_inner_html: "{html}" }
-                                            }
-                                        } else {
-                                            div { class: "markdown-content", style: "white-space: pre-wrap;", "{bio}" }
-                                        }
-                                    }
-                                }
+                            if let Some(source) = d.player.bio.as_ref().filter(|value| !value.trim().is_empty()) {
+                                ProfileBio { source: source.clone() }
                             }
                             if d.player.phone.as_ref().is_none_or(|value| value.trim().is_empty())
                                 && d.player.bio.as_ref().is_none_or(|value| value.trim().is_empty()) {

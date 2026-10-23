@@ -95,7 +95,10 @@ registrations are excluded.
 
 Event and league detail pages share `EventHeader`, `EventAbout`, and `EventTabs`.
 The header follows the profile layout: a 3:1 cover above left-aligned identity,
-metadata, registration, and a compact Organizer tools menu. Organizers can upload a banner
+metadata, registration, and a compact Organizer tools menu. Registration appears
+beside the identity on desktop and fills the content width below it on phones.
+Embedded tools and side competitions omit parent registration controls, leaving
+the current form or side competition as the action target. Organizers can upload a banner
 image from Settings; profile owners can do the same from Edit profile.
 Navigation tabs link to information, rosters, schedules, results, brackets,
 league rounds, and side events using real URLs. The selected link uses
@@ -111,7 +114,7 @@ horizontal scrolling on narrow screens. Use native `details.section-disclosure` 
 and settings, with a labeled summary and a count where useful. Keep current
 event information and essential actions visible. Collapsing a section keeps its
 form state intact. Only the top-level Events, Leagues, Players, Teams, and
-Stones introductions have a centered collapse chevron beneath their text.
+Stones introductions have a collapse chevron at their top-right.
 Appearance settings offer “Show page introduction” on those pages. Their visibility is saved independently per page,
 separately from appearance preferences. Player, team, tournament, and league
 detail headers always remain visible, with no dismiss or restore control.
@@ -133,9 +136,12 @@ the summary. Penalty types use one full-width disclosure, closed initially;
 organizer lists start expanded.
 
 Edit profile shows the cover and avatar where they appear on the public profile.
-Camera controls select or remove an image. Drag the image to position it and use
-one Zoom control; arrow keys and the Fine positioning buttons provide alternatives
-to dragging. The desktop preview updates beside the fields; on phones, Preview
+Camera controls select or remove an image. Drag or tap the image to position it and use
+one Zoom control. Arrow keys also adjust position; Reset position centers the image
+without changing the zoom. Profiles, avatars, and event covers share these controls. Player bios and team descriptions use the same Markdown renderer as event
+information, with explicit formatting guidance beside the field. The preview
+tracks the current draft and falls back to escaped text if rendering fails.
+The desktop preview updates beside the fields; on phones, Preview
 profile switches between the full preview and fields without losing changes.
 The profile's Save action stores text and both images together in one multipart
 request. Cancel leaves the stored profile unchanged, and failed saves retain all

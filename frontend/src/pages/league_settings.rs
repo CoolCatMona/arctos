@@ -447,29 +447,10 @@ pub fn LeagueSettings(league_url: String) -> Element {
 
                 }
                 div { class: "col-12",
-            details { class: "edit-section section-disclosure penalty-types-section mb-3",
-                summary { class: "edit-section-heading", h2 { class: "h5 mb-0", "Penalty Types ({d.penalty_types.len()})" } }
-                div { class: "edit-section-body",
-                    div { class: "table-responsive",
-                        table { class: "table table-sm",
-                            thead {
-                                tr {
-                                    th { "Name" }
-                                    th { "Color" }
-                                    th { "Description" }
-                                    th { style: "width: 1%; white-space: nowrap;", "Actions" }
-                                }
-                            }
-                            tbody {
-                                LeaguePenaltyTypesTable {
-                                    penalty_types: d.penalty_types.clone(),
-                                    league_url: league_url.clone(),
-                                    on_refresh: trigger_refresh,
-                                }
-                            }
-                        }
-                    }
-                }
+            LeaguePenaltyTypesTable {
+                penalty_types: d.penalty_types.clone(),
+                league_url: league_url.clone(),
+                on_refresh: trigger_refresh,
             }
 
             details { class: "edit-section section-disclosure mb-3", open: true,

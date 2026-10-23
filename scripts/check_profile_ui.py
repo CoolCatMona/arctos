@@ -20,7 +20,7 @@ import sys
 from urllib.parse import urlsplit
 
 from PIL import Image
-from playwright.async_api import Page, Route, async_playwright, expect
+from playwright.async_api import Error, Page, Route, async_playwright, expect
 
 from check_appearance_ui import PALETTES, check_contrast, choose, close_menu, isolated_page, open_menu
 from check_mobile_ui import DEMO_USER, TIMEOUT_MS, SmokeCheck, api_json, arguments
@@ -62,9 +62,17 @@ async def introductions(check: SmokeCheck, page: Page) -> None:
         dismiss = page.locator("#page-banner-dismiss")
         box = await dismiss.bounding_box()
         assert box and box["width"] >= 44 and box["height"] >= 44, box
-        content = await page.locator("#page-banner-content").bounding_box()
-        assert content and box["y"] >= content["y"] + content["height"] - 1
-        assert abs(box["x"] + box["width"] / 2 - content["x"] - content["width"] / 2) <= 1
+        frame = await banner.bounding_box()
+        assert frame and 0 <= box["y"] - frame["y"] <= 12
+        assert abs(box["x"] + box["width"] - frame["x"] - frame["width"]) <= 12
+        heading = await page.locator("#page-banner-heading").evaluate("""el => {
+            const range = document.createRange(); range.selectNodeContents(el);
+            const r=range.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};
+        }""")
+        assert abs(heading["x"] + heading["width"] / 2 - frame["x"] - frame["width"] / 2) <= 1
+        assert min(box["x"] + box["width"], heading["x"] + heading["width"]) <= max(box["x"], heading["x"]) or min(
+            box["y"] + box["height"], heading["y"] + heading["height"]
+        ) <= max(box["y"], heading["y"])
         await expect(dismiss).to_have_attribute("aria-label", f"Collapse {title} introduction")
         await expect(dismiss).to_have_attribute("aria-controls", "page-banner-content")
         await expect(dismiss).to_have_attribute("aria-expanded", "true")
@@ -260,9 +268,64 @@ URL.createObjectURL = value => {const url = create(value); cropUrls.created.push
 URL.revokeObjectURL = url => {cropUrls.revoked.push(url); revoke(url);};"""
 
 
+async def simple_position_controls(page: Page, viewport, zoom) -> None:
+    """Reset keeps zoom; pointer and keyboard alternatives work without extra controls."""
+    await expect(page.get_by_text("Fine positioning", exact=True)).to_have_count(0)
+    await expect(page.get_by_text("Position controls", exact=True)).to_have_count(0)
+    await expect(page.get_by_label("Horizontal position", exact=True)).to_have_count(0)
+    await expect(page.get_by_label("Vertical position", exact=True)).to_have_count(0)
+    reset = viewport.locator("..").get_by_role("button", name="Reset position", exact=True)
+    await expect(reset).to_be_visible()
+    reset_box = await reset.bounding_box()
+    assert reset_box and reset_box["width"] >= 44 and reset_box["height"] >= 44
+    image = viewport.locator("img")
+    await reset.click()
+    await expect(reset).to_be_focused()
+    await expect(zoom).to_have_value("3")
+    await page.wait_for_function(
+        """el => {
+        const frame=el.getBoundingClientRect(), image=el.querySelector('img').getBoundingClientRect();
+        return Math.abs(frame.x+frame.width/2-image.x-image.width/2)<1 &&
+            Math.abs(frame.y+frame.height/2-image.y-image.height/2)<1;
+    }""",
+        arg=await viewport.element_handle(),
+    )
+    centered = await image.get_attribute("style")
+    await viewport.scroll_into_view_if_needed()
+    box = await viewport.bounding_box()
+    assert box
+    # Upper-right stays clear of the reset and camera overlays, including the 88px avatar.
+    await viewport.tap(position={"x": box["width"] * 0.7, "y": box["height"] * 0.3})
+    await expect(image).not_to_have_attribute("style", centered)
+    await expect(zoom).to_have_value("3")
+    await reset.click()
+    await expect(image).to_have_attribute("style", centered)
+    await viewport.focus()
+    await page.keyboard.press("ArrowLeft")
+    await expect(image).not_to_have_attribute("style", centered)
+    await reset.click()
+    await expect(image).to_have_attribute("style", centered)
+    # A drag must not perform an extra tap-to-center action when released.
+    await viewport.scroll_into_view_if_needed()
+    box = await viewport.bounding_box()
+    assert box
+    x, y = box["x"] + box["width"] * 0.7, box["y"] + box["height"] * 0.3
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x - 15, y + 8, steps=3)
+    await expect(image).not_to_have_attribute("style", centered)
+    dragged = await image.get_attribute("style")
+    await page.mouse.up()
+    await expect(image).to_have_attribute("style", dragged)
+    await reset.click()
+    await expect(image).to_have_attribute("style", centered)
+    await expect(zoom).to_have_value("3")
+
+
 async def adjust_crop(page: Page, crop_id: str) -> None:
     viewport = page.locator("#" + crop_id)
     zoom = page.locator("#" + crop_id + "-zoom")
+    await expect(page.locator(".image-crop-editor input[type=range]")).to_have_count(1)
     await zoom.focus()
     await page.keyboard.press("End")
     await expect(zoom).to_have_value("3")
@@ -295,18 +358,7 @@ async def adjust_crop(page: Page, crop_id: str) -> None:
             if touch_active:
                 await cdp.send("Input.dispatchTouchEvent", {"type": "touchCancel", "touchPoints": []})
             await cdp.detach()
-    editor = viewport.locator("..")
-    await editor.locator("summary").click()
-    horizontal = page.locator("#" + crop_id + "-horizontal")
-    await horizontal.focus()
-    await page.keyboard.press("Home")
-    await expect(horizontal).to_have_value("0")
-    await editor.get_by_role("button", name="Center", exact=True).click()
-    await expect(horizontal).to_have_value("50")
-    await expect(page.locator("#" + crop_id + "-vertical")).to_have_value("50")
-    await horizontal.focus()
-    await page.keyboard.press("End")
-    await expect(horizontal).to_have_value("100")
+    await simple_position_controls(page, viewport, zoom)
 
 
 async def image_upload(check: SmokeCheck, page: Page, kind: str, avatar: bool = False) -> None:
@@ -427,7 +479,7 @@ async def image_upload(check: SmokeCheck, page: Page, kind: str, avatar: bool = 
         positions = await widget.locator("input[type=range]").evaluate_all("els => els.map(el => el.value)")
         await check_contrast(
             page,
-            ".image-crop-editor, .image-crop-editor .form-label, .image-crop-actions .btn, .image-upload > .form-text",
+            ".image-crop-editor, .image-crop-editor .form-label, .image-crop-actions .btn, .image-position-reset, .image-upload > .form-text",
         )
         await check.check_layout(page, f"{kind}-{noun}-crop-{palette}-{mode}", 320)
         check.visited += 1
@@ -464,7 +516,9 @@ async def image_upload(check: SmokeCheck, page: Page, kind: str, avatar: bool = 
             )
             center = result.convert("RGB").getpixel((result.width // 2, result.height // 2))
             original_center = original.getpixel((original.width // 2, original.height // 2))
-            assert sum(abs(a - b) for a, b in zip(center, original_center)) > 20, "Saved crop ignored position controls"
+            assert sum(abs(a - b) for a, b in zip(center, original_center)) <= 5, (
+                "Saved crop did not preserve reset position"
+            )
         assert await page.evaluate("url => cropUrls.revoked.includes(url)", saved_url)
         await expect(page.locator(".event-banner-image img")).to_have_attribute(
             "src", check.base_url + "/static/smoke-profile/new.png"
@@ -538,10 +592,10 @@ async def staged_adjust_crop(page: Page, avatar: bool) -> None:
     await viewport.scroll_into_view_if_needed()
     box = await viewport.bounding_box()
     assert box
-    x, y = box["x"] + box["width"] * 0.3, box["y"] + box["height"] * 0.3
+    x, y = box["x"] + box["width"] * 0.7, box["y"] + box["height"] * 0.3
     await page.mouse.move(x, y)
     await page.mouse.down()
-    await page.mouse.move(x + 20, y + 10, steps=5)
+    await page.mouse.move(x - 20, y + 10, steps=5)
     await page.mouse.up()
     await expect(image).not_to_have_attribute("style", style)
     if avatar:
@@ -555,17 +609,7 @@ async def staged_adjust_crop(page: Page, avatar: bool) -> None:
             await expect(image).not_to_have_attribute("style", style)
         finally:
             await cdp.detach()
-    fine = page.locator(".profile-image-fine-position")
-    if not await fine.get_attribute("open") == "":
-        await fine.locator("summary").click()
-    await fine.get_by_role("button", name="Center", exact=True).click()
-    style = await image.get_attribute("style")
-    await fine.get_by_role("button", name="Move image left", exact=True).click()
-    await expect(image).not_to_have_attribute("style", style)
-    controls = await fine.locator("button").evaluate_all(
-        "els => els.map(el => {const r=el.getBoundingClientRect();return [r.width,r.height];})"
-    )
-    assert all(width >= 44 and height >= 44 for width, height in controls), controls
+    await simple_position_controls(page, viewport, zoom)
 
 
 async def staged_profile_edit(check: SmokeCheck, page: Page, kind: str) -> None:
@@ -734,7 +778,7 @@ async def staged_profile_edit(check: SmokeCheck, page: Page, kind: str) -> None:
             await close_menu(page)
             await check_contrast(
                 page,
-                ".profile-image-controls, .profile-image-controls .btn, .profile-image-camera, .profile-editor-toolbar .btn",
+                ".profile-image-controls, .profile-image-controls .btn, .profile-image-camera, .profile-image-reset, .profile-editor-toolbar .btn",
             )
             await check.check_layout(page, f"{kind}-staged-profile-{palette}-{mode}", 320)
             check.visited += 1
@@ -841,6 +885,126 @@ async def owner_profile_tabs(check: SmokeCheck, page: Page, kind: str) -> None:
     check.visited += 1
 
 
+PROFILE_MARKDOWN = """## Profile introduction
+
+- First item
+- Second item
+
+**Strong words** and *emphasis*.
+
+[Profile guide](https://example.com/profile)
+
+<a href="javascript:window.profileMarkdownUnsafe=true" onclick="window.profileMarkdownUnsafe=true">Unsafe link</a>
+<script>window.profileMarkdownUnsafe=true</script>
+"""
+
+
+async def profile_markdown(check: SmokeCheck, page: Page, kind: str) -> None:
+    """Both bios use the real sanitizer; local editing cannot render stale responses."""
+    owner = f"demo-{kind}"
+    await check.login(page, owner)
+    path, api_path = f"/{kind}s/{owner}", f"/_api/{kind}s/{owner}"
+    data = await api_json(page.context, check.base_url, api_path)
+    data[kind]["about" if kind == "team" else "bio"] = PROFILE_MARKDOWN
+    if kind == "player":
+        data[kind]["phone"] = "555-0100-private"
+    requests = []
+    delayed, release, completed = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    fail_format = True
+
+    async def fixture(route: Route) -> None:
+        request, parsed = route.request, urlsplit(route.request.url)
+        if parsed.netloc != check.origin:
+            await route.fallback()
+        elif request.method == "GET" and parsed.path == api_path:
+            await route.fulfill(json=data)
+        elif request.method == "POST" and parsed.path == "/_api/render-markdown":
+            source = request.post_data_json["markdown"]
+            requests.append(source)
+            if source == "## Delayed bio":
+                response = await route.fetch()
+                delayed.set()
+                await release.wait()
+                try:
+                    await route.fulfill(response=response)
+                except Error:
+                    # Replacing the text may cancel the obsolete browser request.
+                    pass
+                finally:
+                    completed.set()
+            elif source == "## Retry formatting" and fail_format:
+                await route.fulfill(json={"error": "Formatting fixture temporarily unavailable"})
+            else:
+                await route.fallback()
+        else:
+            await route.fallback()
+
+    async def rich_bio(container) -> None:
+        await expect(container.get_by_role("heading", name="Profile introduction", exact=True)).to_be_visible()
+        await expect(container.locator("ul > li")).to_have_text(["First item", "Second item"])
+        await expect(container.locator("strong")).to_have_text("Strong words")
+        await expect(container.locator("em")).to_have_text("emphasis")
+        await expect(container.get_by_role("link", name="Profile guide", exact=True)).to_have_attribute(
+            "href", "https://example.com/profile"
+        )
+        await expect(
+            container.locator("script, iframe, svg, [onclick], [onerror], a[href^='javascript:']")
+        ).to_have_count(0)
+        assert not await page.evaluate("window.profileMarkdownUnsafe === true")
+
+    await page.context.route("**/_api/**", fixture)
+    try:
+        await page.goto(check.base_url + path, wait_until="domcontentloaded")
+        await rich_bio(page.locator(".profile-bio"))
+        await check.check_layout(page, f"{kind}-public-markdown", 320)
+        check.visited += 1
+        await page.goto(check.base_url + path + "/edit", wait_until="domcontentloaded")
+        bio = page.locator("#profile-edit-about")
+        await expect(bio).to_have_attribute("aria-describedby", "profile-edit-about-help")
+        await expect(page.locator("#profile-edit-about-help")).to_contain_text("Markdown supported")
+        await page.get_by_role("button", name="Preview profile", exact=True).click()
+        preview = page.locator(".profile-preview-content")
+        await rich_bio(preview)
+        await expect(preview).not_to_contain_text("555-0100-private")
+        await preview.get_by_role("link", name="Profile guide", exact=True).click()
+        assert page.url == check.base_url + path + "/edit", "Preview link left unsaved edits"
+        await page.set_viewport_size({"width": 1280, "height": 900})
+        await bio.fill("")
+        await expect(preview).to_contain_text("No profile details added yet")
+        await bio.press_sequentially("## Debounced bio", delay=10)
+        await expect(preview.get_by_role("heading", name="Debounced bio", exact=True)).to_be_visible()
+        assert [source for source in requests if "Debounced" in source] == ["## Debounced bio"], requests
+        count = len(requests)
+        await page.locator("#profile-edit-name").fill("Unsaved Markdown profile")
+        await page.wait_for_timeout(350)  # One full debounce window: unrelated fields must not render the bio again.
+        assert len(requests) == count, "Changing the name re-rendered unchanged Markdown"
+        await bio.fill("## Delayed bio")
+        await asyncio.wait_for(delayed.wait(), 10)
+        await bio.fill("## Fresh bio")
+        await expect(preview.get_by_role("heading", name="Debounced bio", exact=True)).to_have_count(0)
+        await expect(preview.get_by_role("heading", name="Fresh bio", exact=True)).to_be_visible()
+        release.set()
+        await asyncio.wait_for(completed.wait(), 10)
+        await expect(preview.get_by_role("heading", name="Fresh bio", exact=True)).to_be_visible()
+        await expect(preview.get_by_role("heading", name="Delayed bio", exact=True)).to_have_count(0)
+        await bio.fill("## Retry formatting")
+        await expect(preview.get_by_role("status")).to_have_text("Formatting unavailable.")
+        await expect(preview).to_contain_text("## Retry formatting")
+        fail_format = False
+        await preview.get_by_role("button", name="Retry formatting", exact=True).click()
+        await expect(preview.get_by_role("heading", name="Retry formatting", exact=True)).to_be_visible()
+        await bio.fill(PROFILE_MARKDOWN)
+        await rich_bio(preview)
+        await page.set_viewport_size({"width": 320, "height": 900})
+        await check.check_layout(page, f"{kind}-live-markdown-preview", 320)
+        check.visited += 1
+        await page.get_by_role("button", name="Cancel", exact=True).click()
+        await expect(page).to_have_url(check.base_url + path)
+    finally:
+        release.set()
+        await page.context.unroute("**/_api/**", fixture)
+
+
 async def profile_themes(check: SmokeCheck, page: Page) -> None:
     for mode in ("light", "dark"):
         for palette in PALETTES:
@@ -885,6 +1049,8 @@ async def run(args) -> int:
                 ("league-banner-upload", 320, lambda check, page: image_upload(check, page, "league")),
                 ("organizer-tools", 320, organizer_tools),
                 ("profile-theme-matrix", 360, profile_themes),
+                ("player-markdown", 320, lambda check, page: profile_markdown(check, page, "player")),
+                ("team-markdown", 320, lambda check, page: profile_markdown(check, page, "team")),
             ):
                 async with isolated_page(check, browser) as page:
                     await page.set_viewport_size({"width": width, "height": 900})

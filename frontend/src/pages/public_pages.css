@@ -1,7 +1,7 @@
 /* Public discovery and event identity for Arctos. */
-.arctos-app .arctos-page-banner { position: relative; max-width: 760px; margin: 0 auto 1rem; padding: .5rem 0 .25rem; text-align: center; }
-.arctos-app .arctos-page-banner h1 { margin: 0 0 .65rem; padding: 0; font-size: clamp(1.65rem, 3.2vw, 2.25rem); letter-spacing: -.035em; }
-.arctos-app .arctos-intro-dismiss { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: .5rem; background: transparent; color: var(--ui-muted); font-size: .875rem; cursor: pointer; }
+.arctos-app .arctos-page-banner { position: relative; max-width: 760px; margin: 0 auto 1.5rem; padding: .5rem 0 1rem; text-align: center; }
+.arctos-app .arctos-page-banner h1 { margin: 0 0 .65rem; padding: 0 44px; font-size: clamp(1.65rem, 3.2vw, 2.25rem); letter-spacing: -.035em; }
+.arctos-app .arctos-intro-dismiss { position: absolute; top: 0; right: 0; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: .5rem; background: transparent; color: var(--ui-muted); font-size: .875rem; cursor: pointer; }
 .arctos-app .arctos-intro-dismiss:hover { background: var(--ui-surface-hover); color: var(--ui-text); }
 .arctos-app .arctos-page-banner p { color: var(--ui-muted); max-width: 650px; margin: 0 auto .25rem; line-height: 1.6; }
 .arctos-app .arctos-page-banner[hidden] { display: none; }

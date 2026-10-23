@@ -24,10 +24,11 @@ can be collapsed with a chevron and restored in Appearance settings. Profile, to
 - `home-registration-mobile.png`: pending approval and unpaid badges for a fictional player registration.
 - `organizer-tools-mobile.png`: compact organizer menu in the event banner.
 - `organizer-settings-mobile.png`: flat settings with expanded referee options and consistent checkboxes.
+- `penalty-types-mobile.png`: Add beside the penalty heading, with labeled fields stacked for phones.
 - `profile-crop-mobile.png`: image positioning within the profile preview, with one Zoom control.
 - `profile-edit-mobile.png`: cover and avatar controls above unframed editing fields.
-- `profile-preview-mobile.png`: the unsaved profile preview on a phone.
-- `profile-edit-desktop.png`: live preview beside the editing fields.
+- `profile-preview-mobile.png`: the unsaved profile preview with a Markdown bio on a phone.
+- `profile-edit-desktop.png`: live Markdown preview beside the editing fields.
 - `profile-history-mobile.png`: a plain history table with contained horizontal scrolling.
 - `stones-mobile.png`: 360px playback and sound selection controls.
 - `match-mobile.png`: 360px full page, including point controls and fixed match actions.

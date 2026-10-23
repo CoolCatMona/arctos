@@ -1,6 +1,8 @@
 //! Local image drafts shared by the profile preview and its final Save action.
 
 use super::image_crop::crop_rect;
+#[cfg(target_arch = "wasm32")]
+use super::image_crop::focus_crop;
 use dioxus::prelude::*;
 use std::rc::Rc;
 
@@ -228,7 +230,7 @@ pub fn ProfileImageEditor(
     let mut menu = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let mut loading = use_signal(|| false);
-    let mut drag = use_signal(|| None::<(i32, f64, f64, f64, f64)>);
+    let mut drag = use_signal(|| None::<(i32, f64, f64, f64, f64, bool)>);
     let noun = if avatar { "photo" } else { "banner" };
     let label = if avatar {
         "Profile photo"
@@ -302,13 +304,17 @@ pub fn ProfileImageEditor(
                     crate::appearance::focus_control(frame_id);
                     capture_pointer(frame_id, event.pointer_id(), true);
                     if let Some(image) = draft.read().selected.as_ref() {
-                        drag.set(Some((event.pointer_id(), event.client_coordinates().x, event.client_coordinates().y, image.x, image.y)));
+                        drag.set(Some((event.pointer_id(), event.client_coordinates().x, event.client_coordinates().y, image.x, image.y, false)));
                     }
                 },
                 onpointermove: move |event: Event<PointerData>| {
                     if locked { return; }
-                    if let Some((pointer, start_x, start_y, initial_x, initial_y)) = drag() {
+                    if let Some((pointer, start_x, start_y, initial_x, initial_y, moved)) = drag() {
                         if pointer != event.pointer_id() { return; }
+                        if !moved {
+                            if (event.client_coordinates().x - start_x).hypot(event.client_coordinates().y - start_y) < 4.0 { return; }
+                            drag.set(Some((pointer, start_x, start_y, initial_x, initial_y, true)));
+                        }
                         #[cfg(target_arch = "wasm32")]
                         if let Some(element) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id(frame_id)) {
                             let bounds = element.get_bounding_client_rect();
@@ -325,7 +331,24 @@ pub fn ProfileImageEditor(
                     }
                 },
                 onpointerup: move |event: Event<PointerData>| {
-                    if drag().is_some_and(|value| value.0 == event.pointer_id()) { drag.set(None); capture_pointer(frame_id, event.pointer_id(), false); }
+                    if let Some((pointer, _, _, _, _, moved)) = drag() {
+                        if pointer != event.pointer_id() { return; }
+                        if !moved && !locked {
+                            #[cfg(target_arch = "wasm32")]
+                            if let Some(element) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id(frame_id)) {
+                                let bounds = element.get_bounding_client_rect();
+                                if bounds.width() > 0.0 && bounds.height() > 0.0 {
+                                    if let Some(image) = draft.write().selected.as_mut() {
+                                        let crop = crop_rect(image.width, image.height, if avatar { 1.0 } else { 3.0 }, image.zoom, image.x, image.y);
+                                        (image.x, image.y) = focus_crop(image.width, image.height, crop,
+                                            (event.client_coordinates().x - bounds.left()) / bounds.width(),
+                                            (event.client_coordinates().y - bounds.top()) / bounds.height());
+                                    }
+                                }
+                            }
+                        }
+                        drag.set(None); capture_pointer(frame_id, event.pointer_id(), false);
+                    }
                 },
                 onpointercancel: move |event: Event<PointerData>| { drag.set(None); capture_pointer(frame_id, event.pointer_id(), false); },
                 onlostpointercapture: move |_| drag.set(None),
@@ -333,6 +356,17 @@ pub fn ProfileImageEditor(
                     img { src, style: draft.read().style(avatar), alt: "", draggable: "false" }
                 } else if avatar {
                     span { class: "profile-image-placeholder", aria_hidden: "true", i { class: "fas fa-user" } }
+                }
+            }
+            if adjusting {
+                button {
+                    class: "profile-image-reset", r#type: "button", disabled: locked,
+                    aria_label: "Reset position", title: "Reset position",
+                    onclick: move |_| {
+                        // Reset pan only: keep the user's chosen zoom level.
+                        if let Some(image) = draft.write().selected.as_mut() { image.x = 50.0; image.y = 50.0; }
+                    },
+                    i { class: "fas fa-rotate-left", aria_hidden: "true" }
                 }
             }
             input {
@@ -441,7 +475,9 @@ pub fn ProfileImageControls(
     let locked = disabled || busy();
     rsx! {
         div { class: "profile-image-controls", aria_label: "Position {noun}",
-            p { id: "profile-image-position-help", class: "form-text", "Drag the image or use arrow keys to position it." }
+            p { id: "profile-image-position-help", class: "form-text", "Drag or tap to position."
+                span { class: "visually-hidden", " You can also focus the image and use arrow keys. Reset position centers the image without changing zoom." }
+            }
             div { class: "profile-image-zoom-row",
                 label { r#for: "profile-image-zoom", "Zoom" }
                 input { id: "profile-image-zoom", class: "form-range", r#type: "range", min: "1", max: "3", step: "0.01",
@@ -450,22 +486,6 @@ pub fn ProfileImageControls(
                 }
                 button { r#type: "button", class: "btn btn-outline-secondary", disabled: locked,
                     onclick: move |_| { active.set(None); crate::appearance::focus_control(if avatar { "profile-photo-options-trigger" } else { "profile-banner-options-trigger" }); }, "Done" }
-            }
-            details { class: "profile-image-fine-position",
-                summary { "Fine positioning" }
-                div { class: "profile-image-nudges",
-                    for (label, icon, x, y) in [
-                        ("Move image left", "fa-arrow-left", 5.0, 0.0),
-                        ("Move image up", "fa-arrow-up", 0.0, 5.0),
-                        ("Move image down", "fa-arrow-down", 0.0, -5.0),
-                        ("Move image right", "fa-arrow-right", -5.0, 0.0),
-                    ] {
-                        button { r#type: "button", class: "btn btn-outline-secondary", aria_label: label, title: label, disabled: locked,
-                            onclick: move |_| nudge(draft, x, y), i { class: "fas {icon}", aria_hidden: "true" } }
-                    }
-                    button { r#type: "button", class: "btn btn-outline-secondary", disabled: locked,
-                        onclick: move |_| { if let Some(image) = draft.write().selected.as_mut() { image.x = 50.0; image.y = 50.0; } }, "Center" }
-                }
             }
             span { class: "visually-hidden", aria_live: "polite", "Editing {noun}. Changes are saved with your profile." }
         }

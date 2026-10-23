@@ -7,7 +7,7 @@ pub fn CreateEvent() -> Element {
         div { class: "arctos-create-event",
             header { class: "arctos-page-intro arctos-centered-intro",
                 div { class: "arctos-brand-mark", aria_hidden: "true", i { class: "fas fa-plus" } }
-                h1 { "Create an event" }
+                h1 { "Create an Event" }
                 p { "Choose a tournament or a league." }
             }
             div { class: "arctos-choice-grid",
@@ -20,7 +20,7 @@ pub fn CreateEvent() -> Element {
                         li { "Independent team and player registration" }
                         li { "Separate fees, waivers, and roster limits" }
                     }
-                    Link { to: Route::NewTournament {}, class: "btn btn-primary", "Create tournament" i { class: "fas fa-arrow-right", aria_hidden: "true" } }
+                    Link { to: Route::NewTournament {}, class: "btn btn-primary", "Create an Event" i { class: "fas fa-arrow-right", aria_hidden: "true" } }
                 }
                 article { class: "card arctos-choice-card",
                     div { class: "arctos-choice-icon", aria_hidden: "true", i { class: "fas fa-award" } }

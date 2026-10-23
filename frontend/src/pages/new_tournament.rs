@@ -28,8 +28,8 @@ pub fn NewTournament() -> Element {
                 div { class: "col-12 form-column",
                     div { class: "edit-section",
                         div { class: "edit-section-body",
-                            h1 { "Create a tournament" }
-                            p { "Log in to create and manage your tournament. Both player and team accounts can organize events." }
+                            h1 { "Create an Event" }
+                            p { "Log in to create and manage your event. Both player and team accounts can organize events." }
                             a { class: "btn btn-primary", href: "/login?next=/new-tournament", "Log in to continue" }
                         }
                     }
@@ -43,8 +43,8 @@ pub fn NewTournament() -> Element {
             div { class: "col-12 form-column",
                 div { class: "edit-section",
                     div { class: "edit-section-heading",
-                        h1 { class: "mb-2", "Create a tournament" }
-                        p { class: "text-muted mb-0", "Start with a name and link. Your tournament is a private draft until you publish it." }
+                        h1 { class: "mb-2", "Create an Event" }
+                        p { class: "text-muted mb-0", "Start with a name and link. Your event is a private draft until you publish it." }
                     }
                     div { class: "edit-section-body",
                         if let Some(ref err) = error() {
@@ -74,7 +74,7 @@ pub fn NewTournament() -> Element {
                                             if let Some(url) = res.url {
                                                 nav.push(Route::TournamentSettings { url });
                                             } else {
-                                                error.set(Some("Tournament created but no URL returned.".to_string()));
+                                                error.set(Some("Event created but no URL returned.".to_string()));
                                             }
                                         }
                                         Ok(res) => {
@@ -88,7 +88,7 @@ pub fn NewTournament() -> Element {
                                 });
                             },
                             div { class: "mb-3",
-                                label { r#for: "name", class: "form-label", "Tournament Name" }
+                                label { r#for: "name", class: "form-label", "Event Name" }
                                 input { r#type: "text", class: "form-control", id: "name", name: "name", required: true }
                             }
                             div { class: "mb-3",
@@ -108,7 +108,7 @@ pub fn NewTournament() -> Element {
                                 div { class: "form-text", "Choose a unique, shareable link, such as /summer-cup. {URL_SLUG_ALLOWED_HINT}" }
                             }
                             div { class: "d-grid",
-                                button { r#type: "submit", class: "btn btn-primary", disabled: busy(), if busy() { "Creating tournament…" } else { "Create tournament" } }
+                                button { r#type: "submit", class: "btn btn-primary", disabled: busy(), if busy() { "Creating event…" } else { "Create an Event" } }
                             }
                         }
                     }

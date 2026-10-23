@@ -161,6 +161,8 @@ pub fn LeagueHomeContent(
                     registration_open: d.league.team_registration_open || d.league.player_registration_open,
                     badge_league_url: None,
                     badge_name: None,
+                    if content.is_none() || active_tab == "results" {
+                    div { class: "event-participant-actions", role: "group", aria_label: "League registration",
                     if (d.league.team_registration_open || d.league.player_registration_open) || d.is_current_team_registered || d.is_current_player_registered {
                         LeagueRegistrationButtons {
                             league_url: league_url.clone(),
@@ -176,6 +178,8 @@ pub fn LeagueHomeContent(
                         }
                     } else {
                         button { r#type: "button", class: "btn btn-secondary", disabled: true, "Registration closed" }
+                    }
+                    }
                     }
                     if viewer_is_to {
                         OrganizerTools {

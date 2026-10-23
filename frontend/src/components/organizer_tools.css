@@ -26,7 +26,7 @@
 .arctos-app .sidecomp-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .75rem; margin-bottom: 1rem; }
 .arctos-app .sidecomp-heading h1, .arctos-app .sidecomp-heading h2 { margin: 0; }
 @media (max-width: 575px) {
-  .arctos-app .sidecomp-heading .organizer-tools-dropdown { left: 0; right: auto; }
-  .arctos-app .event-hero-actions > .organizer-tools { width: 100%; }
-  .arctos-app .event-hero-actions .organizer-tools-dropdown { right: 50%; transform: translateX(50%); width: min(19rem, calc(100vw - 32px)); }
+  .arctos-app .sidecomp-heading .organizer-tools-dropdown { right: 0; left: auto; }
+
+  .arctos-app .event-hero-actions .organizer-tools-dropdown { right: 0; width: min(19rem, calc(100vw - 32px)); }
 }

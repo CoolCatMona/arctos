@@ -34,7 +34,8 @@
   background: var(--ui-surface-muted);
   font-size: 2rem;
 }
-.arctos-app .profile-image-camera {
+.arctos-app .profile-image-camera,
+.arctos-app .profile-image-reset {
   position: absolute;
   right: 8px;
   bottom: 8px;
@@ -50,8 +51,12 @@
   box-shadow: 0 2px 6px rgb(0 0 0 / 15%);
 }
 .arctos-app .is-avatar > .profile-image-camera { right: 0; bottom: 0; }
-.arctos-app .profile-image-camera:hover { background: var(--ui-surface-hover); }
-.arctos-app .profile-image-camera:focus-visible { outline: 3px solid var(--ui-link); outline-offset: 2px; }
+.arctos-app .profile-image-reset { top: 8px; left: 8px; right: auto; bottom: auto; }
+.arctos-app .is-avatar > .profile-image-reset { top: 0; left: 0; }
+.arctos-app .profile-image-camera:hover,
+.arctos-app .profile-image-reset:hover { background: var(--ui-surface-hover); }
+.arctos-app .profile-image-camera:focus-visible,
+.arctos-app .profile-image-reset:focus-visible { outline: 3px solid var(--ui-link); outline-offset: 2px; }
 .arctos-app .profile-image-menu-dismiss { position: fixed; inset: 0; border: 0; background: transparent; cursor: default; }
 .arctos-app .profile-image-options {
   position: absolute;
@@ -90,6 +95,3 @@
 .arctos-app .profile-image-zoom-row .form-range::-webkit-slider-thumb { background: var(--ui-link); }
 .arctos-app .profile-image-zoom-row .form-range::-moz-range-thumb { background: var(--ui-link); }
 .arctos-app .profile-image-zoom-row label { flex-shrink: 0; }
-.arctos-app .profile-image-fine-position summary { display: list-item; min-height: 44px; padding: 11px 0; cursor: pointer; color: var(--ui-link); }
-.arctos-app .profile-image-nudges { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.arctos-app .profile-image-nudges .btn { min-width: 44px; min-height: 44px; padding: 8px; }

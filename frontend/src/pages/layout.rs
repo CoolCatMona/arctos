@@ -133,7 +133,7 @@ fn page_title_for_route(route: &Route) -> String {
         Route::TeamProfilePage { id } | Route::TeamProfilePageWithTab { id, .. } => format!("{id}"),
         Route::Stones { .. } => "Stones".into(),
         Route::About { .. } => "About".into(),
-        Route::NewTournament { .. } => "Create Tournament".into(),
+        Route::NewTournament { .. } => "Create an Event".into(),
         Route::LeaguesIndex { .. } => "Leagues".into(),
         Route::CreateEvent { .. } => "Create event".into(),
         Route::NewLeague { .. } => "Create League".into(),

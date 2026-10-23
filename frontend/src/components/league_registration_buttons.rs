@@ -41,12 +41,16 @@ pub fn LeagueRegistrationButtons(
     let player_open = player_registration_open.unwrap_or(registration_open);
 
     rsx! {
-        if show_register_only {
+        if current_user.is_none() {
+            span { class: "text-muted", role: "status", "Loading registration…" }
+        } else if show_register_only && (team_open || player_open) {
             a {
                 href: format!("/login?next={}", urlencoding::encode(&format!("/leagues/{league_url}/register"))),
-                class: "btn btn-primary",
+                class: "btn btn-primary event-registration-action",
                 "Log in to register"
             }
+        } else if show_register_only {
+            button { r#type: "button", class: "btn btn-secondary", disabled: true, "Registration closed" }
         } else {
             if user_type == "team" {
                 if is_team_registered {
@@ -72,7 +76,7 @@ pub fn LeagueRegistrationButtons(
                 } else if team_open {
                     Link {
                         to: Route::LeagueRegister { league_url: league_url.clone() },
-                        class: "btn btn-success",
+                        class: "btn btn-primary event-registration-action",
                         "Register"
                     }
                 } else {
@@ -102,7 +106,7 @@ pub fn LeagueRegistrationButtons(
                 } else if player_open {
                     Link {
                         to: Route::LeagueRegister { league_url: league_url.clone() },
-                        class: "btn btn-success",
+                        class: "btn btn-primary event-registration-action",
                         "Register"
                     }
                 } else {
@@ -117,7 +121,7 @@ pub fn LeagueRegistrationButtons(
                 if team_open || player_open {
                     Link {
                         to: Route::LeagueRegister { league_url: league_url.clone() },
-                        class: "btn btn-success",
+                        class: "btn btn-primary event-registration-action",
                         "Register"
                     }
                 } else {

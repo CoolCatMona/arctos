@@ -154,6 +154,8 @@ pub fn TournamentHomeContent(
                     registration_open: team_open || player_open,
                     badge_league_url: league.map(|l| l.league_url.clone()),
                     badge_name: league.map(|l| l.name.clone()),
+                    if content.is_none() || matches!(active_tab.as_str(), "schedule" | "results" | "bracket") {
+                    div { class: "event-participant-actions", role: "group", aria_label: "Event registration",
                     if let Some(ref l) = d.tournament.league {
                         LeagueRegistrationButtons {
                             league_url: l.league_url.clone(),
@@ -167,7 +169,9 @@ pub fn TournamentHomeContent(
                             on_edit_registration: move |_| show_league_edit_modal.set(true),
                         }
                     } else {
-                        if let Some(current_user) = me_res.read().as_ref().and_then(|r| r.as_ref().ok()) {
+                        if me_res.read().is_none() {
+                            span { class: "text-muted", role: "status", "Loading registration…" }
+                        } else if let Some(current_user) = me_res.read().as_ref().and_then(|r| r.as_ref().ok()) {
                             if current_user.user_type == "team" {
                                 if d.is_current_team_registered {
                                     Link { to: Route::Invitations { url: url.clone() }, class: "btn btn-outline-secondary", "Manage roster" }
@@ -177,7 +181,7 @@ pub fn TournamentHomeContent(
                                         "Edit Registration"
                                     }
                                 } else if d.tournament.team_registration_open {
-                                    Link { to: Route::TournamentRegister { url: url.clone() }, class: "btn btn-success", "Register" }
+                                    Link { to: Route::TournamentRegister { url: url.clone() }, class: "btn btn-primary event-registration-action", "Register" }
                                 } else {
                                     button {
                                         r#type: "button",
@@ -194,7 +198,7 @@ pub fn TournamentHomeContent(
                                         "Edit Registration"
                                     }
                                 } else if d.tournament.player_registration_open {
-                                    Link { to: Route::TournamentRegister { url: url.clone() }, class: "btn btn-success", "Register" }
+                                    Link { to: Route::TournamentRegister { url: url.clone() }, class: "btn btn-primary event-registration-action", "Register" }
                                 } else {
                                     button {
                                         r#type: "button",
@@ -205,7 +209,7 @@ pub fn TournamentHomeContent(
                                 }
                             } else {
                                 if d.tournament.team_registration_open || d.tournament.player_registration_open {
-                                    Link { to: Route::TournamentRegister { url: url.clone() }, class: "btn btn-success", "Register" }
+                                    Link { to: Route::TournamentRegister { url: url.clone() }, class: "btn btn-primary event-registration-action", "Register" }
                                 } else {
                                     button {
                                         r#type: "button",
@@ -215,13 +219,17 @@ pub fn TournamentHomeContent(
                                     }
                                 }
                             }
-                        } else {
+                        } else if team_open || player_open {
                             a {
                                 href: format!("/login?next={}", urlencoding::encode(&format!("/{url}/register"))),
-                                class: "btn btn-primary",
+                                class: "btn btn-primary event-registration-action",
                                 "Log in to register"
                             }
+                        } else {
+                            button { r#type: "button", class: "btn btn-secondary", disabled: true, "Registration closed" }
                         }
+                    }
+                    }
                     }
 
                     if viewer_is_to {
