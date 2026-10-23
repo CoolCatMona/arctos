@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::{BannerAccountKind, BannerUpload};
+use crate::components::{BannerAccountKind, BannerUpload, EventBannerPhoto};
 use crate::Route;
 use dioxus::prelude::*;
 use std::collections::HashMap;
@@ -468,7 +468,8 @@ pub fn TournamentSettings(url: String) -> Element {
     let mut draft_values = use_signal(HashMap::<String, String>::new);
     let mut draft_checks = use_signal(HashMap::<String, bool>::new);
     let mut draft_initialized = use_signal(|| false);
-    let mut banner_photo = use_signal(|| None::<String>);
+    let local_banner_photo = use_signal(|| None::<String>);
+    let mut banner_photo = try_use_context::<EventBannerPhoto>().map_or(local_banner_photo, |shared| shared.0);
     let banner_busy = use_signal(|| false);
     let mut banner_initialized = use_signal(|| false);
     let mut saving = use_signal(|| false);
@@ -541,7 +542,7 @@ pub fn TournamentSettings(url: String) -> Element {
             div { class: "penalty-settings-wrap organizer-settings",
                 div { class: "row",
                 div { class: "col-12",
-                    h1 { "{d.tournament.name} - Settings" }
+                    h2 { "Settings" }
                     nav { aria_label: "breadcrumb",
                         ol { class: "breadcrumb",
                             li { class: "breadcrumb-item", Link { to: Route::TournamentHome { url: url.clone() }, "{d.tournament.name}" } }
@@ -553,11 +554,11 @@ pub fn TournamentSettings(url: String) -> Element {
 
             div { class: "row",
                 div { class: "col-12",
-                    div { class: "card",
-                        div { class: "card-header",
+                    div { class: "edit-section",
+                        div { class: "edit-section-heading",
                             h5 { class: "mb-0", "Tournament Information" }
                         }
-                        div { class: "card-body",
+                        div { class: "edit-section-body",
                             BannerUpload { kind: BannerAccountKind::Tournament, account_id: url.clone(), photo: banner_photo, busy: banner_busy }
                             form {
                                 id: "tournament-settings-form",
@@ -888,9 +889,9 @@ pub fn TournamentSettings(url: String) -> Element {
 
                 div { class: "col-12 mt-4",
                     if d.tournament.league.is_none() {
-                    details { class: "section-disclosure penalty-types-section",
-                        summary { class: "card-header", h2 { class: "h5 mb-0", "Penalty Types ({d.penalty_types.len()})" } }
-                        div { class: "card-body",
+                    details { class: "edit-section section-disclosure penalty-types-section",
+                        summary { class: "edit-section-heading", h2 { class: "h5 mb-0", "Penalty Types ({d.penalty_types.len()})" } }
+                        div { class: "edit-section-body",
                             div { class: "table-responsive",
                                 table { class: "table table-sm",
                                     thead {
@@ -923,11 +924,11 @@ pub fn TournamentSettings(url: String) -> Element {
                     }
 
                     if d.tournament.league.is_none() {
-                    details { class: "card section-disclosure mt-4", open: true,
-                        summary { class: "card-header",
+                    details { class: "edit-section section-disclosure mt-4", open: true,
+                        summary { class: "edit-section-heading",
                             h2 { class: "h5 mb-0", "Tournament Organizers ({d.to_entries.len()})" }
                         }
-                        div { class: "card-body",
+                        div { class: "edit-section-body",
                             if !d.to_entries.is_empty() {
                                 ul { class: "list-group list-group-flush mb-3",
                                     for to_entry in d.to_entries.iter() {

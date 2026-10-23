@@ -2,8 +2,18 @@ use crate::appearance::focus_control;
 use dioxus::prelude::*;
 
 #[component]
-pub fn OrganizerTools(children: Element) -> Element {
+pub fn OrganizerTools(
+    children: Element,
+    #[props(default = "organizer-tools".to_string())] id_prefix: String,
+    #[props(default = "Organizer tools".to_string())] label: String,
+) -> Element {
     let mut open = use_signal(|| false);
+    let route = use_route::<crate::Route>();
+    use_effect(use_reactive(&route, move |_| open.set(false)));
+    let trigger_id = format!("{id_prefix}-trigger");
+    let options_id = format!("{id_prefix}-options");
+    let keyboard_trigger = trigger_id.clone();
+    let dismiss_trigger = trigger_id.clone();
     rsx! {
         style { {include_str!("organizer_tools.css")} }
         div {
@@ -13,24 +23,24 @@ pub fn OrganizerTools(children: Element) -> Element {
                     event.prevent_default();
                     event.stop_propagation();
                     open.set(false);
-                    focus_control("organizer-tools-trigger");
+                    focus_control(&keyboard_trigger);
                 }
             },
             button {
-                id: "organizer-tools-trigger", class: "organizer-tools-trigger", r#type: "button",
-                aria_expanded: "{open()}", aria_controls: "organizer-tools-options",
+                id: trigger_id, class: "organizer-tools-trigger", r#type: "button",
+                aria_expanded: "{open()}", aria_controls: options_id.clone(),
                 onclick: move |_| open.set(!open()),
-                "Organizer tools"
+                "{label}"
                 i { class: "fas fa-chevron-down", aria_hidden: "true" }
             }
             if open() {
                 button {
                     class: "organizer-tools-dismiss", r#type: "button", tabindex: "-1",
                     aria_label: "Dismiss organizer tools",
-                    onclick: move |_| { open.set(false); focus_control("organizer-tools-trigger"); },
+                    onclick: move |_| { open.set(false); focus_control(&dismiss_trigger); },
                 }
                 div {
-                    id: "organizer-tools-options", class: "organizer-tools-dropdown",
+                    id: options_id.clone(), class: "organizer-tools-dropdown",
                     onclick: move |_| open.set(false),
                     {children}
                 }

@@ -1,4 +1,4 @@
-//! Change password form card for use on own player/team profile pages.
+//! Change password form for the account owner's profile editor.
 
 use crate::api;
 use dioxus::prelude::*;
@@ -13,11 +13,11 @@ pub fn ChangePasswordCard() -> Element {
     let mut loading = use_signal(|| false);
 
     rsx! {
-        div { class: "card mt-3",
-            div { class: "card-header",
+        div { class: "edit-section mt-3",
+            div { class: "edit-section-heading",
                 h5 { class: "mb-0", "Change password" }
             }
-            div { class: "card-body",
+            div { class: "edit-section-body",
                 if let Some(ref e) = error() {
                     div { class: "alert alert-danger py-2", role: "alert", "{e}" }
                 }

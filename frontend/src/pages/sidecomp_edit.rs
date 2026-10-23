@@ -74,7 +74,7 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
         style { {include_str!("../components/organizer_tools.css")} }
         div { class: "row",
             div { class: "col-12 sidecomp-form",
-                h1 { "Edit side competition" }
+                h2 { "Edit side competition" }
                 div { class: "mb-3",
                     Link {
                         to: Route::SideCompDetail { url: url_for_back, comp_id },

@@ -3,14 +3,17 @@
     uv run python scripts/check_profile_ui.py --base-url http://127.0.0.1:8444 \
         --browser-executable /usr/bin/google-chrome --screenshots /tmp/arctos-profiles
 
-Uses the shared loopback/demo marker and mutation guard. Image POST/DELETE
-responses and deterministic raster fixtures are fulfilled in the browser; no profile or event changes
-reach the backend. The only real mutation is signing into a demo account.
+Uses the shared loopback/demo marker and mutation guard. Profile PUT and image
+POST/DELETE responses and deterministic raster fixtures are fulfilled in the browser;
+no profile or event changes reach the backend. The only real mutation is signing into a demo account.
 """
 
 from __future__ import annotations
 
 import asyncio
+from email import policy
+from email.parser import BytesParser
+import json
 from io import BytesIO
 import re
 import sys
@@ -19,7 +22,7 @@ from urllib.parse import urlsplit
 from PIL import Image
 from playwright.async_api import Page, Route, async_playwright, expect
 
-from check_appearance_ui import PALETTES, check_contrast, choose, close_menu, isolated_page
+from check_appearance_ui import PALETTES, check_contrast, choose, close_menu, isolated_page, open_menu
 from check_mobile_ui import DEMO_USER, TIMEOUT_MS, SmokeCheck, api_json, arguments
 
 BANNER_KEY = "arctos.page-banners.hidden.v1"
@@ -33,10 +36,19 @@ INTRODUCTIONS = (
 
 
 async def restore_banner(page: Page) -> None:
-    await page.locator("#utility-trigger").click()
-    await page.get_by_role("button", name="Show page banner", exact=True).click()
-    await expect(page.locator("#utility-options")).to_be_hidden()
-    await expect(page.locator("#page-banner-heading")).to_be_focused()
+    await open_menu(page)
+    setting = page.get_by_role("checkbox", name="Show page introduction", exact=True)
+    await expect(setting).not_to_be_checked()
+    target = await page.locator('label[for="page-introduction-setting"]').bounding_box()
+    assert target and target["width"] >= 44 and target["height"] >= 44, target
+    await setting.check()
+    await expect(page.locator("#page-banner")).to_be_visible()
+    await expect(page.locator("#appearance-options")).to_be_visible()
+    await setting.uncheck()
+    await expect(page.locator("#page-banner")).to_be_hidden()
+    await expect(page.locator("#appearance-options")).to_be_visible()
+    await setting.check()
+    await close_menu(page)
 
 
 async def introductions(check: SmokeCheck, page: Page) -> None:
@@ -50,11 +62,20 @@ async def introductions(check: SmokeCheck, page: Page) -> None:
         dismiss = page.locator("#page-banner-dismiss")
         box = await dismiss.bounding_box()
         assert box and box["width"] >= 44 and box["height"] >= 44, box
+        content = await page.locator("#page-banner-content").bounding_box()
+        assert content and box["y"] >= content["y"] + content["height"] - 1
+        assert abs(box["x"] + box["width"] / 2 - content["x"] - content["width"] / 2) <= 1
+        await expect(dismiss).to_have_attribute("aria-label", f"Collapse {title} introduction")
+        await expect(dismiss).to_have_attribute("aria-controls", "page-banner-content")
+        await expect(dismiss).to_have_attribute("aria-expanded", "true")
+        await expect(dismiss.locator(".fa-chevron-up")).to_have_count(1)
+        await expect(dismiss.locator(".fa-xmark")).to_have_count(0)
         if target.endswith("search"):
             await page.locator(target).fill("demo")
         await dismiss.focus()
         await page.keyboard.press("Enter")
         await expect(banner).to_be_hidden()
+        await expect(dismiss).to_have_attribute("aria-expanded", "false")
         await expect(page.locator(focus)).to_be_focused()
         assert await page.evaluate("!['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)")
         if target.endswith("search"):
@@ -199,8 +220,10 @@ async def detail_banners(check: SmokeCheck, page: Page) -> None:
             await page.locator("#utility-trigger").click()
             await expect(page.locator("#utility-options")).to_be_visible()
             await expect(page.locator("#page-banner-restore")).to_have_count(0)
-            await page.keyboard.press("Escape")
-            await expect(page.locator("#utility-options")).to_be_hidden()
+            await page.get_by_role("button", name="Appearance", exact=True).click()
+            await expect(page.locator("#appearance-options")).to_be_visible()
+            await expect(page.locator("#page-introduction-setting")).to_have_count(0)
+            await close_menu(page)
 
         await visible_detail()
         await page.goto(check.base_url + next_path, wait_until="domcontentloaded")
@@ -287,7 +310,8 @@ async def adjust_crop(page: Page, crop_id: str) -> None:
 
 
 async def image_upload(check: SmokeCheck, page: Page, kind: str, avatar: bool = False) -> None:
-    profile = kind in ("player", "team")
+    assert kind in ("tournament", "league"), "Profile images use the staged final Save workflow"
+    profile = False
     noun = "photo" if avatar else "banner"
     field = "profile_photo" if avatar else "banner_photo"
     owner = f"demo-{kind}" if profile else DEMO_USER
@@ -414,6 +438,9 @@ async def image_upload(check: SmokeCheck, page: Page, kind: str, avatar: bool = 
         await expect(widget.get_by_role("alert")).to_have_text(error)
         await expect(crop).to_be_visible()
         await expect(preview).to_have_attribute("src", check.base_url + "/static/" + current)
+        await expect(page.locator(".event-banner-image img")).to_have_attribute(
+            "src", check.base_url + "/static/" + current
+        )
         assert await widget.locator("input[type=range]").evaluate_all("els => els.map(el => el.value)") == positions
         await draft_retained()
         succeed = True
@@ -439,6 +466,9 @@ async def image_upload(check: SmokeCheck, page: Page, kind: str, avatar: bool = 
             original_center = original.getpixel((original.width // 2, original.height // 2))
             assert sum(abs(a - b) for a, b in zip(center, original_center)) > 20, "Saved crop ignored position controls"
         assert await page.evaluate("url => cropUrls.revoked.includes(url)", saved_url)
+        await expect(page.locator(".event-banner-image img")).to_have_attribute(
+            "src", check.base_url + "/static/smoke-profile/new.png"
+        )
         viewer = await page.context.new_page()
         check.observe(viewer)
         try:
@@ -455,6 +485,8 @@ async def image_upload(check: SmokeCheck, page: Page, kind: str, avatar: bool = 
         await widget.get_by_role("button", name="Remove " + noun, exact=True).click()
         await expect(widget.get_by_role("status")).to_have_text(noun.title() + " removed.")
         await expect(preview).to_have_count(0)
+        await expect(page.locator(".event-banner-image img")).to_have_count(0)
+        await expect(page.locator(".event-banner-image")).to_be_visible()
         await draft_retained()
         assert writes == ["POST", "POST", "DELETE"], writes
         await check.check_layout(page, f"{kind}-{noun}-upload", 320)
@@ -471,6 +503,287 @@ async def image_upload(check: SmokeCheck, page: Page, kind: str, avatar: bool = 
             "Crop object URL leaked on route change"
         )
         assert writes == ["POST", "POST", "DELETE"], "Leaving the crop submitted it"
+    finally:
+        gate.set()
+        await page.context.unroute("**/*", fixture)
+
+
+def multipart_parts(request) -> dict[str, bytes]:
+    content_type = request.headers["content-type"]
+    assert content_type.startswith("multipart/form-data;"), content_type
+    message = BytesParser(policy=policy.default).parsebytes(
+        f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode() + request.post_data_buffer
+    )
+    parts = {}
+    for part in message.iter_parts():
+        name = part.get_param("name", header="content-disposition")
+        assert name not in parts, f"Duplicate profile field: {name}"
+        parts[name] = part.get_payload(decode=True)
+    return parts
+
+
+async def staged_adjust_crop(page: Page, avatar: bool) -> None:
+    viewport = page.locator("#image-crop-avatar" if avatar else "#image-crop-banner")
+    zoom = page.locator("#profile-image-zoom")
+    await expect(page.locator(".profile-image-controls input[type=range]")).to_have_count(1)
+    await zoom.focus()
+    await page.keyboard.press("End")
+    await expect(zoom).to_have_value("3")
+    image = viewport.locator("img")
+    style = await image.get_attribute("style")
+    await viewport.focus()
+    await page.keyboard.press("ArrowLeft")
+    await expect(image).not_to_have_attribute("style", style)
+    style = await image.get_attribute("style")
+    await viewport.scroll_into_view_if_needed()
+    box = await viewport.bounding_box()
+    assert box
+    x, y = box["x"] + box["width"] * 0.3, box["y"] + box["height"] * 0.3
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x + 20, y + 10, steps=5)
+    await page.mouse.up()
+    await expect(image).not_to_have_attribute("style", style)
+    if avatar:
+        style = await image.get_attribute("style")
+        cdp = await page.context.new_cdp_session(page)
+        try:
+            point = {"x": x, "y": y, "id": 1}
+            await cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [point]})
+            await cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{**point, "x": x - 15}]})
+            await cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+            await expect(image).not_to_have_attribute("style", style)
+        finally:
+            await cdp.detach()
+    fine = page.locator(".profile-image-fine-position")
+    if not await fine.get_attribute("open") == "":
+        await fine.locator("summary").click()
+    await fine.get_by_role("button", name="Center", exact=True).click()
+    style = await image.get_attribute("style")
+    await fine.get_by_role("button", name="Move image left", exact=True).click()
+    await expect(image).not_to_have_attribute("style", style)
+    controls = await fine.locator("button").evaluate_all(
+        "els => els.map(el => {const r=el.getBoundingClientRect();return [r.width,r.height];})"
+    )
+    assert all(width >= 44 and height >= 44 for width, height in controls), controls
+
+
+async def staged_profile_edit(check: SmokeCheck, page: Page, kind: str) -> None:
+    """Profile fields and both images remain local until one guarded multipart Save."""
+    owner = f"demo-{kind}"
+    await check.login(page, owner)
+    path, api_path = f"/{kind}s/{owner}", f"/_api/{kind}s/{owner}"
+    data = await api_json(page.context, check.base_url, api_path)
+    data[kind].update(profile_photo="smoke-profile/photo-old.png", banner_photo="smoke-profile/banner-old.png")
+    rasters = {"photo-old.png": SMALL_PNG, "banner-old.png": PNG}
+    writes = []
+    succeed = False
+    error = "Smoke check: profile save failed. Your changes are still here."
+    gate, seen = asyncio.Event(), asyncio.Event()
+    check.mock_gate = gate
+
+    async def fixture(route: Route) -> None:
+        request, parsed = route.request, urlsplit(route.request.url)
+        if parsed.netloc != check.origin:
+            await route.fallback()
+        elif request.method == "GET" and parsed.path.startswith("/static/smoke-profile/"):
+            await route.fulfill(body=rasters[parsed.path.rsplit("/", 1)[1]], content_type="image/png")
+        elif request.method == "GET" and parsed.path == api_path:
+            await route.fulfill(json=data)
+        elif request.method == "PUT" and parsed.path == api_path:
+            parts = multipart_parts(request)
+            writes.append(parts)
+            seen.set()
+            await gate.wait()
+            if not succeed:
+                await route.fulfill(json={"success": False, "error": error})
+            else:
+                data[kind].update(json.loads(parts["profile"]))
+                for field, basename in (("profile_photo", "photo-new.png"), ("banner_photo", "banner-new.png")):
+                    if field in parts:
+                        rasters[basename] = parts[field]
+                        data[kind][field] = "smoke-profile/" + basename
+                    elif parts.get("remove_" + field) == b"true":
+                        data[kind][field] = None
+                await route.fulfill(json={"success": True})
+        else:
+            await route.fallback()
+
+    async def image_menu(avatar: bool, action: str) -> None:
+        noun = "photo" if avatar else "banner"
+        await page.locator(f"#profile-{noun}-options-trigger").click()
+        await page.locator(f"#profile-{noun}-options").get_by_role("button", name=action, exact=True).click()
+
+    async def choose_image(avatar: bool) -> None:
+        async with page.expect_file_chooser() as chooser:
+            await image_menu(avatar, "Replace image")
+        await (await chooser.value).set_files(
+            {"name": "draft.png", "mimeType": "image/png", "buffer": SMALL_PNG if avatar else PNG}
+        )
+        crop = page.locator("#image-crop-avatar" if avatar else "#image-crop-banner")
+        await expect(crop.locator("img")).to_have_attribute("src", re.compile(r"^blob:"))
+        await expect(crop).to_be_focused()
+        await expect(page.locator("#profile-image-zoom")).to_be_visible()
+
+    async def fields_visible() -> None:
+        edit = page.get_by_role("button", name="Edit details", exact=True)
+        if await edit.is_visible():
+            await edit.click()
+
+    async def preview_visible() -> None:
+        preview = page.get_by_role("button", name="Preview profile", exact=True)
+        if await preview.is_visible():
+            await preview.click()
+
+    await page.add_init_script(URL_MONITOR)
+    await page.context.route("**/*", fixture)
+    try:
+        await page.goto(check.base_url + path + "/edit", wait_until="domcontentloaded")
+        form = page.locator("#profile-edit-form")
+        save = form.locator("button[type=submit]")
+        await expect(form).to_be_visible()
+        await expect(form.locator(".card")).to_have_count(0)
+        await expect(save).to_be_disabled()
+        settings = page.locator(".profile-account-settings")
+        await settings.locator("summary").click()
+        await expect(settings.get_by_role("heading", name="Connected apps", exact=True)).to_be_visible()
+        await settings.locator("summary").click()
+        await page.locator("#profile-edit-name").fill("Local profile preview")
+        await page.locator("#profile-edit-location").fill("Preview City")
+        await page.locator("#profile-edit-about").fill("**Unsaved preview bio**")
+        if kind == "player":
+            await page.locator("#profile-edit-phone").fill("555-0100-private")
+        await preview_visible()
+        await expect(page.locator("#profile-preview-name")).to_have_text("Local profile preview")
+        await expect(page.locator("#profile-edit-preview .profile-location")).to_have_text("Preview City")
+        await expect(page.locator(".profile-preview-content")).to_contain_text("Unsaved preview bio")
+        await expect(page.locator("#profile-edit-preview")).not_to_contain_text("555-0100-private")
+        await page.set_viewport_size({"width": 1280, "height": 900})
+        await page.locator("#profile-edit-name").fill("Updated live name")
+        await expect(page.locator("#profile-preview-name")).to_have_text("Updated live name")
+        await expect(page.locator(".profile-preview-content strong")).to_have_text("Unsaved preview bio")
+        await check.check_layout(page, f"{kind}-live-profile-editor-desktop", 1280)
+        check.visited += 1
+        await page.set_viewport_size({"width": 320, "height": 900})
+        await fields_visible()
+        await choose_image(False)
+        await choose_image(True)
+        assert not writes, "Selecting images wrote to the backend"
+        await image_menu(True, "Remove photo")
+        assert not writes, "Removing a staged image wrote to the backend"
+        await form.get_by_role("button", name="Cancel", exact=True).click()
+        await expect(page).to_have_url(check.base_url + path)
+        assert await page.evaluate("cropUrls.created.every(url => cropUrls.revoked.includes(url))")
+        await expect(page.locator(".profile-avatar[src]")).to_have_attribute(
+            "src", check.base_url + "/static/smoke-profile/photo-old.png"
+        )
+        await page.goto(check.base_url + path + "/edit", wait_until="domcontentloaded")
+        await expect(save).to_be_disabled()
+        await image_menu(False, "Remove banner")
+        await image_menu(True, "Remove photo")
+        await expect(page.locator("#image-crop-banner img, #image-crop-avatar img")).to_have_count(0)
+        assert not writes, "Removal must be staged until final Save"
+        await form.get_by_role("button", name="Cancel", exact=True).click()
+        await expect(page).to_have_url(check.base_url + path)
+        await expect(page.locator(".profile-cover-image")).to_have_attribute(
+            "src", check.base_url + "/static/smoke-profile/banner-old.png"
+        )
+        await page.goto(check.base_url + path + "/edit", wait_until="domcontentloaded")
+        await page.locator("#profile-edit-name").fill("")
+        await preview_visible()
+        await save.click()
+        await expect(page.locator(".profile-edit-error")).to_contain_text("Enter a display name")
+        await expect(page.locator("#profile-edit-name")).to_be_visible()
+        await expect(page.locator("#profile-edit-name")).to_be_focused()
+        assert not writes, "Required name validation sent a profile update"
+        await page.locator("#profile-edit-name").fill("Saved draft name")
+        await expect(page.locator(".profile-edit-error")).to_have_count(0)
+        await page.locator("#profile-edit-location").fill("Saved draft city")
+        await page.locator("#profile-edit-about").fill("**Saved draft bio**")
+        if kind == "player":
+            for filename, body, message in (
+                ("broken.png", b"not an image", "valid JPEG"),
+                ("large.png", PNG + bytes(8 * 1024 * 1024), "8 MB"),
+            ):
+                await page.locator("#profile-banner-file").set_input_files(
+                    {"name": filename, "mimeType": "image/png", "buffer": body}
+                )
+                await expect(page.locator(".profile-image-message[role=alert]")).to_contain_text(message)
+                await expect(page.locator("#profile-image-zoom")).to_have_count(0)
+                await expect(save).to_be_enabled()
+        await image_menu(False, "Adjust position")
+        await expect(page.locator("#image-crop-banner img")).to_have_attribute("src", re.compile(r"^blob:"))
+        assert not writes, "Adjusting an existing image uploaded it"
+        await choose_image(False)
+        await staged_adjust_crop(page, False)
+        banner_style = await page.locator("#image-crop-banner img").get_attribute("style")
+        await choose_image(True)
+        await staged_adjust_crop(page, True)
+        await expect(page.locator("#image-crop-banner img")).to_have_attribute("style", banner_style)
+        styles = await page.locator(".profile-image-viewport img").evaluate_all(
+            "els => els.map(el => el.getAttribute('style'))"
+        )
+        await page.get_by_role("button", name="Done", exact=True).click()
+        await expect(page.locator("#profile-image-zoom")).to_have_count(0)
+        assert not writes, "Done must retain the crop without uploading"
+        await image_menu(True, "Adjust position")
+        await expect(page.locator("#profile-image-zoom")).to_have_value("3")
+        for palette in PALETTES:
+            mode = "light" if kind == "player" else "dark"
+            await choose(page, palette, mode)
+            await close_menu(page)
+            await check_contrast(
+                page,
+                ".profile-image-controls, .profile-image-controls .btn, .profile-image-camera, .profile-editor-toolbar .btn",
+            )
+            await check.check_layout(page, f"{kind}-staged-profile-{palette}-{mode}", 320)
+            check.visited += 1
+        await preview_visible()
+        await save.click()
+        await asyncio.wait_for(seen.wait(), 10)
+        await expect(save).to_be_disabled()
+        await form.dispatch_event("submit")
+        assert len(writes) == 1, "Pending Save submitted twice"
+        gate.set()
+        await expect(page.locator(".profile-edit-error")).to_have_text(error)
+        await expect(save).to_be_enabled()
+        await expect(page.locator("#profile-edit-name")).to_have_value("Saved draft name")
+        await expect(page.locator("#profile-edit-location")).to_have_value("Saved draft city")
+        await expect(page.locator("#profile-edit-about")).to_have_value("**Saved draft bio**")
+        assert (
+            await page.locator(".profile-image-viewport img").evaluate_all(
+                "els => els.map(el => el.getAttribute('style'))"
+            )
+            == styles
+        )
+        succeed = True
+        seen.clear()
+        gate.clear()
+        await save.click()
+        await asyncio.wait_for(seen.wait(), 10)
+        gate.set()
+        await expect(page).to_have_url(check.base_url + path)
+        assert len(writes) == 2 and writes[0] == writes[1], "Retry must preserve both crops and all fields"
+        assert set(writes[-1]) == {"profile", "profile_photo", "banner_photo"}, writes[-1].keys()
+        profile = json.loads(writes[-1]["profile"])
+        assert profile["name"] == "Saved draft name" and profile["location"] == "Saved draft city"
+        assert profile["about" if kind == "team" else "bio"] == "**Saved draft bio**"
+        for field, maximum, aspect, source in (("profile_photo", 512, 1, SMALL_PNG), ("banner_photo", 1500, 3, PNG)):
+            with Image.open(BytesIO(writes[-1][field])) as image, Image.open(BytesIO(source)) as original:
+                assert image.format == "PNG" and image.width == image.height * aspect and image.width <= maximum
+                assert image.width <= original.width / 3 + 1 and image.height <= original.height / 3 + 1
+        assert await page.evaluate("cropUrls.created.every(url => cropUrls.revoked.includes(url))")
+        await expect(page.locator(".profile-cover-image")).to_have_attribute(
+            "src", check.base_url + "/static/smoke-profile/banner-new.png"
+        )
+        await expect(page.locator(".profile-avatar[src]")).to_have_attribute(
+            "src", check.base_url + "/static/smoke-profile/photo-new.png"
+        )
+        await page.locator(".profile-cover-image, .profile-avatar[src]").evaluate_all(
+            "els => Promise.all(els.map(img => img.decode()))"
+        )
+        await check.check_layout(page, f"{kind}-staged-profile-saved", 320)
+        check.visited += 1
     finally:
         gate.set()
         await page.context.unroute("**/*", fixture)
@@ -566,12 +879,10 @@ async def run(args) -> int:
                 ("detail-banners-always-visible", 360, detail_banners),
                 ("player-owner-tabs", 320, lambda check, page: owner_profile_tabs(check, page, "player")),
                 ("team-owner-tabs", 320, lambda check, page: owner_profile_tabs(check, page, "team")),
-                ("player-banner-upload", 320, lambda check, page: image_upload(check, page, "player")),
-                ("team-banner-upload", 320, lambda check, page: image_upload(check, page, "team")),
+                ("player-profile-editor", 320, lambda check, page: staged_profile_edit(check, page, "player")),
+                ("team-profile-editor", 320, lambda check, page: staged_profile_edit(check, page, "team")),
                 ("tournament-banner-upload", 320, lambda check, page: image_upload(check, page, "tournament")),
                 ("league-banner-upload", 320, lambda check, page: image_upload(check, page, "league")),
-                ("player-photo-upload", 320, lambda check, page: image_upload(check, page, "player", True)),
-                ("team-photo-upload", 320, lambda check, page: image_upload(check, page, "team", True)),
                 ("organizer-tools", 320, organizer_tools),
                 ("profile-theme-matrix", 360, profile_themes),
             ):

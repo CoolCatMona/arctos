@@ -18,7 +18,7 @@ pub fn Invitations(url: String) -> Element {
         if let Some(Ok(d)) = val.read().as_ref() {
             div { class: "row",
                 div { class: "col-12",
-                    h1 { "{d.tournament.name} - {d.team_registration.pseudonym} Roster" }
+                    h2 { "{d.team_registration.pseudonym} roster" }
                     nav { aria_label: "breadcrumb",
                         ol { class: "breadcrumb",
                             li { class: "breadcrumb-item", Link { to: Route::TournamentHome { url: url.clone() }, "{d.tournament.name}" } }

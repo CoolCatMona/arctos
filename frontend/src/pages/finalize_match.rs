@@ -215,11 +215,11 @@ pub fn FinalizeMatch(url: String, match_id: String) -> Element {
                         }
                     }
 
-                    div { class: "card mt-4",
-                        div { class: "card-header",
+                    div { class: "edit-section mt-4",
+                        div { class: "edit-section-heading",
                             h5 { class: "mb-0", "Match Results" }
                         }
-                        div { class: "card-body",
+                        div { class: "edit-section-body",
                             form {
                                 onsubmit: move |ev| {
                                     ev.prevent_default();

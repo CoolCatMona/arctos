@@ -45,9 +45,11 @@ pub fn SideCompDetail(url: String, comp_id: i32) -> Element {
                         let results_page_enabled = d.results_page_enabled;
                         rsx! {
                             div { class: "sidecomp-heading",
-                                h1 { "{d.name}" }
+                                h2 { "{d.name}" }
                             if viewer_is_to {
                                 OrganizerTools {
+                                    id_prefix: "sidecomp-organizer-tools".to_string(),
+                                    label: "Side competition tools".to_string(),
                                     Link {
                                         to: Route::SideCompEdit { url: url_for_edit.clone(), comp_id },
                                         class: "dropdown-item",

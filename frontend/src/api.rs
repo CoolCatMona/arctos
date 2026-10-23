@@ -2416,6 +2416,56 @@ pub async fn force_start_match(
     }
 }
 
+/// Save profile text and any locally prepared image changes in one transaction.
+pub async fn save_profile_edit(
+    kind: &str,
+    id: &str,
+    profile: &impl serde::Serialize,
+    photo: Option<bytes::Bytes>,
+    banner: Option<bytes::Bytes>,
+    remove_photo: bool,
+    remove_banner: bool,
+) -> Result<(), String> {
+    if !matches!(kind, "players" | "teams") {
+        return Err("Unknown profile type".to_string());
+    }
+    let mut form = reqwest::multipart::Form::new().text(
+        "profile",
+        serde_json::to_string(profile).map_err(|error| error.to_string())?,
+    );
+    for (field, image, remove) in [
+        ("profile_photo", photo, remove_photo),
+        ("banner_photo", banner, remove_banner),
+    ] {
+        if image.is_some() && remove {
+            return Err("Choose either a replacement image or removal, not both.".to_string());
+        }
+        if let Some(image) = image {
+            form = form.part(
+                field,
+                reqwest::multipart::Part::bytes(image.to_vec()).file_name("image"),
+            );
+        }
+        if remove {
+            form = form.text(format!("remove_{field}"), "true");
+        }
+    }
+    let response = with_credentials(
+        client()
+            .put(format!("{}/_api/{kind}/{}", base(), urlencoding::encode(id)))
+            .multipart(form),
+    )
+    .send()
+    .await
+    .map_err(|error| error.to_string())?;
+    let data: StatusResponse = response_json(response).await?;
+    if data.success {
+        Ok(())
+    } else {
+        Err(data.error.unwrap_or_else(|| "Your profile could not be saved.".to_string()))
+    }
+}
+
 pub async fn update_player_profile(
     player_id: &str,
     req: &UpdatePlayerProfileRequest,

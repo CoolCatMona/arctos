@@ -705,6 +705,7 @@ pub fn ScheduleEdit(url: String) -> Element {
             team: String::new(),
             field: String::new(),
             editor: true,
+            embedded: true,
         }
     }
 }
@@ -1163,7 +1164,7 @@ fn SchedulePage(
                 div {
                     // The editor gets the full viewport width (escapes the layout's
                     // centered max-width container via the full-bleed class).
-                    class: if editor { "container-fluid mt-3 position-relative schedule-keyboard-focus schedule-editor-fullbleed" } else if embedded { "mt-3 position-relative schedule-keyboard-focus" } else { "container-fluid mt-3 position-relative schedule-keyboard-focus" },
+                    class: if editor && !embedded { "container-fluid mt-3 position-relative schedule-keyboard-focus schedule-editor-fullbleed" } else if embedded { "mt-3 position-relative schedule-keyboard-focus" } else { "container-fluid mt-3 position-relative schedule-keyboard-focus" },
                     tabindex: 0,
                     onkeydown: handle_keydown,
                     onmounted: move |_| focus_schedule_root(),
@@ -1234,8 +1235,8 @@ fn SchedulePage(
                         }
                     }
 
-                    div { class: "card mb-3 bg-light",
-                        div { class: "card-body p-2",
+                    div { class: if editor { "edit-toolbar mb-3" } else { "card mb-3 bg-light" },
+                        div { class: if editor { "edit-toolbar-body p-2" } else { "card-body p-2" },
                             div { class: "d-flex flex-wrap justify-content-between align-items-center gap-2",
                                 div { class: "d-flex flex-wrap align-items-center gap-2",
                                     if view_mode() != "team" {
@@ -1460,8 +1461,8 @@ fn SchedulePage(
                             }
                         }
                         if push_back_open() {
-                            div { class: "card mb-2 border-secondary",
-                                div { class: "card-body py-2 d-flex flex-wrap align-items-center gap-2",
+                            div { class: "edit-toolbar mb-2",
+                                div { class: "edit-toolbar-body py-2 d-flex flex-wrap align-items-center gap-2",
                                     strong { class: "small", "Push back day:" }
                                     span { class: "small text-muted",
                                         "push back all non-started matches on {viewed_day()}"
@@ -1516,8 +1517,8 @@ fn SchedulePage(
                             }
                         }
                         if bulk_mode() {
-                            div { class: "card mb-2 border-secondary",
-                                div { class: "card-body py-2 d-flex flex-wrap align-items-center gap-2",
+                            div { class: "edit-toolbar mb-2",
+                                div { class: "edit-toolbar-body py-2 d-flex flex-wrap align-items-center gap-2",
                                     strong { class: "small", "Bulk length:" }
                                     span { class: "small text-muted",
                                         "click blocks to select — {bulk_selected().len()} selected"
@@ -2639,10 +2640,10 @@ fn CreateMatchModal(
             // Docked editor card (not a modal): the schedule stays visible and
             // interactive beside/below it.
             div {
-                class: "card schedule-editor-card",
+                class: "edit-section schedule-editor-card",
                 tabindex: -1,
                 onkeydown: modal_keydown,
-                div { class: "card-header d-flex justify-content-between align-items-center",
+                div { class: "edit-section-heading d-flex justify-content-between align-items-center",
                     h5 { class: "mb-0", "New Match" }
                     button {
                         class: "btn-close",
@@ -2651,7 +2652,7 @@ fn CreateMatchModal(
                         onclick: move |_| on_close.call(()),
                     }
                 }
-                    div { class: "card-body",
+                    div { class: "edit-section-body",
                         if let Some(err) = error() {
                             div { class: "alert alert-danger", "{err}" }
                         }
@@ -3122,10 +3123,10 @@ fn BreakGroupModal(
         // Docked editor card (not a modal): the schedule stays visible and
         // interactive beside/below it.
         div {
-            class: "card schedule-editor-card",
+            class: "edit-section schedule-editor-card",
             tabindex: -1,
             onkeydown: modal_keydown,
-            div { class: "card-header d-flex justify-content-between align-items-center",
+            div { class: "edit-section-heading d-flex justify-content-between align-items-center",
                 h5 { class: "mb-0", "Edit {type_label}: {group_name}" }
                 button {
                     class: "btn-close",
@@ -3134,7 +3135,7 @@ fn BreakGroupModal(
                     onclick: move |_| on_close.call(()),
                 }
             }
-                    div { class: "card-body",
+                    div { class: "edit-section-body",
                         if let Some(err) = error() {
                             div { class: "alert alert-danger", "{err}" }
                         }
@@ -3299,9 +3300,9 @@ fn FieldsModal(
                     div { class: "modal-body",
                         if let Some(err) = error() { div { class: "alert alert-danger", "{err}" } }
 
-                        div { class: "card mb-3",
-                            div { class: "card-header py-2", "Add field" }
-                            div { class: "card-body py-3",
+                        div { class: "edit-section mb-3",
+                            div { class: "edit-section-heading py-2", "Add field" }
+                            div { class: "edit-section-body py-3",
                                 div { class: "mb-3",
                                     label { class: "form-label", "Field name" }
                                     input {
@@ -7271,10 +7272,10 @@ fn EditMatchModal(
             // Docked editor card (not a modal): the schedule stays visible and
             // interactive beside/below it.
             div {
-                class: "card schedule-editor-card",
+                class: "edit-section schedule-editor-card",
                 tabindex: -1,
                 onkeydown: modal_keydown,
-                div { class: "card-header d-flex justify-content-between align-items-center",
+                div { class: "edit-section-heading d-flex justify-content-between align-items-center",
                     h5 { class: "mb-0", "Edit Match: {name}" }
                     button {
                         class: "btn-close",
@@ -7283,7 +7284,7 @@ fn EditMatchModal(
                         onclick: move |_| on_close.call(()),
                     }
                 }
-                        div { class: "card-body",
+                        div { class: "edit-section-body",
                         // Locked matches stay editable client-side; the server decides
                         // what (if anything) it will accept and the error shows here.
                         if match_locked {

@@ -33,6 +33,7 @@ from app.utils.profile_photo_helpers import (
     remove_profile_photo,
     replace_profile_photo,
 )
+from app.utils.profile_edit_helpers import ProfileEditError, save_profile_edit
 from app.utils.user_helpers import is_player, is_team
 from models import (
     Match,
@@ -43,7 +44,6 @@ from models import (
     Team,
     TeamRegistration,
     Tournament,
-    db,
 )
 
 bp = Blueprint("teams", __name__, url_prefix="/_api")
@@ -293,27 +293,15 @@ def team_profile(team_id):
 @bp.route("/teams/<team_id>", methods=["PUT"])
 @login_required
 def update_team_profile(team_id):
-    """Update team profile."""
-    if current_user.id != team_id:
+    """Save profile text and optional multipart images together."""
+    if current_user.id != team_id or not is_team(current_user):
         return jsonify({"error": "You can only edit your own team profile"}), 403
 
     team = Team.query.get_or_404(team_id)
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Invalid JSON"}), 400
-
-    if "name" in data:
-        team.name = data["name"]
-    if "location" in data:
-        team.location = data["location"]
-    if "email" in data:
-        team.email = data["email"]
-    if "website" in data:
-        team.website = data["website"]
-    if "about" in data:
-        team.about = data["about"]
-
-    db.session.commit()
+    try:
+        save_profile_edit(team, "team")
+    except ProfileEditError as error:
+        return jsonify({"error": str(error)}), error.status
     return jsonify({"success": True})
 
 

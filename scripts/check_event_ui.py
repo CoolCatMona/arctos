@@ -205,7 +205,8 @@ async def event_themes(check: SmokeCheck, page: Page) -> None:
                         await phone_targets(page)
                         await check_contrast(
                             page,
-                            ".event-route-tab, .event-hero-actions .btn, "
+                            ".event-route-tab, .event-hero-actions .btn, .event-detail-hero h1, "
+                            ".event-hero-meta, .event-kind-badge, .event-registration-badge, "
                             ".event-section:visible h2, .event-section:visible h5, "
                             ".event-section:visible dt, .event-section:visible dd, "
                             ".event-section:visible p, .event-section:visible strong, "

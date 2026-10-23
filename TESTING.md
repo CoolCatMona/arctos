@@ -197,6 +197,9 @@ Image tests exercise raw-byte avatar and banner uploads independently of the
 browser crop editor. They cover file and decoded-pixel limits, still-image
 validation, metadata removal, typed account ownership and organizer access,
 failed writes, unique image URLs, and conservative cleanup of existing files.
+`tests/test_profile_edits.py` covers atomic multipart text/avatar/cover updates,
+existing JSON clients, malformed and conflicting fields, model limits, partial
+image failures, and cleanup after database or rollback failures.
 Migration tests verify the nullable banner columns introduced by revisions
 `0023_profile_banners` and `0024_event_banners` without replacing existing rows.
 
@@ -306,18 +309,31 @@ visible even when older preferences marked them hidden, and offer no dismiss
 or restore control. Profile geometry checks cover
 the 3:1 cover, overlapping avatar, left-aligned identity, 900px desktop column,
 and panels without card frames at 320px, 360px, and 1280px. Back/Forward checks
-preserve unsaved injury inputs and expanded team rosters. Banner uploads for players,
-teams, tournaments, and leagues use intercepted responses to check failure,
-success, removal, retained form input, and Save blocking while an image edit
-is pending.
-Crop checks cover keyboard, mouse, and touch positioning, cancellation without
-uploading, retrying after failure, exported PNG dimensions/pixels, and object
-URL cleanup. Avatar uploads use the same checks for player and team accounts.
+preserve unsaved injury inputs and expanded team rosters. Player and team edits
+check live text previews, the phone Preview/Edit switch, private phone exclusion,
+validation while fields are hidden, and staged removal/cropping without writes.
+Intercepted multipart saves verify that text and both images travel together,
+duplicate submissions are blocked, failures retain drafts, and retry sends the
+same content. Crop checks cover keyboard, mouse, touch, and button positioning,
+one shared Zoom control, exported PNG dimensions/pixels, and object URL cleanup.
+Tournament and league banner uploads retain separate checks for failure,
+success, removal, retained form input, and form blocking during a pending crop.
 Organizer menus are checked for guest/owner visibility, links, Escape, outside
 clicks, and narrow-screen layout. Upload tests do not write images or records to
 the demo backend. Backend tests separately exercise image validation, typed
 ownership, storage cleanup, and both database migrations. Pending image editors
 are cancelled on navigation and release their temporary object URLs.
+
+Check the shared headers and flat editing sections on event and league tools with:
+
+```bash
+uv run python scripts/check_event_tools_ui.py --screenshots /tmp/arctos-event-tools
+```
+
+This visits settings, registration, management, footage, rosters, schedule editing,
+and side competitions at 320px, 360px, and 1280px. It checks header composition,
+selected tabs, distinct event/side-competition menus, preserved drafts during
+header updates, and schedule editor dialogs without saving data.
 
 Check the Stones controls against the same demo:
 

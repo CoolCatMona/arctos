@@ -1,6 +1,6 @@
 use crate::api;
 use crate::components::{
-    EditRegistrationContext, EditRegistrationModal, EventAbout, EventHeader, EventTab, EventTabs,
+    EditRegistrationContext, EditRegistrationModal, EventAbout, EventBannerPhoto, EventHeader, EventTab, EventTabs,
     EventTeamsList, LeagueRegistrationButtons, OrganizerTools,
 };
 use crate::types::{ToEntry, User};
@@ -53,7 +53,14 @@ pub fn LeagueHomeContent(
     league_url: String,
     initial_tab: Option<String>,
     #[props(default)] content: Option<Element>,
+    #[props(default)] section_title: Option<String>,
 ) -> Element {
+    let route = use_route::<Route>();
+    let has_overview = content.is_none();
+    let show_overview = use_memo(use_reactive(&has_overview, |value| value));
+    let mut banner_photo = use_signal(|| None::<String>);
+    let mut banner_initialized = use_signal(|| false);
+    use_context_provider(|| EventBannerPhoto(banner_photo));
     let url_for_data = league_url.clone();
     let mut refresh = use_signal(|| 0u32);
     let mut show_edit_modal = use_signal(|| false);
@@ -72,7 +79,9 @@ pub fn LeagueHomeContent(
     let league_url_for_warning = league_url.clone();
     let waiver_warning = use_resource(move || {
         let lu = league_url_for_warning.clone();
+        let player_signed_in = matches!(me_res.read().as_ref(), Some(Ok(user)) if user.user_type == "player");
         async move {
+            if !player_signed_in { return false; }
             match api::get_my_player_registration_league(&lu).await {
                 Ok(res) => res.waiver_required && !res.waiver_signature_valid,
                 Err(_) => false,
@@ -84,20 +93,26 @@ pub fn LeagueHomeContent(
     use_effect(move || {
         let v = val.read();
         if let Some(Ok(d)) = v.as_ref() {
+            if !banner_initialized() {
+                banner_photo.set(d.league.banner_photo.clone());
+                banner_initialized.set(true);
+            }
             about_markdown.set(d.league.about.clone());
         } else {
             about_markdown.set(None);
         }
     });
-    let about_html = use_resource(use_reactive(&about_markdown, move |md| {
-        let md = md().clone();
+    let about_html = use_resource(move || {
+        let md = about_markdown();
+        let has_overview = show_overview();
         async move {
+            if !has_overview { return Ok(String::new()); }
             match md.as_deref() {
                 Some(m) if !m.is_empty() => api::render_markdown(m).await,
                 _ => Ok(String::new()),
             }
         }
-    }));
+    });
 
     use_effect(move || {
         if get_query_param("registered").as_deref() == Some("1") {
@@ -113,7 +128,7 @@ pub fn LeagueHomeContent(
     });
 
     let active_tab = initial_tab.as_deref().filter(|tab| {
-        matches!(*tab, "events" | "teams") || (content.is_some() && *tab == "results")
+        matches!(*tab, "events" | "teams") || (content.is_some() && (section_title.is_some() || *tab == "results"))
     }).unwrap_or("info").to_string();
     let backend = api::base_url();
 
@@ -122,10 +137,20 @@ pub fn LeagueHomeContent(
             {{
                 let viewer_is_to = is_current_user_to(me_res.read().as_ref(), &d.to_entries);
                 let unattached_count = d.unattached_players.len();
+                let wide = content.is_some() && matches!(active_tab.as_str(), "results" | "manage");
+                let mut tabs = vec![
+                    EventTab { id: "info".into(), label: "Info".into(), icon: "fas fa-info-circle".into(), href: Some(format!("/leagues/{league_url}")) },
+                    EventTab { id: "events".into(), label: format!("Events ({})", d.events.len()), icon: "far fa-calendar-alt".into(), href: Some(format!("/leagues/{league_url}?tab=events")) },
+                    EventTab { id: "teams".into(), label: format!("Teams ({})", d.teams_with_counts.len()), icon: "fas fa-users".into(), href: Some(format!("/leagues/{league_url}?tab=teams")) },
+                    EventTab { id: "results".into(), label: "Results".into(), icon: "fas fa-trophy".into(), href: Some(format!("/leagues/{league_url}/results")) },
+                ];
+                if let Some(title) = section_title.as_ref() {
+                    tabs.push(EventTab { id: active_tab.clone(), label: title.clone(), icon: "fas fa-sliders-h".into(), href: Some(route.to_string()) });
+                }
                 rsx! {
-            div { class: "event-detail-page",
+            div { class: if wide { "event-detail-page is-wide" } else { "event-detail-page" },
                 EventHeader {
-                    banner: d.league.banner_photo.clone(),
+                    banner: banner_photo(),
                     title: d.league.name.clone(),
                     kind: "League".to_string(),
                     date: None,
@@ -166,12 +191,7 @@ pub fn LeagueHomeContent(
                 }
                 EventTabs {
                     prefix: "league".to_string(), label: "League sections".to_string(), active: active_tab.clone(),
-                    tabs: vec![
-                        EventTab { id: "info".into(), label: "Info".into(), icon: "fas fa-info-circle".into(), href: Some(format!("/leagues/{league_url}")) },
-                        EventTab { id: "events".into(), label: format!("Events ({})", d.events.len()), icon: "far fa-calendar-alt".into(), href: Some(format!("/leagues/{league_url}?tab=events")) },
-                        EventTab { id: "teams".into(), label: format!("Teams ({})", d.teams_with_counts.len()), icon: "fas fa-users".into(), href: Some(format!("/leagues/{league_url}?tab=teams")) },
-                        EventTab { id: "results".into(), label: "Results".into(), icon: "fas fa-trophy".into(), href: Some(format!("/leagues/{league_url}/results")) },
-                    ],
+                    tabs,
                 }
                 div { class: "container-wide event-detail-content",
                 if let Some(page_content) = content.as_ref() {

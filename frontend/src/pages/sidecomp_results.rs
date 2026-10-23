@@ -217,7 +217,7 @@ pub fn SideCompResults(url: String, comp_id: i32) -> Element {
                                 format!("{name} - Results (Unofficial)")
                             };
                             rsx! {
-                                h1 { "{title}" }
+                                h2 { "{title}" }
                                 for table in tables.into_iter() {
                                     StandingsTableView { key: "{table.id}", table }
                                 }

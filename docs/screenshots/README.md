@@ -6,7 +6,7 @@ organizer controls and registration examples use added fictional demo accounts.
 California Jugger/Light is used unless noted otherwise.
 
 Only the top-level Events, Leagues, Players, Teams, and Stones introductions
-can be dismissed. Profile, tournament, and league detail headers stay visible.
+can be collapsed with a chevron and restored in Appearance settings. Profile, tournament, and league detail headers stay visible.
 
 - `home-mobile.png`: 360px Events page with date filters and contextual Organize control.
 - `home-dismissed-mobile.png`: 360px viewport after dismissing the Events introduction.
@@ -23,8 +23,12 @@ can be dismissed. Profile, tournament, and league detail headers stay visible.
 - `players-mobile.png`: 360px player directory with past-event counts.
 - `home-registration-mobile.png`: pending approval and unpaid badges for a fictional player registration.
 - `organizer-tools-mobile.png`: compact organizer menu in the event banner.
-- `organizer-settings-mobile.png`: expanded referee options and consistent checkboxes.
-- `profile-crop-mobile.png`: avatar position and zoom controls before saving.
+- `organizer-settings-mobile.png`: flat settings with expanded referee options and consistent checkboxes.
+- `profile-crop-mobile.png`: image positioning within the profile preview, with one Zoom control.
+- `profile-edit-mobile.png`: cover and avatar controls above unframed editing fields.
+- `profile-preview-mobile.png`: the unsaved profile preview on a phone.
+- `profile-edit-desktop.png`: live preview beside the editing fields.
+- `profile-history-mobile.png`: a plain history table with contained horizontal scrolling.
 - `stones-mobile.png`: 360px playback and sound selection controls.
 - `match-mobile.png`: 360px full page, including point controls and fixed match actions.
 - `appearance-mobile.png`: 360px viewport with the Appearance panel open in California Jugger/Light.
@@ -37,4 +41,5 @@ To run the application against a snapshot, use
 The source database is opened read-only; migrations and fixtures affect only the
 local copy. See [`TESTING.md`](../../TESTING.md#mobile-browser-verification) for
 browser checks. Available records, dates, and live timers depend on the database
-and capture time. The crop preview does not save a profile change.
+and capture time. The editor previews use a fictional account and do not save
+profile changes; the image is selected locally from the snapshot's existing media.

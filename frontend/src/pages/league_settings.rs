@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::{BannerAccountKind, BannerUpload, LeaguePenaltyTypesTable};
+use crate::components::{BannerAccountKind, BannerUpload, EventBannerPhoto, LeaguePenaltyTypesTable};
 use crate::types::ToEntry;
 use crate::Route;
 use dioxus::prelude::*;
@@ -107,7 +107,8 @@ pub fn LeagueSettings(league_url: String) -> Element {
     let mut draft_values = use_signal(HashMap::<String, String>::new);
     let mut draft_checks = use_signal(HashMap::<String, bool>::new);
     let mut draft_initialized = use_signal(|| false);
-    let mut banner_photo = use_signal(|| None::<String>);
+    let local_banner_photo = use_signal(|| None::<String>);
+    let mut banner_photo = try_use_context::<EventBannerPhoto>().map_or(local_banner_photo, |shared| shared.0);
     let banner_busy = use_signal(|| false);
     let mut banner_initialized = use_signal(|| false);
     let mut saving = use_signal(|| false);
@@ -163,7 +164,7 @@ pub fn LeagueSettings(league_url: String) -> Element {
         if let Some(Ok(d)) = data.value().read().as_ref() {
             div { class: "row",
                 div { class: "col-12",
-                    h1 { "{d.league.name} - Settings" }
+                    h2 { "Settings" }
                     nav { aria_label: "breadcrumb",
                         ol { class: "breadcrumb",
                             li { class: "breadcrumb-item",
@@ -242,9 +243,9 @@ pub fn LeagueSettings(league_url: String) -> Element {
                         saving.set(false);
                     });
                 },
-                div { class: "card mb-3",
-                    div { class: "card-header", h5 { class: "mb-0", "League settings" } }
-                    div { class: "card-body",
+                div { class: "edit-section mb-3",
+                    div { class: "edit-section-heading", h5 { class: "mb-0", "League settings" } }
+                    div { class: "edit-section-body",
                         BannerUpload { kind: BannerAccountKind::League, account_id: league_url.clone(), photo: banner_photo, busy: banner_busy }
                         div { class: "mb-3",
                             label { r#for: "about", class: "form-label", "About (markdown)" }
@@ -446,9 +447,9 @@ pub fn LeagueSettings(league_url: String) -> Element {
 
                 }
                 div { class: "col-12",
-            details { class: "section-disclosure penalty-types-section mb-3",
-                summary { class: "card-header", h2 { class: "h5 mb-0", "Penalty Types ({d.penalty_types.len()})" } }
-                div { class: "card-body",
+            details { class: "edit-section section-disclosure penalty-types-section mb-3",
+                summary { class: "edit-section-heading", h2 { class: "h5 mb-0", "Penalty Types ({d.penalty_types.len()})" } }
+                div { class: "edit-section-body",
                     div { class: "table-responsive",
                         table { class: "table table-sm",
                             thead {
@@ -471,9 +472,9 @@ pub fn LeagueSettings(league_url: String) -> Element {
                 }
             }
 
-            details { class: "card section-disclosure mb-3", open: true,
-                summary { class: "card-header", h2 { class: "h5 mb-0", "League Organizers ({d.to_entries.len()})" } }
-                div { class: "card-body",
+            details { class: "edit-section section-disclosure mb-3", open: true,
+                summary { class: "edit-section-heading", h2 { class: "h5 mb-0", "League Organizers ({d.to_entries.len()})" } }
+                div { class: "edit-section-body",
                     ul { class: "list-group list-group-flush mb-3",
                         for to_entry in &d.to_entries {
                             LeagueToRow {

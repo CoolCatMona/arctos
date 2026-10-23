@@ -138,16 +138,17 @@ completed matches, and side competitions. Two scoring examples each have 16 entr
 
 Existing databases need migrations `0023_profile_banners` and `0024_event_banners` for uploaded profile and event banners. Run `uv sync --group test`, back up your database, and apply pending migrations before starting the updated backend. For the demo, set `SQLALCHEMY_DATABASE_URI=sqlite:////absolute/path/to/arctos/instance/demo.db` when running Alembic. See [the banner migration notes](migrations/README.md#profile-and-event-banners) for unversioned databases. Fresh demos already include these columns.
 
-Profile owners can edit avatars and covers from Edit profile; tournament and
-league organizers can edit covers from Settings. The image editor supports
-dragging, zoom, and keyboard position controls before upload. The server accepts
+Profile owners can preview text, avatars, and covers from Edit profile, then save
+all changes together. Cancel discards the draft. Tournament and league organizers
+can edit covers from Settings. Image controls support dragging, zoom, keyboard
+positioning, and buttons for fine adjustments. The server accepts
 still JPEG, PNG, and WebP images up to 8 MiB and removes embedded metadata.
 Keep `static/uploads` alongside database backups: image files are stored there,
 while the database stores their paths.
 
 Player, team, tournament, and league detail headers stay visible. Only the
 top-level Events, Leagues, Players, Teams, and Stones introductions can be
-dismissed and restored from More.
+collapsed with the chevron beneath their text and restored in Appearance settings.
 
 To preview an existing versioned SQLite snapshot, run the backend with:
 

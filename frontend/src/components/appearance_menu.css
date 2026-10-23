@@ -16,6 +16,9 @@
 .arctos-app .appearance-mode-option.is-selected, .arctos-app .appearance-theme-option.is-selected { background: var(--ui-accent-soft); color: var(--ui-accent-text); border-color: var(--ui-accent-border); }
 .arctos-app .appearance-mode-option:focus-within, .arctos-app .appearance-theme-option:focus-within { outline: 3px solid var(--ui-link); outline-offset: 2px; }
 .arctos-app .appearance-mode-option input, .arctos-app .appearance-theme-option input { flex: 0 0 auto; width: 16px; height: 16px; margin: 0; accent-color: var(--ui-link); }
+.arctos-app .appearance-page-setting label { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0; padding: 8px 0; color: var(--ui-text); font-size: .875rem; cursor: pointer; }
+.arctos-app .appearance-page-setting input { flex: 0 0 auto; width: 18px; height: 18px; margin: 0; accent-color: var(--ui-link); }
+.arctos-app .appearance-page-setting label:focus-within { outline: 3px solid var(--ui-link); outline-offset: 3px; border-radius: 4px; }
 @media (max-width: 575px) {
   .arctos-app .profile-dropdown { position: fixed; top: calc(64px + env(safe-area-inset-top)); right: 16px; max-height: calc(100dvh - 80px - env(safe-area-inset-top)); }
   .arctos-app .appearance-panel { position: fixed; top: calc(64px + env(safe-area-inset-top)); right: 16px; max-height: calc(100dvh - 80px - env(safe-area-inset-top)); }

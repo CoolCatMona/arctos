@@ -1,0 +1,17 @@
+/* Editing sections share headings and dividers, without a separate card frame. */
+.arctos-app .edit-section { min-width: 0; margin-bottom: 1.5rem; overflow-wrap: anywhere; }
+.arctos-app .edit-section-heading { min-width: 0; margin-bottom: 1rem; padding: .75rem 0; border-bottom: 1px solid var(--ui-border); color: var(--ui-text); }
+.arctos-app .edit-section-heading > :last-child { margin-bottom: 0; }
+.arctos-app .edit-section-heading > :is(h1, h2, h3, h4, h5, h6) { min-width: 0; }
+.arctos-app .edit-section-body { min-width: 0; }
+.arctos-app .edit-section .table-responsive { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.arctos-app .edit-section .list-group-flush { border-radius: 0; }
+.arctos-app details.edit-section > summary.edit-section-heading { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; min-height: 48px; margin-bottom: 0; border-radius: 0; cursor: pointer; list-style: none; }
+.arctos-app details.edit-section[open] > summary.edit-section-heading { margin-bottom: 1rem; }
+.arctos-app details.edit-section > summary.edit-section-heading::-webkit-details-marker { display: none; }
+.arctos-app .edit-toolbar { min-width: 0; padding-block: .5rem; border-block: 1px solid var(--ui-border); }
+.arctos-app .edit-toolbar-body { min-width: 0; }
+.arctos-app .schedule-editor-card.edit-section { box-shadow: none; }
+@media (min-width: 1200px) {
+  .arctos-app .schedule-editor-panel .edit-section { padding-left: 1rem; border-left: 1px solid var(--ui-border); }
+}

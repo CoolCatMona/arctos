@@ -1,6 +1,6 @@
 use crate::api;
 use crate::components::{
-    EditRegistrationContext, EditRegistrationModal, EventAbout, EventHeader, EventTab, EventTabs,
+    EditRegistrationContext, EditRegistrationModal, EventAbout, EventBannerPhoto, EventHeader, EventTab, EventTabs,
     EventTeamsList, LeagueRegistrationButtons, OrganizerTools, PompfenIcon,
 };
 use crate::types::{ToEntry, User};
@@ -50,9 +50,16 @@ pub fn TournamentHomeContent(
     url: String,
     initial_tab: Option<String>,
     #[props(default)] content: Option<Element>,
+    #[props(default)] section_title: Option<String>,
 ) -> Element {
     let url_for_data = url.clone();
     let navigator = use_navigator();
+    let route = use_route::<Route>();
+    let has_overview = content.is_none();
+    let show_overview = use_memo(use_reactive(&has_overview, |value| value));
+    let mut banner_photo = use_signal(|| None::<String>);
+    let mut banner_initialized = use_signal(|| false);
+    use_context_provider(|| EventBannerPhoto(banner_photo));
     let mut refresh = use_signal(|| 0u32);
     let data = use_resource(move || {
         let _ = refresh();
@@ -74,6 +81,10 @@ pub fn TournamentHomeContent(
     use_effect(move || {
         let v = val.read();
         if let Some(Ok(d)) = v.as_ref() {
+            if !banner_initialized() {
+                banner_photo.set(d.tournament.banner_photo.clone());
+                banner_initialized.set(true);
+            }
             about_markdown.set(d.tournament.about.clone());
             delete_redirect_league.set(d.tournament.league.as_ref().map(|l| l.league_url.clone()));
         } else {
@@ -81,20 +92,25 @@ pub fn TournamentHomeContent(
             delete_redirect_league.set(None);
         }
     });
-    let about_html = use_resource(use_reactive(&about_markdown, move |md| {
-        let md = md().clone();
+    let about_html = use_resource(move || {
+        let md = about_markdown();
+        let has_overview = show_overview();
         async move {
+            if !has_overview { return Ok(String::new()); }
             match md.as_deref() {
                 Some(m) if !m.is_empty() => api::render_markdown(m).await,
                 _ => Ok(String::new()),
             }
         }
-    }));
+    });
 
     let url_for_sidecomps = url.clone();
     let sidecomps = use_resource(move || {
         let u = url_for_sidecomps.clone();
-        async move { api::sidecomps_list(&u).await }
+        let has_overview = show_overview();
+        async move {
+            if has_overview { api::sidecomps_list(&u).await } else { Ok(Vec::new()) }
+        }
     });
 
 
@@ -105,7 +121,7 @@ pub fn TournamentHomeContent(
                 let viewer_is_to = is_current_user_to(me_res.read().as_ref(), &d.to_entries);
                 let active_tab = initial_tab.as_deref().filter(|tab| {
                     matches!(*tab, "teams" | "sidecomps")
-                        || (content.is_some() && matches!(*tab, "schedule" | "results" | "bracket"))
+                        || (content.is_some() && (section_title.is_some() || matches!(*tab, "schedule" | "results" | "bracket")))
                 }).unwrap_or("info").to_string();
                 let mut tabs = vec![
                     EventTab { id: "info".into(), label: "Info".into(), icon: "fas fa-info-circle".into(), href: Some(format!("/{url}")) },
@@ -117,13 +133,17 @@ pub fn TournamentHomeContent(
                     tabs.push(EventTab { id: "bracket".into(), label: if d.tournament.bracket_published { "Bracket" } else { "Preview bracket" }.into(), icon: "fas fa-sitemap".into(), href: Some(format!("/{url}/bracket")) });
                 }
                 tabs.push(EventTab { id: "sidecomps".into(), label: "Side events".into(), icon: "fas fa-medal".into(), href: Some(format!("/{url}?tab=sidecomps")) });
+                if let Some(title) = section_title.as_ref() {
+                    tabs.push(EventTab { id: active_tab.clone(), label: title.clone(), icon: "fas fa-sliders-h".into(), href: Some(route.to_string()) });
+                }
+                let wide = content.is_some() && matches!(active_tab.as_str(), "schedule" | "results" | "bracket" | "schedule-edit" | "manage");
                 let league = d.tournament.league.as_ref();
                 let team_open = league.map_or(d.tournament.team_registration_open, |l| l.team_registration_open);
                 let player_open = league.map_or(d.tournament.player_registration_open, |l| l.player_registration_open);
                 rsx! {
-            div { class: "event-detail-page",
+            div { class: if wide { "event-detail-page is-wide" } else { "event-detail-page" },
                 EventHeader {
-                    banner: d.tournament.banner_photo.clone(),
+                    banner: banner_photo(),
                     title: d.tournament.name.clone(),
                     kind: if league.is_some() { "League event".to_string() } else { "Tournament".to_string() },
                     date: Some(format_date_display(&d.tournament.start_date, d.tournament.end_date.as_ref())),

@@ -9,6 +9,7 @@ mod docs;
 mod edit_injury;
 mod edit_player_profile;
 mod edit_team_profile;
+mod profile_edit;
 mod finalize_match;
 mod google_choose_account_type;
 mod google_complete_profile;

@@ -76,13 +76,13 @@ AUTH_SCREENS = (
     Screen("profile-edit", "/players/demo-organizer/edit", "main form"),
     Screen("event-settings", "/demo-open/settings", "#tournament-settings-form"),
     Screen("event-manage", "/demo-open/manage", "main table"),
-    Screen("event-footage", "/demo-open/manage-footage"),
-    Screen("event-register", "/demo-summer-cup/register"),
+    Screen("event-footage", "/demo-open/manage-footage", ".event-tool-content h2"),
+    Screen("event-register", "/demo-summer-cup/register", "main form"),
     Screen("sidecomp-new", "/demo-open/sidecomps/new", "main form"),
     Screen("schedule-editor", "/demo-open/schedule/edit", ".schedule-editor-split"),
     Screen("league-settings", "/leagues/demo-coast-league/settings", "main form"),
     Screen("league-manage", "/leagues/demo-coast-league/manage", "main table"),
-    Screen("league-register", "/leagues/demo-coast-league/register"),
+    Screen("league-register", "/leagues/demo-coast-league/register", "main form"),
     Screen("developer-apps", "/developers/apps"),
 )
 
@@ -192,12 +192,18 @@ class SmokeCheck:
         if await page.locator(".event-detail-hero").count():
             banner = await page.locator(".event-detail-hero").evaluate("""el => {
                 const r = el.getBoundingClientRect();
-                return {left: r.left, right: r.right, viewport: document.documentElement.clientWidth};
+                return {left: r.left, right: r.right, width: r.width, viewport: document.documentElement.clientWidth};
             }""")
-            assert abs(banner["left"]) <= 1 and abs(banner["right"] - banner["viewport"]) <= 1, (
-                f"Detail banner does not span the viewport: {banner}"
+            assert banner["width"] <= 901 and abs(banner["left"] - (banner["viewport"] - banner["right"])) <= 1, (
+                f"Event identity must be centered and bounded: {banner}"
             )
-        if await page.locator(".profile-page").count():
+            cover = await page.locator(".event-banner-image").bounding_box()
+            assert cover and abs(cover["width"] / cover["height"] - 3) < 0.02, (
+                f"Event cover must retain 3:1 aspect: {cover}"
+            )
+            alignment = await page.locator(".event-hero-inner").evaluate("el => getComputedStyle(el).textAlign")
+            assert alignment in ("start", "left"), f"Event metadata is not left aligned: {alignment}"
+        if await page.locator(".profile-page").count() and not await page.locator(".profile-editor").count():
             profile = await page.locator(".profile-page").evaluate("""el => {
                 const r = el.getBoundingClientRect();
                 return {left: r.left, right: r.right, width: r.width, viewport: document.documentElement.clientWidth};
@@ -722,9 +728,15 @@ class SmokeCheck:
         await expect(intro).to_be_hidden()
         await page.locator("#event-search").fill("Summer Cup")
         await page.locator("#utility-trigger").click()
-        await page.locator("#page-banner-restore").click()
+        await expect(page.locator("#page-banner-restore")).to_have_count(0)
+        await page.get_by_role("button", name="Appearance", exact=True).click()
+        setting = page.get_by_role("checkbox", name="Show page introduction", exact=True)
+        await expect(setting).not_to_be_checked()
+        await setting.check()
         await expect(intro).to_be_visible()
-        await expect(page.locator("#page-banner-heading")).to_be_focused()
+        await expect(page.locator("#appearance-options")).to_be_visible()
+        await page.keyboard.press("Escape")
+        await expect(page.locator("#utility-trigger")).to_be_focused()
         await expect(page.locator("#event-search")).to_have_value("Summer Cup")
         await expect(page.locator(".arctos-event-card")).to_have_count(1)
         await page.reload(wait_until="domcontentloaded")
@@ -744,17 +756,56 @@ class SmokeCheck:
         await expect(page.get_by_role("button", name="Create account", exact=True)).to_be_enabled()
 
     async def profile_rows_fit(self, page: Page, selector: str) -> None:
-        if page.viewport_size and page.viewport_size["width"] < 992:
-            clipped = await page.locator(selector).evaluate_all("""tables => tables.flatMap(table => {
-                if (!table.getBoundingClientRect().height) return [];
-                const cells = [...table.querySelectorAll('td, input, button, a')].filter(el => {
-                    const r = el.getBoundingClientRect();
-                    return r.width > 0 && (r.left < -1 || r.right > innerWidth + 1);
-                }).map(el => ({tag: el.tagName, text: el.textContent.trim()}));
-                return table.scrollWidth > table.clientWidth + 1 || cells.length
-                    ? [{width: table.clientWidth, scroll: table.scrollWidth, cells}] : [];
-            })""")
-            assert not clipped, f"Profile fields or actions require horizontal scrolling: {clipped}"
+        """Histories keep table columns; overflow is accessible within the table region."""
+        await page.evaluate("document.fonts.ready")
+        for table in await page.locator(selector).all():
+            if not await table.is_visible():
+                continue
+            layout = await table.evaluate("""table => {
+                const region = table.closest('.profile-table-scroll');
+                const rect = region?.getBoundingClientRect();
+                return {
+                    display: getComputedStyle(table).display,
+                    rowDisplay: table.tBodies[0]?.rows[0] ? getComputedStyle(table.tBodies[0].rows[0]).display : null,
+                    headingsVisible: !!table.tHead && getComputedStyle(table.tHead).display === 'table-header-group'
+                        && [...table.tHead.querySelectorAll('th')].every(th => th.scope === 'col'
+                            && th.textContent.trim() && th.getBoundingClientRect().height >= 20),
+                    card: !!table.closest('.card'),
+                    region: region && {role: region.getAttribute('role'), tabIndex: region.tabIndex,
+                        label: region.getAttribute('aria-label'), overflow: getComputedStyle(region).overflowX,
+                        left: rect.left, right: rect.right, width: region.clientWidth,
+                        content: region.scrollWidth, scroll: region.scrollLeft},
+                    viewport: document.documentElement.clientWidth,
+                    document: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth)
+                };
+            }""")
+            assert layout["display"] == "table" and layout["rowDisplay"] in (None, "table-row"), layout
+            assert layout["headingsVisible"] and not layout["card"], f"History lost its plain table headings: {layout}"
+            region = layout["region"]
+            assert region and region["role"] == "region" and region["tabIndex"] == 0 and region["label"], layout
+            assert region["overflow"] in ("auto", "scroll"), layout
+            assert region["left"] >= -1 and region["right"] <= layout["viewport"] + 1, layout
+            assert layout["document"] <= layout["viewport"] + 1, f"Table escaped its scroll region: {layout}"
+            scroll = table.locator("..")
+            if region["content"] > region["width"] + 1:
+                await scroll.evaluate("el => el.scrollLeft = 0")
+                await scroll.focus()
+                await page.keyboard.press("ArrowRight")
+                await page.wait_for_function("el => el.scrollLeft > 0", arg=await scroll.element_handle())
+                await scroll.evaluate("el => el.scrollLeft = el.scrollWidth")
+                last_header = table.locator("thead th").last
+                assert await last_header.evaluate("""th => {
+                    const cell = th.getBoundingClientRect(), region = th.closest('.profile-table-scroll').getBoundingClientRect();
+                    return cell.left >= region.left - 1 && cell.right <= region.right + 1;
+                }"""), "Last history column cannot be scrolled into view"
+            controls = table.locator("input:not([type=checkbox]), button, a")
+            if await controls.count():
+                await controls.last.focus()
+                assert await controls.last.evaluate("""el => {
+                    const control = el.getBoundingClientRect(), region = el.closest('.profile-table-scroll').getBoundingClientRect();
+                    return control.left >= region.left - 1 && control.right <= region.right + 1;
+                }"""), "History action is unreachable with keyboard focus"
+            await scroll.evaluate("(el, left) => el.scrollLeft = left", region["scroll"])
 
     async def profile_event_count(self, page: Page, account_type: str, account_id: str) -> None:
         path = f"/{account_type}s/{account_id}"
@@ -1106,15 +1157,19 @@ async def run(args: argparse.Namespace) -> int:
                         Screen("start-match", f"/demo-open/start-match/{next_id}", "#match_notes"),
                         Screen("run-match", f"/demo-open/run-match/{live_id}", "#score-stones-card"),
                         Screen("finalize-match", f"/demo-open/finalize-match/{live_id}", "#final_notes"),
-                        Screen("sidecomp", f"/demo-open/sidecomps/{comp_id}"),
-                        Screen("sidecomp-edit", f"/demo-open/sidecomps/{comp_id}/edit"),
+                        Screen("sidecomp", f"/demo-open/sidecomps/{comp_id}", ".event-tool-content h2"),
+                        Screen("sidecomp-edit", f"/demo-open/sidecomps/{comp_id}/edit", "#sidecomp-name"),
                         Screen(
                             "sidecomp-quick-register",
                             f"/demo-open/sidecomps/{comp_id}/register-player-as-to",
                             "main .list-group",
                         ),
-                        Screen("sidecomp-results", f"/demo-open/sidecomps/{comp_id}/results"),
-                        Screen("sidecomp-manage", f"/demo-open/sidecomps/{comp_id}/manage-results"),
+                        Screen("sidecomp-results", f"/demo-open/sidecomps/{comp_id}/results", ".event-tool-content h2"),
+                        Screen(
+                            "sidecomp-manage",
+                            f"/demo-open/sidecomps/{comp_id}/manage-results",
+                            ".event-tool-content h2",
+                        ),
                         Screen("sidecomp-scoring", f"/demo-open/sidecomps/{comp_id}/enter-results", ".sc-numpad"),
                     )
                     for screen in (*AUTH_SCREENS, *dynamic):
@@ -1128,8 +1183,10 @@ async def run(args: argparse.Namespace) -> int:
                     )
                     await check.workflow(page, "team-login", width, lambda: check.login(page, "demo-team"))
                     for screen in (
-                        Screen("event-invitations", "/demo-open/invitations"),
-                        Screen("league-invitations", "/leagues/demo-coast-league/invitations"),
+                        Screen("event-invitations", "/demo-open/invitations", ".event-tool-content h2"),
+                        Screen(
+                            "league-invitations", "/leagues/demo-coast-league/invitations", ".event-tool-content h2"
+                        ),
                         Screen("team-profile-edit", "/teams/demo-team/edit", "main form"),
                     ):
                         await check.visit(page, screen, width)

@@ -35,7 +35,7 @@ pub fn SideCompRegisterAsTo(url: String, comp_id: i32) -> Element {
                     class: "btn btn-link",
                     "<- Back to side competition"
                 }
-                h1 { "Quick Register players" }
+                h2 { "Quick Register players" }
                 input {
                     class: "form-control mb-3",
                     r#type: "text",

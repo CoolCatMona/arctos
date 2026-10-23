@@ -32,7 +32,7 @@ pub fn LeagueManage(league_url: String) -> Element {
         if let Some(Ok(d)) = val.read().as_ref() {
             div { class: "row",
                 div { class: "col-12",
-                    h1 { "{d.tournament.name} - Registration Management" }
+                    h2 { "Registration management" }
                     nav { aria_label: "breadcrumb",
                         ol { class: "breadcrumb",
                             li { class: "breadcrumb-item", Link { to: Route::LeagueHome { league_url: league_url.clone() }, "{d.tournament.name}" } }
@@ -91,9 +91,9 @@ pub fn LeagueManage(league_url: String) -> Element {
 
             div { class: "row",
                 div { class: "col-12",
-                    div { class: "card data-section",
-                        div { class: "card-header", h5 { class: "mb-0", "Team Registrations" } }
-                        div { class: "card-body",
+                    div { class: "edit-section data-section",
+                        div { class: "edit-section-heading", h5 { class: "mb-0", "Team Registrations" } }
+                        div { class: "edit-section-body",
                             div { class: "table-responsive management-table-wrap",
                                 table { class: "table table-striped management-table",
                                     thead {
@@ -246,9 +246,9 @@ pub fn LeagueManage(league_url: String) -> Element {
 
             div { class: "row mt-4",
                 div { class: "col-12",
-                    div { class: "card data-section",
-                        div { class: "card-header", h5 { class: "mb-0", "Player Registrations" } }
-                        div { class: "card-body",
+                    div { class: "edit-section data-section",
+                        div { class: "edit-section-heading", h5 { class: "mb-0", "Player Registrations" } }
+                        div { class: "edit-section-body",
                             div { class: "table-responsive management-table-wrap",
                                 table { class: "table table-striped management-table",
                                     thead {

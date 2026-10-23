@@ -37,6 +37,7 @@ from app.utils.profile_photo_helpers import (
     remove_profile_photo,
     replace_profile_photo,
 )
+from app.utils.profile_edit_helpers import ProfileEditError, save_profile_edit
 from app.utils.user_helpers import is_player
 from models import (
     Injury,
@@ -418,25 +419,15 @@ def delete_injury_api(player_id, injury_id):
 @bp.route("/players/<player_id>", methods=["PUT"])
 @login_required
 def update_player_profile(player_id):
-    """Update player profile."""
-    if current_user.id != player_id:
+    """Save profile text and optional multipart images together."""
+    if current_user.id != player_id or not is_player(current_user):
         return jsonify({"error": "You can only edit your own profile"}), 403
 
     player = Player.query.get_or_404(player_id)
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Invalid JSON"}), 400
-
-    if "name" in data:
-        player.name = data["name"]
-    if "phone" in data:
-        player.phone = data["phone"]
-    if "location" in data:
-        player.location = data["location"]
-    if "bio" in data:
-        player.bio = data["bio"]
-
-    db.session.commit()
+    try:
+        save_profile_edit(player, "player")
+    except ProfileEditError as error:
+        return jsonify({"error": str(error)}), error.status
     return jsonify({"success": True})
 
 

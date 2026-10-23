@@ -94,8 +94,8 @@ history statistic, not verified attendance; upcoming and cancelled
 registrations are excluded.
 
 Event and league detail pages share `EventHeader`, `EventAbout`, and `EventTabs`.
-The centered banner spans the viewport, with registration and a compact
-Organizer tools menu beneath event details. Organizers can upload a banner
+The header follows the profile layout: a 3:1 cover above left-aligned identity,
+metadata, registration, and a compact Organizer tools menu. Organizers can upload a banner
 image from Settings; profile owners can do the same from Edit profile.
 Navigation tabs link to information, rosters, schedules, results, brackets,
 league rounds, and side events using real URLs. The selected link uses
@@ -104,13 +104,15 @@ lack preview permission. Native links
 preserve keyboard access, bookmarks, and browser history
 ([W3C link guidance](https://www.w3.org/WAI/ARIA/apg/patterns/link/)).
 
-Use `data-section` on cards containing tables or lists to keep one shared frame
-and compact rows. Use native `details.section-disclosure` for secondary records
+Use `data-section` for compact table and list spacing. Editing forms use flat
+`edit-section` sections with headings and dividers instead of card frames.
+Historical records remain tables with visible column headers and contained
+horizontal scrolling on narrow screens. Use native `details.section-disclosure` for secondary records
 and settings, with a labeled summary and a count where useful. Keep current
 event information and essential actions visible. Collapsing a section keeps its
 form state intact. Only the top-level Events, Leagues, Players, Teams, and
-Stones introductions have a small close button; More can restore a hidden
-introduction on those pages. Their visibility is saved independently per page,
+Stones introductions have a centered collapse chevron beneath their text.
+Appearance settings offer “Show page introduction” on those pages. Their visibility is saved independently per page,
 separately from appearance preferences. Player, team, tournament, and league
 detail headers always remain visible, with no dismiss or restore control.
 Older saved hidden-header preferences for individual profiles or events are
@@ -128,11 +130,18 @@ Organizer settings use checkboxes for saved choices such as registration
 availability. Head referee permissions and secondary side competition rules
 are under Advanced options, with the current policy or restrictions visible in
 the summary. Penalty types use one full-width disclosure, closed initially;
-organizer lists start expanded. Image uploads open a crop preview before
-sending anything. Drag or use the
-position sliders, adjust Zoom, then Save banner or Save photo. Cancel leaves
-the stored image unchanged. Parent form submission waits while an image edit
-is pending; upload failures retain both the crop and other form fields.
+organizer lists start expanded.
+
+Edit profile shows the cover and avatar where they appear on the public profile.
+Camera controls select or remove an image. Drag the image to position it and use
+one Zoom control; arrow keys and the Fine positioning buttons provide alternatives
+to dragging. The desktop preview updates beside the fields; on phones, Preview
+profile switches between the full preview and fields without losing changes.
+The profile's Save action stores text and both images together in one multipart
+request. Cancel leaves the stored profile unchanged, and failed saves retain all
+drafts for retry. Account settings are in a separate disclosure below the editor.
+Tournament and league Settings retain their individual banner crop and save controls;
+form submission waits until those pending image edits are saved or cancelled.
 
 Uploads accept still JPEG, PNG, or WebP up to 8 MiB, 8192 pixels per side, and
 24 megapixels. File headers are checked before browser decoding. The editor

@@ -43,7 +43,7 @@ pub fn ManageFootage(url: String) -> Element {
         if let Some(Ok((tournament_name, cameras))) = val.read().as_ref() {
             div { class: "row",
                 div { class: "col-12",
-                    h1 { "Match footage" }
+                    h2 { "Match footage" }
                     p { class: "text-muted", "Review recordings for {tournament_name}. Open footage to check it before removing an entry." }
                     nav { aria_label: "breadcrumb",
                         ol { class: "breadcrumb",

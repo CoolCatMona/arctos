@@ -21,7 +21,7 @@ pub fn SideCompNew(url: String) -> Element {
         style { {include_str!("../components/organizer_tools.css")} }
         div { class: "row",
             div { class: "col-12 sidecomp-form",
-                h1 { "Create side competition" }
+                h2 { "Create side competition" }
                 div { class: "mb-3",
                     Link {
                         to: Route::TournamentHomeWithTab {

@@ -57,7 +57,7 @@ pub fn TournamentRegister(url: String) -> Element {
         if let Some(Ok(d)) = val.read().as_ref() {
             div { class: "row",
                 div { class: "col-12",
-                    h1 { "Register for {d.tournament.name}" }
+                    h2 { "Registration" }
                     nav { aria_label: "breadcrumb",
                         ol { class: "breadcrumb",
                             li { class: "breadcrumb-item", Link { to: Route::TournamentHome { url: url.clone() }, "{d.tournament.name}" } }
@@ -71,9 +71,9 @@ pub fn TournamentRegister(url: String) -> Element {
                 div { class: "col-12 form-column",
                     if let Some(Ok(u)) = me.read().as_ref() {
                         if u.user_type == "player" {
-                            div { class: "card",
-                                div { class: "card-header", h5 { class: "mb-0", "Player registration" } p { class: "text-muted mb-0 mt-2", "Registering as {u.name} (@{u.id})" } }
-                                div { class: "card-body",
+                            div { class: "edit-section",
+                                div { class: "edit-section-heading", h5 { class: "mb-0", "Player registration" } p { class: "text-muted mb-0 mt-2", "Registering as {u.name} (@{u.id})" } }
+                                div { class: "edit-section-body",
                                     if let Some(terms) = &d.tournament.terms_link {
                                         p { class: "form-text", a { href: "{terms}", target: "_blank", rel: "noopener noreferrer", "Read the event’s registration terms" } }
                                     }
@@ -194,9 +194,9 @@ pub fn TournamentRegister(url: String) -> Element {
                                 }
                             }
                         } else if u.user_type == "team" {
-                            div { class: "card",
-                                div { class: "card-header", h5 { class: "mb-0", "Team registration" } p { class: "text-muted mb-0 mt-2", "Registering as {u.name} (@{u.id})" } }
-                                div { class: "card-body",
+                            div { class: "edit-section",
+                                div { class: "edit-section-heading", h5 { class: "mb-0", "Team registration" } p { class: "text-muted mb-0 mt-2", "Registering as {u.name} (@{u.id})" } }
+                                div { class: "edit-section-body",
                                     if let Some(terms) = &d.tournament.terms_link {
                                         p { class: "form-text", a { href: "{terms}", target: "_blank", rel: "noopener noreferrer", "Read the event’s registration terms" } }
                                     }

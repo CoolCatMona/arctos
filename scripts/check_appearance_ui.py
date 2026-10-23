@@ -129,7 +129,7 @@ async def palette_matrix(check: SmokeCheck, page: Page) -> None:
             await check_contrast(
                 page,
                 ".appearance-panel h2, .appearance-panel legend, .appearance-mode-option, "
-                ".appearance-theme-option, .appearance-back",
+                ".appearance-theme-option, .appearance-back, .appearance-page-setting",
             )
             await close_menu(page)
             await check.check_layout(page, f"appearance-home-{palette}-{mode}", WIDTH)
@@ -180,6 +180,16 @@ async def keyboard_and_persistence(check: SmokeCheck, page: Page) -> None:
     await page.keyboard.press("Enter")
     await expect(page.get_by_role("radio", name="Light mode", exact=True)).to_be_focused()
     await expect(page.locator("#appearance-options legend").first).to_have_text("Display mode")
+    setting = page.get_by_role("checkbox", name="Show page introduction", exact=True)
+    await expect(setting).to_be_checked()
+    await setting.focus()
+    await page.keyboard.press("Space")
+    await expect(setting).not_to_be_checked()
+    await expect(page.locator("#page-banner")).to_be_hidden()
+    await expect(setting).to_be_focused()
+    await page.keyboard.press("Space")
+    await expect(page.locator("#page-banner")).to_be_visible()
+    await page.get_by_role("radio", name="Light mode", exact=True).focus()
     await page.keyboard.press("ArrowRight")
     await expect(page.get_by_role("radio", name="Dark mode", exact=True)).to_be_checked()
     await preference(page, "california", "dark")
@@ -555,9 +565,13 @@ async def storage_disabled(check: SmokeCheck, browser) -> None:
         await check.check_layout(page, "appearance-storage-unavailable", WIDTH)
         await page.locator("#page-banner-dismiss").click()
         await expect(page.locator("#page-banner")).to_be_hidden()
-        await page.locator("#utility-trigger").click()
-        await page.locator("#page-banner-restore").click()
+        await open_menu(page)
+        setting = page.get_by_role("checkbox", name="Show page introduction", exact=True)
+        await expect(setting).not_to_be_checked()
+        await setting.check()
         await expect(page.locator("#page-banner")).to_be_visible()
+        await expect(page.locator("#appearance-options")).to_be_visible()
+        await close_menu(page)
         await page.reload(wait_until="domcontentloaded")
         await preference(page, "california", "light")
 

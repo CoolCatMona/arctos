@@ -14,11 +14,11 @@ pub fn ConnectedAppsCard() -> Element {
     let mut error = use_signal(|| None::<String>);
 
     rsx! {
-        div { class: "card data-section mt-3",
-            div { class: "card-header",
+        div { class: "edit-section data-section mt-3",
+            div { class: "edit-section-heading",
                 h5 { class: "mb-0", "Connected apps" }
             }
-            div { class: "card-body",
+            div { class: "edit-section-body",
                 p { class: "text-muted small", "Apps you've signed in to with Arctos. Only you can see this list." }
                 if let Some(message) = error() {
                     div { class: "alert alert-danger py-2", "{message}" }

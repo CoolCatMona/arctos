@@ -28,12 +28,12 @@ pub fn LeagueNewTournament(league_url: String) -> Element {
         div { class: "row justify-content-center form-page",
             div { class: "col-12 form-column",
                 if let Some(Ok(d)) = league_data.value().read().as_ref() {
-                    div { class: "card",
-                        div { class: "card-header",
-                            h1 { class: "mb-2", "Add an event" }
+                    div { class: "edit-section",
+                        div { class: "edit-section-heading",
+                            h2 { class: "mb-2", "Add an event" }
                             p { class: "text-muted mb-0", "Part of {d.league.name}" }
                         }
-                        div { class: "card-body",
+                        div { class: "edit-section-body",
                             if let Some(ref err) = error() {
                                 div { class: "alert alert-danger mb-3", role: "alert", "{err}" }
                             }

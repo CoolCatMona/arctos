@@ -131,11 +131,11 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
 
                 div { class: "row",
                     div { class: "col-md-8 operator-setup",
-                        div { class: "card",
-                            div { class: "card-header",
+                        div { class: "edit-section",
+                            div { class: "edit-section-heading",
                                 h5 { class: "mb-0", "Match Setup" }
                             }
-                            div { class: "card-body",
+                            div { class: "edit-section-body",
                                 form {
                                     onsubmit: move |ev| {
                                         ev.prevent_default();

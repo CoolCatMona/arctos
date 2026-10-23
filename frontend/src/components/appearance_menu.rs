@@ -1,4 +1,5 @@
 use crate::appearance::{focus_control, Appearance, ColorMode, Palette};
+use crate::pages::layout::{page_banner_key, set_page_banner_hidden, use_page_banner_preferences};
 use dioxus::prelude::*;
 
 /// The Appearance form shares the More menu's anchor and dismiss control.
@@ -9,6 +10,8 @@ pub fn AppearanceMenu(
     appearance: Appearance,
 ) -> Element {
     let preferences = appearance.preferences();
+    let banners = use_page_banner_preferences();
+    let page_key = page_banner_key(&use_route::<crate::Route>());
     rsx! {
         style { {include_str!("appearance_menu.css")} }
         if open() {
@@ -61,6 +64,18 @@ pub fn AppearanceMenu(
                         div { class: "appearance-theme-options",
                             for palette in Palette::ALL {
                                 ThemeOption { palette, appearance }
+                            }
+                        }
+                    }
+                    if let Some(key) = page_key {
+                        div { class: "appearance-section appearance-page-setting",
+                            label { r#for: "page-introduction-setting",
+                                input {
+                                    id: "page-introduction-setting", r#type: "checkbox",
+                                    checked: !banners.read().contains(&key), aria_controls: "page-banner",
+                                    onchange: move |event| set_page_banner_hidden(banners, &key, !event.checked()),
+                                }
+                                span { "Show page introduction" }
                             }
                         }
                     }

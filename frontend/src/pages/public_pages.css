@@ -1,9 +1,9 @@
 /* Public discovery and event identity for Arctos. */
-.arctos-app .arctos-page-banner { position: relative; max-width: 760px; margin: 0 auto 1.5rem; padding: .5rem 0 1rem; text-align: center; }
-.arctos-app .arctos-page-banner h1 { margin: 0 0 .65rem; padding: 0 44px; font-size: clamp(1.65rem, 3.2vw, 2.25rem); letter-spacing: -.035em; }
-.arctos-app .arctos-intro-dismiss { position: absolute; top: 0; right: 0; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: .5rem; background: transparent; color: var(--ui-muted); font-size: 1rem; cursor: pointer; }
+.arctos-app .arctos-page-banner { position: relative; max-width: 760px; margin: 0 auto 1rem; padding: .5rem 0 .25rem; text-align: center; }
+.arctos-app .arctos-page-banner h1 { margin: 0 0 .65rem; padding: 0; font-size: clamp(1.65rem, 3.2vw, 2.25rem); letter-spacing: -.035em; }
+.arctos-app .arctos-intro-dismiss { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: .5rem; background: transparent; color: var(--ui-muted); font-size: .875rem; cursor: pointer; }
 .arctos-app .arctos-intro-dismiss:hover { background: var(--ui-surface-hover); color: var(--ui-text); }
-.arctos-app .arctos-page-banner > p { color: var(--ui-muted); max-width: 650px; margin: 0 auto 1rem; line-height: 1.6; }
+.arctos-app .arctos-page-banner p { color: var(--ui-muted); max-width: 650px; margin: 0 auto .25rem; line-height: 1.6; }
 .arctos-app .arctos-page-banner[hidden] { display: none; }
 .arctos-app .arctos-brand-mark { width: 3.25rem; height: 3.25rem; display: inline-flex; align-items: center; justify-content: center; border-radius: .9rem; color: var(--ui-gradient-contrast); background: linear-gradient(135deg, var(--ui-gradient-start), var(--ui-gradient-end)); font-size: 1.35rem; flex-shrink: 0; }
 .arctos-app .arctos-card-footer .btn, .arctos-app .arctos-choice-card .btn { display: inline-flex; align-items: center; justify-content: center; gap: .65rem; min-height: 44px; }
@@ -107,7 +107,7 @@
 @media (max-width: 1100px) { .arctos-app .arctos-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) {
     .arctos-app .arctos-card-grid, .arctos-app .arctos-choice-grid { grid-template-columns: minmax(0, 1fr); }
-    .arctos-app .arctos-page-banner > p { font-size: .95rem; }
+    .arctos-app .arctos-page-banner p { font-size: .95rem; }
     .arctos-app .arctos-discovery-toolbar { align-items: stretch; gap: .85rem; }
     .arctos-app .arctos-discovery-actions, .arctos-app .arctos-event-search { width: 100%; flex-basis: 100%; }
     .arctos-app .arctos-discovery-actions { gap: .5rem; }
@@ -151,45 +151,6 @@
   .arctos-app .data-section .roster-table td:first-child { grid-column: 1 / -1; font-size: .9375rem; }
   .arctos-app .data-section .roster-table .roster-actions { grid-column: 1 / -1; padding-top: 6px; }
   .arctos-app .data-section .roster-table .roster-actions::before { display: none; }
-}
-
-/* Profile histories retain desktop columns, with every field and action visible
-   in labeled rows when the profile's content column is narrow. */
-@media (max-width: 991.98px) {
-  .arctos-app .data-section .profile-history-table,
-  .arctos-app .data-section .profile-history-table tbody,
-  .arctos-app .data-section .profile-injury-table,
-  .arctos-app .data-section .profile-injury-table tbody { display: block; width: 100%; }
-  .arctos-app .profile-history-table thead, .arctos-app .profile-injury-table thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
-  .arctos-app .data-section .profile-history-table > tbody > tr,
-  .arctos-app .data-section .profile-injury-table > tbody > tr { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; width: 100%; padding: 10px 16px; border-bottom: 1px solid var(--ui-border); }
-  .arctos-app .data-section .profile-history-table > tbody > tr:last-child,
-  .arctos-app .data-section .profile-injury-table > tbody > tr:last-child { border-bottom: 0; }
-  .arctos-app .data-section .profile-history-table > tbody > tr > td,
-  .arctos-app .data-section .profile-injury-table > tbody > tr > td { display: block; min-width: 0; padding: 2px 0; border: 0; background: transparent; box-shadow: none; overflow-wrap: anywhere; }
-  .arctos-app .profile-history-table td[data-label]::before,
-  .arctos-app .profile-injury-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 2px; color: var(--ui-muted); font-size: .75rem; font-weight: 500; }
-  .arctos-app .profile-history-table .profile-record-name,
-  .arctos-app .profile-history-table .profile-record-actions,
-  .arctos-app .profile-injury-table .profile-record-wide,
-  .arctos-app .profile-injury-table .profile-record-actions { grid-column: 1 / -1; }
-  .arctos-app .profile-history-table .profile-record-name a { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; font-weight: 600; }
-  .arctos-app .profile-history-table .profile-record-name::before,
-  .arctos-app .profile-history-table .profile-record-actions::before,
-  .arctos-app .profile-injury-table .profile-record-actions::before { display: none; }
-  .arctos-app .data-section .profile-history-table .profile-history-toggle { position: absolute; top: 10px; left: 12px; width: 44px; padding: 0 !important; }
-  .arctos-app .data-section .profile-history-table .profile-team-record .profile-record-name { padding-left: 48px; }
-  .arctos-app .profile-history-table .profile-record-actions:empty { display: none; }
-  .arctos-app .profile-history-table .profile-record-actions .btn { width: 100%; margin-top: 4px; }
-  .arctos-app .data-section .profile-history-table > tbody > .profile-roster-expanded { display: block; padding-block: 4px; background: var(--ui-surface-muted); }
-  .arctos-app .data-section .profile-history-table .profile-roster-expanded > td { width: 100%; padding: 0; }
-  .arctos-app .profile-history-table .profile-roster-copy small { flex-basis: 100%; }
-  .arctos-app .data-section .profile-injury-table > tbody > tr { padding-inline: 0; }
-  .arctos-app .profile-injury-table .form-control { width: 100%; min-width: 0; max-width: 100%; }
-  .arctos-app .profile-injury-table .form-check-label { display: inline-flex; align-items: center; min-height: 44px; }
-  .arctos-app .profile-injury-table .form-check-input { margin-top: 13px; }
-  .arctos-app .profile-injury-table .profile-record-actions .btn-group { display: flex; flex-wrap: wrap; gap: 6px; }
-  .arctos-app .profile-injury-table .profile-record-actions .btn { flex: 1 1 auto; min-height: 44px; margin: 0; border-radius: 8px; }
 }
 
 /* Public registration counts share a compact treatment on profiles and directories. */

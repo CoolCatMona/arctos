@@ -37,11 +37,11 @@ pub fn LeagueRegister(league_url: String) -> Element {
         div { class: "row justify-content-center form-page",
             div { class: "col-12 form-column",
                 if let Some(Ok(d)) = data.value().read().as_ref() {
-                    div { class: "card",
-                        div { class: "card-header",
-                            h3 { class: "mb-0", "Register for {d.league.name}" }
+                    div { class: "edit-section",
+                        div { class: "edit-section-heading",
+                            h2 { class: "h3 mb-0", "Registration" }
                         }
-                        div { class: "card-body",
+                        div { class: "edit-section-body",
                             p { class: "text-muted mb-3",
                                 "One registration covers all events in this league season."
                             }

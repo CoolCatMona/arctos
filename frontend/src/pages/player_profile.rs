@@ -266,7 +266,7 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
 
                     section {
                         id: "player-tournament-history", key: "{d.player.id}-history",
-                        class: "data-section profile-section", hidden: active_tab != "history", aria_labelledby: "player-tab-history",
+                        class: "profile-section", hidden: active_tab != "history", aria_labelledby: "player-tab-history",
                         div { class: "profile-section-heading",
                             h2 { class: "h5 mb-0", "Tournament History ({d.registrations.len()})" }
                         }
@@ -274,16 +274,17 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                             if d.registrations.is_empty() {
                                 p { class: "text-muted", "No tournament registrations yet." }
                             } else {
-                                div { class: "profile-table-scroll",
-                                    table { class: "table profile-history-table",
+                                div { class: "profile-table-scroll", role: "region", tabindex: "0",
+                                    aria_label: "Tournament history, scroll to see all columns",
+                                    table { class: "table profile-history-table", aria_label: "Tournament history",
                                         thead {
                                             tr {
-                                                th { "Tournament" }
-                                                th { "Team" }
-                                                th { "Jersey" }
-                                                th { "Status" }
-                                                th { "Payment" }
-                                                th { "Waiver" }
+                                                th { scope: "col", "Tournament" }
+                                                th { scope: "col", "Team" }
+                                                th { scope: "col", "Jersey" }
+                                                th { scope: "col", "Status" }
+                                                th { scope: "col", "Payment" }
+                                                th { scope: "col", "Waiver" }
                                             }
                                         }
                                         tbody {
@@ -362,7 +363,7 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                     if show_injuries {
                         section {
                             id: "player-injury-history", key: "{d.player.id}-injuries",
-                            class: "data-section data-section-editor profile-section", hidden: active_tab != "injuries", aria_labelledby: "player-tab-injuries",
+                            class: "profile-section", hidden: active_tab != "injuries", aria_labelledby: "player-tab-injuries",
                             div { class: "profile-section-heading",
                                 h2 { class: "h5 mb-0", "Injury History ({injury_total})" }
                                 if active_injuries > 0 {
@@ -373,16 +374,17 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                 if let Some(err) = injury_error() {
                                     div { class: "alert alert-danger", "{err}" }
                                 }
-                                div { class: "profile-table-scroll",
-                                    table { class: "table profile-injury-table",
+                                div { class: "profile-table-scroll", role: "region", tabindex: "0",
+                                    aria_label: "Injury history, scroll to see all columns",
+                                    table { class: "table profile-injury-table", aria_label: "Injury history",
                                         thead {
                                             tr {
-                                                th { "Date" }
-                                                th { "Description" }
-                                                th { "Status" }
-                                                th { "Public" }
+                                                th { scope: "col", "Date" }
+                                                th { scope: "col", "Description" }
+                                                th { scope: "col", "Status" }
+                                                th { scope: "col", "Public" }
                                                 if can_edit_injuries {
-                                                    th { "Actions" }
+                                                    th { scope: "col", "Actions" }
                                                 }
                                             }
                                         }
@@ -656,20 +658,21 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                     if show_infractions {
                         section {
                             id: "player-penalties", key: "{d.player.id}-penalties",
-                            class: "data-section profile-section", hidden: active_tab != "infractions", aria_labelledby: "player-tab-infractions",
+                            class: "profile-section", hidden: active_tab != "infractions", aria_labelledby: "player-tab-infractions",
                             div { class: "profile-section-heading",
                                 h2 { class: "h5 mb-0", "Infractions ({penalty_row_elements.len()})" }
                             }
                             div { class: "profile-section-body",
                                 if penalty_rows_empty { p { class: "text-muted", "No infractions recorded." } }
-                                div { class: "profile-table-scroll",
-                                    table { class: "table table-sm",
+                                div { class: "profile-table-scroll", role: "region", tabindex: "0",
+                                    aria_label: "Infractions, scroll to see all columns",
+                                    table { class: "table table-sm", aria_label: "Infractions",
                                         thead {
                                             tr {
-                                                th { "Date" }
-                                                th { "Note" }
-                                                th { "Point #" }
-                                                th { "Match" }
+                                                th { scope: "col", "Date" }
+                                                th { scope: "col", "Note" }
+                                                th { scope: "col", "Point #" }
+                                                th { scope: "col", "Match" }
                                             }
                                         }
                                         tbody {

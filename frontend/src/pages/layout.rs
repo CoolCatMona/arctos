@@ -4,6 +4,34 @@ use crate::components::AppearanceMenu;
 use crate::Route;
 use dioxus::prelude::*;
 
+// These ordinary event tools share their event's identity and navigation.
+// Public schedule/results/bracket pages already supply this shell themselves;
+// live match controls, scoring keypads, and overlays keep their dedicated space.
+fn event_tool_shell(route: &Route) -> Option<(bool, String, String, Option<String>)> {
+    let (league, url, tab, title) = match route {
+        Route::TournamentSettings { url } => (false, url, "settings", Some("Settings")),
+        Route::TournamentRegister { url } => (false, url, "registration", Some("Registration")),
+        Route::Manage { url } => (false, url, "manage", Some("Registration management")),
+        Route::ManageFootage { url } => (false, url, "footage", Some("Footage")),
+        Route::Invitations { url } => (false, url, "roster", Some("Manage roster")),
+        Route::ScheduleEdit { url } => (false, url, "schedule-edit", Some("Edit schedule")),
+        Route::LegacyBracket { url } => (false, url, "legacy-bracket", Some("Legacy bracket")),
+        Route::SideCompNew { url }
+        | Route::SideCompDetail { url, .. }
+        | Route::SideCompEdit { url, .. }
+        | Route::SideCompRegisterAsTo { url, .. }
+        | Route::SideCompResults { url, .. }
+        | Route::SideCompManageResults { url, .. } => (false, url, "sidecomps", None),
+        Route::LeagueSettings { league_url } => (true, league_url, "settings", Some("Settings")),
+        Route::LeagueRegister { league_url } => (true, league_url, "registration", Some("Registration")),
+        Route::LeagueManage { league_url } => (true, league_url, "manage", Some("Registration management")),
+        Route::LeagueInvitations { league_url } => (true, league_url, "roster", Some("Manage roster")),
+        Route::LeagueNewTournament { league_url } => (true, league_url, "new-event", Some("Add event")),
+        _ => return None,
+    };
+    Some((league, url.clone(), tab.to_string(), title.map(str::to_string)))
+}
+
 /// Signal bumped when login/logout succeeds so the layout refetches user.
 pub fn use_auth_invalidate() -> Signal<u32> {
     use_context::<Signal<u32>>()
@@ -62,14 +90,6 @@ pub fn page_banner_key(route: &Route) -> Option<String> {
         Route::Stones {} => Some("stones".into()),
         _ => None,
     }
-}
-
-fn focus_restored_page_banner() {
-    #[cfg(target_arch = "wasm32")]
-    spawn(async move {
-        gloo_timers::future::TimeoutFuture::new(0).await;
-        focus_control("page-banner-heading");
-    });
 }
 
 /// Returns a short page name for the tab title: "Page Name | Arctos".
@@ -169,8 +189,8 @@ pub fn Layout() -> Element {
     let route = use_route::<Route>();
     let page_title = format!("{} | Arctos", page_title_for_route(&route));
     let path = route.to_string();
-    let banner_key = page_banner_key(&route);
-    let event_page = matches!(route, Route::TournamentHome { .. } | Route::TournamentHomeWithTab { .. }
+    let event_shell = event_tool_shell(&route);
+    let event_page = event_shell.is_some() || matches!(route, Route::TournamentHome { .. } | Route::TournamentHomeWithTab { .. }
         | Route::Schedule { .. } | Route::Results { .. } | Route::Bracket { .. }
         | Route::LeagueHome { .. } | Route::LeagueHomeWithTab { .. } | Route::LeagueResults { .. }
         | Route::PlayerProfilePage { .. } | Route::PlayerProfilePageWithTab { .. }
@@ -223,6 +243,7 @@ pub fn Layout() -> Element {
         style { {include_str!("../theme.css")} }
         style { {include_str!("public_pages.css")} }
         style { {include_str!("operator.css")} }
+        style { {include_str!("edit_forms.css")} }
         div {
             class: "arctos-app",
             "data-palette": palette, "data-bs-theme": color_scheme,
@@ -362,17 +383,6 @@ pub fn Layout() -> Element {
                                     }
                                     Link { to: Route::Docs {}, class: "dropdown-item", "Help & documentation" }
                                     Link { to: Route::About {}, class: "dropdown-item", "About Arctos" }
-                                    if let Some(key) = banner_key.clone().filter(|key| banner_preferences.read().contains(key)) {
-                                        button {
-                                            id: "page-banner-restore", r#type: "button", class: "dropdown-item",
-                                            onclick: move |_| {
-                                                set_page_banner_hidden(banner_preferences, &key, false);
-                                                utility_open.set(false);
-                                                focus_restored_page_banner();
-                                            },
-                                            "Show page banner"
-                                        }
-                                    }
                                 }
                             }
                             AppearanceMenu { open: appearance_open, utility_open, appearance }
@@ -386,7 +396,21 @@ pub fn Layout() -> Element {
                 }
                 SuspenseBoundary {
                     fallback: |_| rsx! { div { class: "loading-state", role: "status", "Loading…" } },
-                    Outlet::<Route> {}
+                    if let Some((league, url, tab, section_title)) = event_shell {
+                        if league {
+                            super::league_home::LeagueHomeContent {
+                                key: "league-{url}", league_url: url, initial_tab: Some(tab), section_title,
+                                content: Some(rsx! { div { class: "event-tool-content", Outlet::<Route> {} } }),
+                            }
+                        } else {
+                            super::tournament_home::TournamentHomeContent {
+                                key: "event-{url}", url, initial_tab: Some(tab), section_title,
+                                content: Some(rsx! { div { class: "event-tool-content", Outlet::<Route> {} } }),
+                            }
+                        }
+                    } else {
+                        Outlet::<Route> {}
+                    }
                 }
             }
             footer { class: "app-footer",

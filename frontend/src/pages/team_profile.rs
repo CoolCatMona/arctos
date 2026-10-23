@@ -288,7 +288,7 @@ pub fn TeamProfile(id: Signal<String>, tab: String) -> Element {
 
                     section {
                         id: "team-tournament-registrations", key: "{d.team.id}-registrations",
-                        class: "data-section profile-section", hidden: active_tab != "history", aria_labelledby: "team-tab-history",
+                        class: "profile-section", hidden: active_tab != "history", aria_labelledby: "team-tab-history",
                         div { class: "profile-section-heading",
                             h2 { class: "h5 mb-0", "Tournament Registrations ({d.registrations.len()})" }
                         }
@@ -296,17 +296,18 @@ pub fn TeamProfile(id: Signal<String>, tab: String) -> Element {
                             if d.registrations.is_empty() {
                                 p { class: "text-muted", "No tournament registrations yet." }
                             } else {
-                                div { class: "profile-table-scroll",
-                                    table { class: "table profile-history-table",
+                                div { class: "profile-table-scroll", role: "region", tabindex: "0",
+                                    aria_label: "Tournament registrations, scroll to see all columns",
+                                    table { class: "table profile-history-table", aria_label: "Tournament registrations",
                                         thead {
                                             tr {
-                                                th { style: "width: 2rem;", "" }
-                                                th { "Tournament" }
-                                                th { "Team Name" }
-                                                th { "Date" }
-                                                th { "Status" }
-                                                th { "Payment" }
-                                                th { "Actions" }
+                                                th { scope: "col", "Players" }
+                                                th { scope: "col", "Tournament" }
+                                                th { scope: "col", "Team Name" }
+                                                th { scope: "col", "Date" }
+                                                th { scope: "col", "Status" }
+                                                th { scope: "col", "Payment" }
+                                                th { scope: "col", "Actions" }
                                             }
                                         }
                                         tbody {
@@ -344,20 +345,21 @@ pub fn TeamProfile(id: Signal<String>, tab: String) -> Element {
                     if show_notes {
                         section {
                             id: "team-notes", key: "{d.team.id}-notes",
-                            class: "data-section profile-section", hidden: active_tab != "notes", aria_labelledby: "team-tab-notes",
+                            class: "profile-section", hidden: active_tab != "notes", aria_labelledby: "team-tab-notes",
                             div { class: "profile-section-heading",
                                 h2 { class: "h5 mb-0", "Notes Received ({d.team_notes.len()})" }
                             }
                             div { class: "profile-section-body",
                                 if d.team_notes.is_empty() { p { class: "text-muted", "No notes recorded." } }
-                                div { class: "profile-table-scroll",
-                                    table { class: "table table-sm",
+                                div { class: "profile-table-scroll", role: "region", tabindex: "0",
+                                    aria_label: "Notes received, scroll to see all columns",
+                                    table { class: "table table-sm", aria_label: "Notes received",
                                         thead {
                                             tr {
-                                                th { "Date" }
-                                                th { "Note" }
-                                                th { "Point #" }
-                                                th { "Match" }
+                                                th { scope: "col", "Date" }
+                                                th { scope: "col", "Note" }
+                                                th { scope: "col", "Point #" }
+                                                th { scope: "col", "Match" }
                                             }
                                         }
                                         tbody {

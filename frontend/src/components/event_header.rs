@@ -4,6 +4,10 @@ use crate::Route;
 use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
 
+/// Settings uploads and the surrounding event identity use one saved image.
+#[derive(Clone, Copy)]
+pub struct EventBannerPhoto(pub Signal<Option<String>>);
+
 /// A real event destination; an unavailable destination has no href.
 #[derive(Clone, PartialEq)]
 pub struct EventTab {
@@ -40,7 +44,10 @@ fn reveal_event_tab(id: &str) {
 pub fn EventTabs(prefix: String, label: String, active: String, tabs: Vec<EventTab>) -> Element {
     let navigator = use_navigator();
     let active_id = format!("{prefix}-tab-{active}");
-    use_effect(use_reactive(&active_id, move |active_id| {
+    // Account/detail responses can add tabs or change labels without changing
+    // the current destination; keep that destination visible after either.
+    let reveal_dependencies = (active_id, tabs.clone());
+    use_effect(use_reactive(&reveal_dependencies, move |(active_id, _)| {
         reveal_event_tab(&active_id);
         #[cfg(target_arch = "wasm32")]
         if let Some(document) = web_sys::window().and_then(|window| window.document()) {
@@ -124,22 +131,13 @@ pub fn EventHeader(props: EventHeaderProps) -> Element {
     rsx! {
         style { {include_str!("event_details.css")} }
         header { id: "page-banner", class: "event-detail-hero",
-            if let Some(path) = props.banner {
-                div { class: "event-banner-image",
+            div { class: "event-banner-image",
+                if let Some(path) = props.banner {
                     img { src: "{crate::api::base_url()}/static/{path}", alt: "" }
                 }
             }
-            div { class: "container-wide event-hero-inner",
+            div { class: "event-hero-inner",
             div { class: "event-hero-main",
-                div { class: "event-hero-badges",
-                    span { class: "event-kind-badge", i { class: "fas fa-trophy", aria_hidden: "true" } "{props.kind}" }
-                    if props.registration_open {
-                        span { class: "event-registration-badge", i { class: "fas fa-circle-check", aria_hidden: "true" } "Registration open" }
-                    }
-                    if let (Some(url), Some(name)) = (props.badge_league_url, props.badge_name) {
-                        Link { to: Route::LeagueHome { league_url: url }, class: "arctos-event-league-badge", "Part of {name}" }
-                    }
-                }
                 h1 { id: "page-banner-heading", tabindex: "-1", "{props.title}" }
                 ul { class: "event-hero-meta",
                     if let Some(date) = props.date {
@@ -157,6 +155,15 @@ pub fn EventHeader(props: EventHeaderProps) -> Element {
                     }
                     if let Some(count) = props.event_count {
                         li { i { class: "far fa-calendar-check", aria_hidden: "true" } span { "{count} " if count == 1 { "event" } else { "events" } } }
+                    }
+                }
+                div { class: "event-hero-badges",
+                    span { class: "event-kind-badge", i { class: "fas fa-trophy", aria_hidden: "true" } "{props.kind}" }
+                    if props.registration_open {
+                        span { class: "event-registration-badge", i { class: "fas fa-circle-check", aria_hidden: "true" } "Registration open" }
+                    }
+                    if let (Some(url), Some(name)) = (props.badge_league_url, props.badge_name) {
+                        Link { to: Route::LeagueHome { league_url: url }, class: "arctos-event-league-badge", "Part of {name}" }
                     }
                 }
             }

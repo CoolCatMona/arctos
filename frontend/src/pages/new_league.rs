@@ -26,8 +26,8 @@ pub fn NewLeague() -> Element {
         return rsx! {
             div { class: "row justify-content-center form-page",
                 div { class: "col-12 form-column",
-                    div { class: "card",
-                        div { class: "card-body",
+                    div { class: "edit-section",
+                        div { class: "edit-section-body",
                             h1 { "Create a league" }
                             p { "Log in to create and manage your league. Both player and team accounts can organize events." }
                             a { class: "btn btn-primary", href: "/login?next=/leagues/new", "Log in to continue" }
@@ -41,12 +41,12 @@ pub fn NewLeague() -> Element {
     rsx! {
         div { class: "row justify-content-center form-page",
             div { class: "col-12 form-column",
-                div { class: "card",
-                    div { class: "card-header",
+                div { class: "edit-section",
+                    div { class: "edit-section-heading",
                         h1 { class: "mb-2", "Create a league" }
                         p { class: "text-muted mb-0", "Start a private draft for a season of events, with shared registration and rosters." }
                     }
-                    div { class: "card-body",
+                    div { class: "edit-section-body",
                         if let Some(ref err) = error() {
                             div { class: "alert alert-danger mb-3", role: "alert", "{err}" }
                         }

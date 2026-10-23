@@ -134,7 +134,7 @@ pub fn Manage(url: String) -> Element {
         if let Some(Ok(d)) = val.read().as_ref() {
             div { class: "row",
                 div { class: "col-12",
-                    h1 { "{d.tournament.name} - Registration Management" }
+                    h2 { "Registration management" }
                     nav { aria_label: "breadcrumb",
                         ol { class: "breadcrumb",
                             li { class: "breadcrumb-item", Link { to: Route::TournamentHome { url: url.clone() }, "{d.tournament.name}" } }
@@ -214,9 +214,9 @@ pub fn Manage(url: String) -> Element {
 
                 div { class: "row",
                     div { class: "col-12",
-                        div { class: "card data-section",
-                            div { class: "card-header", h5 { class: "mb-0", "Team Registrations" } }
-                            div { class: "card-body",
+                        div { class: "edit-section data-section",
+                            div { class: "edit-section-heading", h5 { class: "mb-0", "Team Registrations" } }
+                            div { class: "edit-section-body",
                                 div { class: "table-responsive management-table-wrap",
                                     table { class: "table table-striped management-table",
                                         thead {
@@ -369,9 +369,9 @@ pub fn Manage(url: String) -> Element {
 
                 div { class: "row mt-4",
                     div { class: "col-12",
-                        div { class: "card data-section",
-                            div { class: "card-header", h5 { class: "mb-0", "Player Registrations" } }
-                            div { class: "card-body",
+                        div { class: "edit-section data-section",
+                            div { class: "edit-section-heading", h5 { class: "mb-0", "Player Registrations" } }
+                            div { class: "edit-section-body",
                                 div { class: "table-responsive management-table-wrap",
                                     table { class: "table table-striped management-table",
                                         thead {
@@ -614,10 +614,10 @@ pub fn Manage(url: String) -> Element {
                                 div { class: "alert alert-danger", "{err}" }
                             }
 
-                            // Player search card
-                            div { class: "card mb-3",
-                                div { class: "card-header", h5 { class: "mb-0", "Find Player" } }
-                                div { class: "card-body",
+                            // Player search section
+                            div { class: "edit-section mb-3",
+                                div { class: "edit-section-heading", h5 { class: "mb-0", "Find Player" } }
+                                div { class: "edit-section-body",
                                     input {
                                         r#type: "text",
                                         class: "form-control mb-2",
@@ -662,8 +662,8 @@ pub fn Manage(url: String) -> Element {
                                     let waiver_url = d.tournament.waiver_filepath.clone();
                                     let url_submit = url.clone();
                                     rsx! {
-                                        div { class: "card mb-3",
-                                            div { class: "card-header d-flex justify-content-between align-items-center",
+                                        div { class: "edit-section mb-3",
+                                            div { class: "edit-section-heading d-flex justify-content-between align-items-center",
                                                 h5 { class: "mb-0", "Registering: {player.name}" }
                                                 button {
                                                     class: "btn btn-sm btn-outline-secondary",
@@ -678,7 +678,7 @@ pub fn Manage(url: String) -> Element {
                                                     "Change"
                                                 }
                                             }
-                                            div { class: "card-body",
+                                            div { class: "edit-section-body",
                                                 form {
                                                     onsubmit: move |ev| {
                                                         ev.prevent_default();
@@ -834,10 +834,10 @@ pub fn Manage(url: String) -> Element {
                                 div { class: "alert alert-danger", "{err}" }
                             }
 
-                            // Team search card
-                            div { class: "card mb-3",
-                                div { class: "card-header", h5 { class: "mb-0", "Find Team" } }
-                                div { class: "card-body",
+                            // Team search section
+                            div { class: "edit-section mb-3",
+                                div { class: "edit-section-heading", h5 { class: "mb-0", "Find Team" } }
+                                div { class: "edit-section-body",
                                     input {
                                         r#type: "text",
                                         class: "form-control mb-2",
@@ -881,8 +881,8 @@ pub fn Manage(url: String) -> Element {
                                 {
                                     let url_team_submit = url.clone();
                                     rsx! {
-                                        div { class: "card mb-3",
-                                            div { class: "card-header d-flex justify-content-between align-items-center",
+                                        div { class: "edit-section mb-3",
+                                            div { class: "edit-section-heading d-flex justify-content-between align-items-center",
                                                 h5 { class: "mb-0", "Registering: {team.name}" }
                                                 button {
                                                     class: "btn btn-sm btn-outline-secondary",
@@ -895,7 +895,7 @@ pub fn Manage(url: String) -> Element {
                                                     "Change"
                                                 }
                                             }
-                                            div { class: "card-body",
+                                            div { class: "edit-section-body",
                                                 form {
                                                     onsubmit: move |ev| {
                                                         ev.prevent_default();

@@ -53,7 +53,7 @@ pub fn SideCompManageResults(url: String, comp_id: i32) -> Element {
                             "Permanently finalize results".to_string()
                         };
                         rsx! {
-                            h1 { "Manage results — {name}" }
+                            h2 { "Manage results — {name}" }
                             div { class: "mb-3 d-flex flex-wrap align-items-center gap-2",
                                 if finalized {
                                     span { class: "badge bg-dark", "Finalized" }
