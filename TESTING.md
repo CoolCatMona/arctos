@@ -309,6 +309,17 @@ registration; league registration destinations; and side-competition eligibility
 The checks verify one relevant primary action, preserved edit/roster access,
 login return paths, and responsive placement and contrast across all themes.
 
+Check calculated tournament and league standings with:
+
+```bash
+uv run python scripts/check_results_ui.py --screenshots /tmp/arctos-results
+```
+
+GET-only fixtures cover tied ranks, unplayed teams, podium trophies, keyboard
+sorting without changing ranks, ribbon inclusion, expandable match details,
+empty results, and resizing after collapse. Layout and trophy contrast checks
+cover all three themes in light/dark and widths from 320px to 1280px.
+
 Check page banners, profile navigation, uploads, and organizer access with:
 
 ```bash
@@ -323,7 +334,7 @@ or restore control. Profile geometry checks cover
 the 3:1 cover, overlapping avatar, left-aligned identity, 900px desktop column,
 and panels without card frames at 320px, 360px, and 1280px. Back/Forward checks
 preserve unsaved injury inputs and expanded team rosters. Player and team edits
-check live Markdown previews, the phone Preview/Edit switch, private phone exclusion,
+check player pronouns/pompfen, live Markdown previews, the phone Preview/Edit switch, private phone exclusion,
 validation while fields are hidden, and staged removal/cropping without writes.
 Intercepted multipart saves verify that text and both images travel together,
 duplicate submissions are blocked, failures retain drafts, and retry sends the

@@ -9,6 +9,7 @@ from uuid import uuid4
 from flask import current_app, request
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
+from app.domain.enums import Pompfen
 from app.utils.profile_banner_helpers import (
     MAX_BANNER_BYTES,
     OUTPUT_BANNER_SIZE,
@@ -22,7 +23,7 @@ from models import db
 
 MAX_PROFILE_EDIT_BYTES = 17 * 1024 * 1024
 _FIELDS = {
-    "player": ("name", "phone", "location", "bio"),
+    "player": ("name", "phone", "location", "bio", "pronouns"),
     "team": ("name", "location", "email", "website", "about"),
 }
 _IMAGES = ("profile_photo", "banner_photo")
@@ -89,10 +90,23 @@ def _validate_fields(entity, account_type: str, data: dict) -> dict:
             continue
         if not isinstance(value, str) or (field == "name" and not value.strip()):
             raise ProfileEditError(f"{label} must be {'nonempty text' if field == 'name' else 'text'}.")
+        if field == "pronouns":
+            value = value.strip()
         length = getattr(column.type, "length", None)
         if length is not None and len(value) > length:
             raise ProfileEditError(f"{label} must be {length} characters or fewer.")
-        fields[field] = value
+        fields[field] = (value or None) if field == "pronouns" else value
+    if account_type == "player" and "pompfen" in data:
+        selected = data["pompfen"]
+        allowed = [weapon.name for weapon in Pompfen]
+        if (
+            not isinstance(selected, list)
+            or len(selected) > len(allowed)
+            or any(not isinstance(value, str) or value not in allowed for value in selected)
+            or len(set(selected)) != len(selected)
+        ):
+            raise ProfileEditError("Pompfen must be a list of distinct supported choices.")
+        fields["pompfen"] = [weapon for weapon in allowed if weapon in selected]
     return fields
 
 

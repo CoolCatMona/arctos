@@ -1129,6 +1129,10 @@ pub struct PlayerProfileData {
     pub phone: Option<String>,
     pub location: Option<String>,
     pub bio: Option<String>,
+    #[serde(default)]
+    pub pronouns: Option<String>,
+    #[serde(default)]
+    pub pompfen: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -45,6 +45,8 @@ class Player(UserMixin, db.Model):
         banner_photo: Server-relative path to the optional profile banner.
         bio: Free-text biography.
         location: Player's city or region.
+        pronouns: Optional publicly displayed pronouns.
+        pompfen: Canonical names of the player's selected pompfen roles.
     """
 
     __tablename__ = "players"
@@ -59,6 +61,8 @@ class Player(UserMixin, db.Model):
     banner_photo = db.Column(db.String(AUTH_STRING_LEN), nullable=True)
     bio = db.Column(db.Text)
     location = db.Column(db.String(SHORT_NAME_LEN))
+    pronouns = db.Column(db.String(64), nullable=True)
+    pompfen = db.Column(db.JSON, nullable=False, default=list, server_default="[]")
 
     def set_password(self, password: str) -> None:
         """Hash *password* and store it in :attr:`pw_hash`.

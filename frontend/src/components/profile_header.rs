@@ -1,5 +1,6 @@
-use crate::api;
+use super::PlayerPompfen;
 use crate::Route;
+use crate::api;
 use dioxus::prelude::*;
 
 #[component]
@@ -10,6 +11,8 @@ pub fn ProfileHeader(
     avatar: Option<String>,
     banner: Option<String>,
     location: Option<String>,
+    #[props(default)] pronouns: Option<String>,
+    #[props(default)] pompfen: Vec<String>,
     past_count: u32,
     edit_route: Option<Route>,
 ) -> Element {
@@ -38,7 +41,11 @@ pub fn ProfileHeader(
                 }
                 div { class: "profile-identity",
                     h1 { id: "page-banner-heading", tabindex: "-1", "{name}" }
-                    p { class: "profile-account-name", "@{account_id}" }
+                    p { class: "profile-account-name", "@{account_id}"
+                        if let Some(pronouns) = pronouns.as_ref().filter(|value| !value.trim().is_empty()) {
+                            span { class: "profile-pronouns", " · {pronouns}" }
+                        }
+                    }
                 }
                 div { class: "profile-meta",
                     if let Some(location) = location.as_ref().filter(|value| !value.trim().is_empty()) {
@@ -48,6 +55,7 @@ pub fn ProfileHeader(
                         dt { "Past events" }
                         dd { "{past_count}" }
                     }
+                    PlayerPompfen { selected: pompfen }
                 }
             }
         }

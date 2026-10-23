@@ -214,6 +214,8 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
             ProfileHeader {
                 account_id: d.player.id.clone(), kind: "player".to_string(), name: d.player.name.clone(),
                 avatar: d.player.profile_photo.clone(), banner: d.player.banner_photo.clone(), location: d.player.location.clone(),
+                pronouns: d.player.pronouns.clone(),
+                pompfen: d.player.pompfen.clone(),
                 past_count: d.past_event_count,
                 edit_route: can_edit_profile.then(|| Route::EditPlayerProfile { player_id: d.player.id.clone() }),
             }

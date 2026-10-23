@@ -69,8 +69,10 @@ existing database:
 |---|---|
 | `0023_profile_banners` | Nullable `banner_photo` columns on `players` and `teams` |
 | `0024_event_banners` | Nullable `banner_photo` columns on `tournaments` and `leagues` |
+| `0025_player_profile_details` | Optional player `pronouns` and a `pompfen` JSON list, initially empty |
 
-Existing rows and avatar paths stay intact. Profiles and events display the
+Existing rows and avatar paths stay intact. Existing players have no pronouns
+or selected pompfen until they choose to add them. Profiles and events display the
 theme background until an authorized user uploads a cover. Run `uv sync` to
 install Pillow, back up the database, then apply pending migrations to the
 intended database before starting Flask:
@@ -92,7 +94,7 @@ A database created directly by `db.create_all()` may have no Alembic revision.
 Do not stamp it at the new head to skip missing columns. Inspect its schema
 first: if it matches revision `0022_oauth_provider` and lacks all four banner
 columns, stamp **0022_oauth_provider**, then upgrade. A fresh database created
-from the updated models already contains both additions; verify that schema
+from the updated models already contains all listed additions; verify that schema
 before stamping it at head. Always point these commands at the intended
 local/demo database using `SQLALCHEMY_DATABASE_URI`.
 

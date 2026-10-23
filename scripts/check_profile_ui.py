@@ -686,6 +686,8 @@ async def staged_profile_edit(check: SmokeCheck, page: Page, kind: str) -> None:
         form = page.locator("#profile-edit-form")
         save = form.locator("button[type=submit]")
         await expect(form).to_be_visible()
+        if kind == "team":
+            await expect(page.locator("#profile-edit-pronouns, .player-pompfen-editor")).to_have_count(0)
         await expect(form.locator(".card")).to_have_count(0)
         await expect(save).to_be_disabled()
         settings = page.locator(".profile-account-settings")
@@ -810,6 +812,8 @@ async def staged_profile_edit(check: SmokeCheck, page: Page, kind: str) -> None:
         assert len(writes) == 2 and writes[0] == writes[1], "Retry must preserve both crops and all fields"
         assert set(writes[-1]) == {"profile", "profile_photo", "banner_photo"}, writes[-1].keys()
         profile = json.loads(writes[-1]["profile"])
+        if kind == "team":
+            assert "pronouns" not in profile and "pompfen" not in profile
         assert profile["name"] == "Saved draft name" and profile["location"] == "Saved draft city"
         assert profile["about" if kind == "team" else "bio"] == "**Saved draft bio**"
         for field, maximum, aspect, source in (("profile_photo", 512, 1, SMALL_PNG), ("banner_photo", 1500, 3, PNG)):
@@ -883,6 +887,154 @@ async def owner_profile_tabs(check: SmokeCheck, page: Page, kind: str) -> None:
         await check.player_profile_tabs(page)
     await check.check_layout(page, f"{kind}-owner-tabs", 320)
     check.visited += 1
+
+
+async def player_identity(check: SmokeCheck, page: Page) -> None:
+    """Optional public player attributes stay local until the existing atomic Save."""
+    await check.login(page, "demo-player")
+    path, api_path = "/players/demo-player", "/_api/players/demo-player"
+    data = await api_json(page.context, check.base_url, api_path)
+    data["player"].update(pronouns=None, pompfen=[])
+    writes = []
+    succeed = False
+    gate, seen = asyncio.Event(), asyncio.Event()
+    check.mock_gate = gate
+
+    async def compact_metadata(scope: str) -> None:
+        header = page.locator(scope)
+        icons = header.get_by_role("list", name="Pompfen", exact=True)
+        await expect(icons.locator(".player-pompfen-item")).to_have_count(8)
+        await expect(icons.locator(".player-pompfen-item.is-selected")).to_have_count(2)
+        await expect(icons.locator("button, input, h2, .fa-check")).to_have_count(0)
+        await expect(icons.locator('[data-pompfen="CHAIN"]')).to_have_attribute("title", "Chain (selected)")
+        await expect(icons.locator('[data-pompfen="LONG"]')).to_have_attribute("title", "Long (not selected)")
+        await expect(icons.locator('[data-pompfen="CHAIN"] .visually-hidden')).to_have_text("Selected: Chain")
+        metrics = await icons.evaluate("""el => {
+            const box=e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,height:r.height}};
+            const tabs=el.closest('.profile-page').querySelector('.event-route-tabs, .profile-preview-tabs');
+            return {row:box(el),stat:box(el.parentElement.querySelector('.profile-event-stat')),tabs:box(tabs),
+                items:[...el.children].map(item=>{const s=getComputedStyle(item),symbol=item.querySelector('.player-pompfen-symbol');
+                    return {...box(item),border:s.borderWidth,bg:s.backgroundColor,opacity:getComputedStyle(symbol).opacity}})};
+        }""")
+        assert metrics["row"]["height"] == 28 and metrics["row"]["bottom"] <= metrics["tabs"]["y"], metrics
+        assert len({item["y"] for item in metrics["items"]}) == 1, metrics
+        assert all(
+            item["height"] == 28 and item["border"] == "0px" and item["bg"] == "rgba(0, 0, 0, 0)"
+            for item in metrics["items"]
+        ), metrics
+        assert metrics["items"][0]["opacity"] == "1" and float(metrics["items"][1]["opacity"]) < 0.5, metrics
+        if page.viewport_size["width"] <= 575:
+            assert metrics["row"]["y"] >= metrics["stat"]["bottom"], metrics
+        else:
+            assert (
+                metrics["row"]["x"] >= metrics["stat"]["right"] and abs(metrics["row"]["y"] - metrics["stat"]["y"]) <= 8
+            ), metrics
+
+    async def fixture(route: Route) -> None:
+        request, parsed = route.request, urlsplit(route.request.url)
+        if parsed.netloc != check.origin or parsed.path != api_path:
+            await route.fallback()
+        elif request.method == "GET":
+            await route.fulfill(json=data)
+        elif request.method == "PUT":
+            parts = multipart_parts(request)
+            assert set(parts) == {"profile"}, "Identity-only Save uploaded an unchanged image"
+            payload = json.loads(parts["profile"])
+            writes.append(payload)
+            seen.set()
+            await gate.wait()
+            if succeed:
+                data["player"].update(payload)
+                data["player"]["pronouns"] = payload["pronouns"].strip() or None
+                await route.fulfill(json={"success": True})
+            else:
+                await route.fulfill(json={"success": False, "error": "Profile fixture: please retry."})
+        else:
+            await route.fallback()
+
+    async def edit_choices() -> None:
+        await page.goto(check.base_url + path + "/edit", wait_until="domcontentloaded")
+        pronouns = page.locator("#profile-edit-pronouns")
+        await expect(pronouns).to_have_attribute("maxlength", "64")
+        await pronouns.fill("they/them")
+        choices = page.locator(".player-pompfen-editor")
+        await expect(choices.get_by_role("checkbox")).to_have_count(8)
+        for name in ("Chain", "Staff"):
+            await choices.get_by_role("checkbox", name=name, exact=True).check()
+        long = choices.get_by_role("checkbox", name="Long", exact=True)
+        await long.focus()
+        await page.keyboard.press("Space")
+        await expect(long).to_be_checked()
+        await page.keyboard.press("Space")
+        await expect(long).not_to_be_checked()
+        boxes = await choices.locator("label").evaluate_all(
+            "els=>els.map(el=>{const r=el.getBoundingClientRect();return [r.width,r.height]})"
+        )
+        assert all(width >= 44 and height >= 44 for width, height in boxes), boxes
+        await page.get_by_role("button", name="Preview profile", exact=True).click()
+        await expect(page.locator("#profile-edit-preview .profile-pronouns")).to_contain_text("they/them")
+        await compact_metadata("#profile-edit-preview .profile-detail-header")
+        await expect(page.locator(".profile-preview-content .player-pompfen")).to_have_count(0)
+
+    await page.context.route("**/_api/**", fixture)
+    try:
+        await page.goto(check.base_url + path, wait_until="domcontentloaded")
+        await expect(page.locator("#page-banner-heading")).to_be_visible()
+        await expect(page.locator(".profile-pronouns, .player-pompfen")).to_have_count(0)
+        await edit_choices()
+        await page.get_by_role("button", name="Cancel", exact=True).click()
+        await expect(page).to_have_url(check.base_url + path)
+        await expect(page.locator(".profile-pronouns, .player-pompfen")).to_have_count(0)
+        assert not writes, "Cancel saved new player attributes"
+        await edit_choices()
+        save = page.locator("#profile-edit-form button[type=submit]")
+        await save.click()
+        await asyncio.wait_for(seen.wait(), 10)
+        await expect(save).to_be_disabled()
+        gate.set()
+        await expect(page.locator(".profile-edit-error")).to_have_text("Profile fixture: please retry.")
+        await expect(page.locator("#profile-edit-pronouns")).to_have_value("they/them")
+        for code in ("CHAIN", "STAFF"):
+            await expect(page.locator(f"#profile-pompfen-{code}")).to_be_checked()
+        succeed = True
+        seen.clear()
+        gate.clear()
+        await save.click()
+        await asyncio.wait_for(seen.wait(), 10)
+        gate.set()
+        await expect(page).to_have_url(check.base_url + path)
+        assert writes == [writes[0], writes[0]] and writes[0]["pronouns"] == "they/them"
+        assert writes[0]["pompfen"] == ["CHAIN", "STAFF"]
+        await expect(page.locator(".profile-pronouns")).to_contain_text("they/them")
+        await compact_metadata(".profile-detail-header")
+        await expect(page.locator(".profile-detail-content .player-pompfen")).to_have_count(0)
+        for mode in ("light", "dark"):
+            for palette in PALETTES:
+                await choose(page, palette, mode)
+                await close_menu(page)
+                await check_contrast(page, ".profile-pronouns")
+                await compact_metadata(".profile-detail-header")
+                await check.check_layout(page, f"player-pronouns-pompfen-{palette}-{mode}", 320)
+                check.visited += 1
+        await page.set_viewport_size({"width": 1280, "height": 900})
+        await choose(page, "california", "light")
+        await close_menu(page)
+        await compact_metadata(".profile-detail-header")
+        await check.check_layout(page, "player-pronouns-pompfen-desktop", 1280)
+        check.visited += 1
+        await page.set_viewport_size({"width": 320, "height": 900})
+        await page.goto(check.base_url + path + "/edit", wait_until="domcontentloaded")
+        await expect(page.locator("#profile-edit-pronouns")).to_have_value("they/them")
+        await page.locator("#profile-edit-pronouns").fill("")
+        for code in ("CHAIN", "STAFF"):
+            await page.locator(f"#profile-pompfen-{code}").uncheck()
+        await page.locator("#profile-edit-form button[type=submit]").click()
+        await expect(page).to_have_url(check.base_url + path)
+        await expect(page.locator(".profile-pronouns, .player-pompfen")).to_have_count(0)
+        assert writes[-1]["pronouns"] == "" and writes[-1]["pompfen"] == []
+    finally:
+        gate.set()
+        await page.context.unroute("**/_api/**", fixture)
 
 
 PROFILE_MARKDOWN = """## Profile introduction
@@ -1049,6 +1201,7 @@ async def run(args) -> int:
                 ("league-banner-upload", 320, lambda check, page: image_upload(check, page, "league")),
                 ("organizer-tools", 320, organizer_tools),
                 ("profile-theme-matrix", 360, profile_themes),
+                ("player-pronouns-pompfen", 320, player_identity),
                 ("player-markdown", 320, lambda check, page: profile_markdown(check, page, "player")),
                 ("team-markdown", 320, lambda check, page: profile_markdown(check, page, "team")),
             ):

@@ -40,9 +40,19 @@
 .arctos-app .event-route-tab[aria-current=page] { color: var(--ui-link); border-bottom-color: var(--ui-link); font-weight: 700; }
 .arctos-app .event-route-tab:hover:not(:disabled) { color: var(--ui-link); background: var(--ui-surface-hover); }
 .arctos-app .event-route-tab:focus-visible { outline: 3px solid var(--ui-link); outline-offset: -4px; }
-.arctos-app .event-route-tab:disabled { opacity: 1; color: var(--ui-muted); cursor: default; }
+.arctos-app .event-route-tab:disabled { opacity: .55; color: var(--ui-muted); cursor: default; }
 .arctos-app .event-section[hidden] { display: none; }
 .arctos-app .event-detail-content .results-expand-toggle { min-width: 44px; min-height: 44px; }
+.arctos-app .results-sort-button { display: inline-flex; align-items: center; gap: .35rem; min-height: 44px; padding: .35rem 0; border: 0; border-radius: .2rem; background: transparent; color: inherit; font: inherit; white-space: nowrap; }
+.arctos-app .results-sort-button:focus-visible { outline: 3px solid var(--ui-link); outline-offset: 3px; }
+.arctos-app .results-rank { display: inline-flex; align-items: center; gap: .45rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.arctos-app .results-rank .fa-trophy { width: 1rem; text-align: center; }
+.arctos-app .results-rank-gold { color: #866300; }
+.arctos-app .results-rank-silver { color: #626d79; }
+.arctos-app .results-rank-bronze { color: #95552d; }
+.arctos-app[data-bs-theme="dark"] .results-rank-gold { color: #f0c65a; }
+.arctos-app[data-bs-theme="dark"] .results-rank-silver { color: #bdc9d5; }
+.arctos-app[data-bs-theme="dark"] .results-rank-bronze { color: #e4a273; }
 .arctos-app .event-info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
 .arctos-app .event-info-grid .card { margin: 0; }
 .arctos-app .event-detail-content .card > .card-header { background: transparent; border-bottom: 0; padding-bottom: .75rem; }

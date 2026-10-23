@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::{ChangePasswordCard, ConnectedAppsCard, ImageDraft, ProfileBio, ProfileImageControls, ProfileImageEditor};
+use crate::components::{ChangePasswordCard, ConnectedAppsCard, ImageDraft, PlayerPompfen, ProfileBio, ProfileImageControls, ProfileImageEditor};
 use crate::Route;
 use dioxus::prelude::*;
 
@@ -8,6 +8,8 @@ struct ProfileFields {
     name: String,
     location: String,
     about: String,
+    pronouns: String,
+    pompfen: Vec<String>,
     phone: String,
     email: String,
     website: String,
@@ -65,7 +67,8 @@ pub fn ProfileEditPage(account_id: String, team: bool) -> Element {
             let value = response.player;
             Ok(ProfileEditData {
                 fields: ProfileFields { name: value.name, location: value.location.unwrap_or_default(),
-                    about: value.bio.unwrap_or_default(), phone: value.phone.unwrap_or_default(), ..Default::default() },
+                    about: value.bio.unwrap_or_default(), phone: value.phone.unwrap_or_default(),
+                    pronouns: value.pronouns.unwrap_or_default(), pompfen: value.pompfen, ..Default::default() },
                 photo: value.profile_photo, banner: value.banner_photo,
                 past_count: response.past_event_count, has_password: user.has_password,
             })
@@ -87,7 +90,7 @@ pub fn ProfileEditPage(account_id: String, team: bool) -> Element {
 fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Element {
     let nav = use_navigator();
     let mut auth_version = super::layout::use_auth_invalidate();
-    let fields = use_signal(|| data.fields.clone());
+    let mut fields = use_signal(|| data.fields.clone());
     let photo = use_signal(|| ImageDraft::new(data.photo.clone()));
     let banner = use_signal(|| ImageDraft::new(data.banner.clone()));
     let active = use_signal(|| None::<bool>);
@@ -130,7 +133,8 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
                     serde_json::json!({"name": draft.name, "location": draft.location, "about": draft.about,
                         "email": draft.email, "website": draft.website})
                 } else {
-                    serde_json::json!({"name": draft.name, "location": draft.location, "bio": draft.about, "phone": draft.phone})
+                    serde_json::json!({"name": draft.name, "location": draft.location, "bio": draft.about, "phone": draft.phone,
+                        "pronouns": draft.pronouns, "pompfen": draft.pompfen})
                 };
                 api::save_profile_edit(if team { "teams" } else { "players" }, &id, &details,
                     avatar_bytes, banner_bytes, photo.is_removed(), banner.is_removed()).await
@@ -174,13 +178,18 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
                                     ProfileImageControls { banner, photo, active, busy, disabled: saving() }
                                     div { class: "profile-identity",
                                         h2 { id: "profile-preview-name", class: "profile-preview-name", if fields().name.trim().is_empty() { "Your name" } else { "{fields().name}" } }
-                                        p { class: "profile-account-name", "@{account_id}" }
+                                        p { class: "profile-account-name", "@{account_id}"
+                                            if !team && !fields().pronouns.trim().is_empty() {
+                                                span { class: "profile-pronouns", " · {fields().pronouns}" }
+                                            }
+                                        }
                                     }
                                     div { class: "profile-meta",
                                         if !fields().location.trim().is_empty() {
                                             p { class: "profile-location", i { class: "fas fa-map-marker-alt", aria_hidden: "true" } "{fields().location}" }
                                         }
                                         dl { class: "profile-event-stat", dt { "Past events" } dd { "{data.past_count}" } }
+                                        if !team { PlayerPompfen { selected: fields().pompfen } }
                                     }
                                 }
                             }
@@ -196,7 +205,9 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
                     }
                     section { class: "profile-edit-fields", aria_label: "Profile details",
                         ProfileField { state: fields, field: Field::Name, label: if team { "Team name" } else { "Display name" }, required: true, disabled: saving() }
+                        if !team { ProfileField { state: fields, field: Field::Pronouns, label: "Pronouns", help: "Optional. Shown on your profile.", disabled: saving() } }
                         ProfileField { state: fields, field: Field::Location, label: "Location", disabled: saving() }
+                        if !team { PlayerPompfen { selected: fields().pompfen, disabled: saving(), onchange: move |value| fields.write().pompfen = value } }
                         ProfileField { state: fields, field: Field::About, label: if team { "About" } else { "Bio" }, multiline: true,
                             help: "Markdown supported: **bold**, *italic*, headings, lists, and [links](https://example.com).", disabled: saving() }
                         if team {
@@ -218,23 +229,23 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
 }
 
 #[derive(Clone, Copy, PartialEq)]
-enum Field { Name, Location, About, Phone, Email, Website }
+enum Field { Name, Location, About, Pronouns, Phone, Email, Website }
 
 impl Field {
     fn id(self) -> &'static str {
         match self { Self::Name => "profile-edit-name", Self::Location => "profile-edit-location",
-            Self::About => "profile-edit-about", Self::Phone => "profile-edit-phone", Self::Email => "profile-edit-email", Self::Website => "profile-edit-website" }
+            Self::About => "profile-edit-about", Self::Pronouns => "profile-edit-pronouns", Self::Phone => "profile-edit-phone", Self::Email => "profile-edit-email", Self::Website => "profile-edit-website" }
     }
     fn get(self, fields: &ProfileFields) -> &str {
-        match self { Self::Name => &fields.name, Self::Location => &fields.location, Self::About => &fields.about,
+        match self { Self::Name => &fields.name, Self::Location => &fields.location, Self::About => &fields.about, Self::Pronouns => &fields.pronouns,
             Self::Phone => &fields.phone, Self::Email => &fields.email, Self::Website => &fields.website }
     }
     fn set(self, fields: &mut ProfileFields, value: String) {
-        *match self { Self::Name => &mut fields.name, Self::Location => &mut fields.location, Self::About => &mut fields.about,
+        *match self { Self::Name => &mut fields.name, Self::Location => &mut fields.location, Self::About => &mut fields.about, Self::Pronouns => &mut fields.pronouns,
             Self::Phone => &mut fields.phone, Self::Email => &mut fields.email, Self::Website => &mut fields.website } = value;
     }
     fn limit(self) -> usize {
-        match self { Self::Name | Self::Location => 100, Self::Phone => 20, Self::Email => 255, Self::Website => 200, Self::About => 20000 }
+        match self { Self::Name | Self::Location => 100, Self::Pronouns => 64, Self::Phone => 20, Self::Email => 255, Self::Website => 200, Self::About => 20000 }
     }
 }
 
@@ -254,6 +265,7 @@ fn ProfileField(mut state: Signal<ProfileFields>, field: Field, label: String,
                     oninput: move |event| field.set(&mut state.write(), event.value()) }
             } else {
                 input { id, class: "form-control", r#type: input_type, value, required, disabled, maxlength: field.limit(),
+                    aria_describedby: (!help.is_empty()).then(|| format!("{id}-help")),
                     oninput: move |event| field.set(&mut state.write(), event.value()) }
             }
             if !help.is_empty() { p { id: "{id}-help", class: "form-text", "{help}" } }

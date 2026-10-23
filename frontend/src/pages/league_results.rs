@@ -1,6 +1,6 @@
 use super::league_home::LeagueHomeContent;
 use crate::api;
-use crate::components::{ResultsGamesTable, rows_for_team};
+use crate::components::{ResultsGamesTable, ResultsRank, ResultsSortHeader, calculate_ranks, rows_for_team};
 use crate::Route;
 use dioxus::prelude::*;
 use std::cmp::Ordering;
@@ -31,7 +31,7 @@ fn LeagueResultsContent(league_url: String) -> Element {
                 .map_err(|e| e.to_string())
         }
     }));
-    let mut sort_column = use_signal(|| "team".to_string());
+    let mut sort_column = use_signal(|| "rank".to_string());
     let mut sort_asc = use_signal(|| true);
     let mut expanded = use_signal(|| None::<String>);
     let mut team_matches_cache =
@@ -60,14 +60,30 @@ fn LeagueResultsContent(league_url: String) -> Element {
                 }
             } else {
                 {
+                    let ranks = calculate_ranks(&results_data.teams);
                     let mut teams_sorted = results_data.teams.iter().collect::<Vec<_>>();
                     let col = sort_column().clone();
                     let asc = sort_asc();
                     teams_sorted.sort_by(|a, b| {
+                        // Keep unranked teams last in either rank sort direction.
+                        if col == "rank" {
+                            return match (ranks.get(&a.id), ranks.get(&b.id)) {
+                                (Some(a_rank), Some(b_rank)) => {
+                                    let order = a_rank.cmp(b_rank);
+                                    (if asc { order } else { order.reverse() })
+                                        .then_with(|| a.pseudonym.to_lowercase().cmp(&b.pseudonym.to_lowercase()))
+                                        .then_with(|| a.id.cmp(&b.id))
+                                }
+                                (Some(_), None) => Ordering::Less,
+                                (None, Some(_)) => Ordering::Greater,
+                                (None, None) => a.pseudonym.to_lowercase().cmp(&b.pseudonym.to_lowercase())
+                                    .then_with(|| a.id.cmp(&b.id)),
+                            };
+                        }
                         let ord = match col.as_str() {
                             "matches" => {
-                                let a_tot = a.matches_won + a.matches_lost;
-                                let b_tot = b.matches_won + b.matches_lost;
+                                let a_tot = u64::from(a.matches_won) + u64::from(a.matches_lost);
+                                let b_tot = u64::from(b.matches_won) + u64::from(b.matches_lost);
                                 let a_ratio = if a_tot > 0 { a.matches_won as f64 / a_tot as f64 } else { 0.0 };
                                 let b_ratio = if b_tot > 0 { b.matches_won as f64 / b_tot as f64 } else { 0.0 };
                                 a_ratio.partial_cmp(&b_ratio).unwrap_or(Ordering::Equal)
@@ -75,8 +91,8 @@ fn LeagueResultsContent(league_url: String) -> Element {
                                     .then_with(|| a.matches_won.cmp(&b.matches_won))
                             }
                             "points" => {
-                                let a_tot = a.points_won + a.points_lost;
-                                let b_tot = b.points_won + b.points_lost;
+                                let a_tot = u64::from(a.points_won) + u64::from(a.points_lost);
+                                let b_tot = u64::from(b.points_won) + u64::from(b.points_lost);
                                 let a_ratio = if a_tot > 0 { a.points_won as f64 / a_tot as f64 } else { 0.0 };
                                 let b_ratio = if b_tot > 0 { b.points_won as f64 / b_tot as f64 } else { 0.0 };
                                 a_ratio.partial_cmp(&b_ratio).unwrap_or(Ordering::Equal)
@@ -88,16 +104,32 @@ fn LeagueResultsContent(league_url: String) -> Element {
                         if asc { ord } else { ord.reverse() }
                     });
                 rsx! {
-                div { class: "card data-section mt-3",
-                    div { class: "card-body",
+                div { class: "data-section mt-3",
+                    div {
                         div { class: "table-responsive",
                             table { class: "table table-striped align-middle mb-0",
+                                caption { class: "caption-top text-muted small pt-0", "Ranked by match win percentage, then point win percentage. Ties share a rank." }
                                 thead {
                                     tr {
-                                        th { style: "width: 1%;", "" }
-                                        th {
-                                            class: "cursor-pointer user-select-none",
-                                            onclick: move |_| {
+                                        th { scope: "col", style: "width: 1%;", span { class: "visually-hidden", "Match details" } }
+                                        ResultsSortHeader {
+                                            label: "Rank",
+                                            active: sort_column() == "rank",
+                                            ascending: sort_asc(),
+                                            onsort: move |_| {
+                                                if sort_column() == "rank" {
+                                                    sort_asc.set(!sort_asc());
+                                                } else {
+                                                    sort_column.set("rank".to_string());
+                                                    sort_asc.set(true);
+                                                }
+                                            },
+                                        }
+                                        ResultsSortHeader {
+                                            label: "Team",
+                                            active: sort_column() == "team",
+                                            ascending: sort_asc(),
+                                            onsort: move |_| {
                                                 if sort_column() == "team" {
                                                     sort_asc.set(!sort_asc());
                                                 } else {
@@ -105,14 +137,12 @@ fn LeagueResultsContent(league_url: String) -> Element {
                                                     sort_asc.set(true);
                                                 }
                                             },
-                                            "Team"
-                                            if sort_column() == "team" {
-                                                span { class: "ms-1", if sort_asc() { "↑" } else { "↓" } }
-                                            }
                                         }
-                                        th {
-                                            class: "cursor-pointer user-select-none",
-                                            onclick: move |_| {
+                                        ResultsSortHeader {
+                                            label: "Matches (W–L)",
+                                            active: sort_column() == "matches",
+                                            ascending: sort_asc(),
+                                            onsort: move |_| {
                                                 if sort_column() == "matches" {
                                                     sort_asc.set(!sort_asc());
                                                 } else {
@@ -120,14 +150,12 @@ fn LeagueResultsContent(league_url: String) -> Element {
                                                     sort_asc.set(false);
                                                 }
                                             },
-                                            "Matches (W–L)"
-                                            if sort_column() == "matches" {
-                                                span { class: "ms-1", if sort_asc() { "↑" } else { "↓" } }
-                                            }
                                         }
-                                        th {
-                                            class: "cursor-pointer user-select-none",
-                                            onclick: move |_| {
+                                        ResultsSortHeader {
+                                            label: "Points (W–L)",
+                                            active: sort_column() == "points",
+                                            ascending: sort_asc(),
+                                            onsort: move |_| {
                                                 if sort_column() == "points" {
                                                     sort_asc.set(!sort_asc());
                                                 } else {
@@ -135,10 +163,6 @@ fn LeagueResultsContent(league_url: String) -> Element {
                                                     sort_asc.set(false);
                                                 }
                                             },
-                                            "Points (W–L)"
-                                            if sort_column() == "points" {
-                                                span { class: "ms-1", if sort_asc() { "↑" } else { "↓" } }
-                                            }
                                         }
                                     }
                                 }
@@ -192,6 +216,7 @@ fn LeagueResultsContent(league_url: String) -> Element {
                                                     if is_expanded { "−" } else { "+" }
                                                 }
                                             }
+                                            td { ResultsRank { rank: ranks.get(&tid).copied() } }
                                             td {
                                                 Link {
                                                     to: Route::TeamProfilePage { id: row_team.id.clone() },
@@ -214,7 +239,7 @@ fn LeagueResultsContent(league_url: String) -> Element {
                                         if is_expanded {
                                             tr {
                                                 key: "{tid}-detail",
-                                                td { colspan: 4, class: "p-0 bg-light results-games-cell",
+                                                td { colspan: 5, class: "p-0 bg-light results-games-cell",
                                                         match team_matches_cache().get(&tid) {
                                                             None | Some(None) => rsx! { p { class: "text-muted mb-0", "Loading…" } },
                                                             Some(Some(Err(e))) => rsx! { p { class: "text-danger mb-0", "{e}" } },

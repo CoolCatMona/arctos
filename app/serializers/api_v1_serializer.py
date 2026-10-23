@@ -101,7 +101,11 @@ def player_summary_json(player) -> dict:
 
 
 def player_profile_json(player) -> dict:
-    return player_summary_json(player) | {"bio": player.bio}
+    return player_summary_json(player) | {
+        "bio": player.bio,
+        "pronouns": player.pronouns,
+        "pompfen": player.pompfen or [],
+    }
 
 
 def team_summary_json(team) -> dict:

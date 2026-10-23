@@ -126,7 +126,7 @@ pub fn TournamentHomeContent(
                 let mut tabs = vec![
                     EventTab { id: "info".into(), label: "Info".into(), icon: "fas fa-info-circle".into(), href: Some(format!("/{url}")) },
                     EventTab { id: "teams".into(), label: format!("Teams ({})", d.teams_with_counts.len()), icon: "fas fa-users".into(), href: Some(format!("/{url}?tab=teams")) },
-                    EventTab { id: "schedule".into(), label: if d.can_view_schedule { if d.tournament.schedule_published { "Schedule" } else { "Preview schedule" } } else if d.tournament.schedule_published { "Schedule unavailable" } else { "Schedule not posted" }.into(), icon: "far fa-calendar-alt".into(), href: d.can_view_schedule.then(|| format!("/{url}/schedule")) },
+                    EventTab { id: "schedule".into(), label: "Schedule".into(), icon: "far fa-calendar-alt".into(), href: d.can_view_schedule.then(|| format!("/{url}/schedule")) },
                     EventTab { id: "results".into(), label: "Results".into(), icon: "fas fa-trophy".into(), href: Some(format!("/{url}/results")) },
                 ];
                 if d.tournament.bracket_published || viewer_is_to {

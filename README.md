@@ -136,7 +136,13 @@ completed matches, and side competitions. Two scoring examples each have 16 entr
 `instance/demo.db`; rerunning preserves changes and never touches
 `instance/tournament.db`. These are local test accounts, not production users.
 
-Existing databases need migrations `0023_profile_banners` and `0024_event_banners` for uploaded profile and event banners. Run `uv sync --group test`, back up your database, and apply pending migrations before starting the updated backend. For the demo, set `SQLALCHEMY_DATABASE_URI=sqlite:////absolute/path/to/arctos/instance/demo.db` when running Alembic. See [the banner migration notes](migrations/README.md#profile-and-event-banners) for unversioned databases. Fresh demos already include these columns.
+Existing databases need migrations `0023_profile_banners`, `0024_event_banners`, and `0025_player_profile_details` for uploaded banners and player pronouns/pompfen. Run `uv sync --group test`, back up each working database, and apply pending migrations before restarting the updated backend. Existing demo copies are preserved by `scripts.dev_demo`, so they are not automatically migrated on restart. Point Alembic at each working copy explicitly:
+
+```bash
+SQLALCHEMY_DATABASE_URI=sqlite:////absolute/path/to/arctos/instance/snapshot-demo/demo.db uv run alembic upgrade head
+```
+
+Use `instance/demo.db` instead for the ordinary demo, never the original snapshot source. See [the migration notes](migrations/README.md#profile-and-event-banners) for schema verification and stamping of unversioned databases. Fresh demos already include the current columns.
 
 Profile owners can preview text, avatars, and covers from Edit profile, then save
 all changes together. Player bios and team descriptions support Markdown,
@@ -167,6 +173,16 @@ have a known Alembic revision; the launcher never stamps an unknown or
 unversioned database. Add `--seed-only` to prepare the copy without starting
 the server. Uploaded media is not copied by this command; make its existing
 `static/uploads` files available separately.
+
+For a populated event to practice organizing, run this after preparing and migrating the working demo:
+
+```bash
+uv run python -m scripts.dev_practice --database instance/snapshot-demo/demo.db
+```
+
+This adds **Practice Open — Demo** at `/demo-practice`, owned by `demo-organizer`: six teams with six players each, two fields, six completed matches, a ready match, a paused live match, and a later scheduled match. Its active dueling side event has 24 entrants, with sample wins/losses for twelve and no scores yet for twelve. The command prints direct Start, Run, Enter results, and Manage results links. Use `--database instance/demo.db` for the ordinary demo.
+
+The practice command makes only additive changes, rolls back the whole addition on failure, and does not run app startup or scheduling updates on other events. Repeating it preserves edits, scores, passwords, and deletions; use a fresh `--slug demo-practice-2` for another independent example. Colliding IDs are rejected rather than reused. Existing accounts and `demo-open` stay unchanged; the original snapshot is never an input to this command.
 
 For a phone on your local network, start the frontend with
 `just frontend --addr 0.0.0.0`, then open your computer's LAN address on port

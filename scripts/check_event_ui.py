@@ -160,13 +160,13 @@ async def event_navigation(check: SmokeCheck, page: Page, event: EventPage, payl
     await expect(nav.get_by_role("link", name="Results", exact=True)).to_have_attribute("href", event.path + "/results")
     if event.prefix == "event":
         if payload["can_view_schedule"]:
-            schedule = nav.get_by_role("link", name=re.compile("^(?:Preview schedule|Schedule)$"))
+            schedule = nav.get_by_role("link", name="Schedule", exact=True)
             await expect(schedule).to_be_visible()
             assert urlsplit(await schedule.get_attribute("href")).path == event.path + "/schedule"
         else:
-            await expect(
-                nav.get_by_role("button", name=re.compile("Schedule (?:not posted|unavailable)"))
-            ).to_be_disabled()
+            schedule = nav.get_by_role("button", name="Schedule", exact=True)
+            await expect(schedule).to_be_disabled()
+            assert await schedule.get_attribute("href") is None
         if payload["tournament"]["bracket_published"]:
             await expect(nav.get_by_role("link", name="Bracket", exact=True)).to_have_attribute(
                 "href", event.path + "/bracket"

@@ -287,6 +287,8 @@ def player_profile(player_id):
                 "phone": (player.phone if (current_user.is_authenticated and current_user.id == player_id) else None),
                 "location": player.location,
                 "bio": player.bio,
+                "pronouns": player.pronouns,
+                "pompfen": player.pompfen or [],
             },
             "registrations": registration_rows,
             "past_event_count": past_event_counts("player", [player_id])[player_id],

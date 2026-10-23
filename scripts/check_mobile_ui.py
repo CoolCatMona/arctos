@@ -585,10 +585,12 @@ class SmokeCheck:
         comp_id = competitions[0]["id"]
         league_path = f"/leagues/{league}"
         match_path = f"/demo-open/match/{match_id}"
+        schedule_api = "/_api/tournaments/demo-open/schedule-setup"
         published, allowed = False, False
         paths = {
             "/_api/tournaments/demo-open",
             "/_api/tournaments/demo-open/match",
+            schedule_api,
             "/_api/tournaments/demo-league-round-one",
             f"/_api{league_path}",
             f"/_api/sidecomps/{comp_id}",
@@ -599,6 +601,12 @@ class SmokeCheck:
             path = parsed.path
             if route.request.method != "GET" or parsed.netloc != self.origin or path not in paths:
                 await route.fallback()
+                return
+            if path == schedule_api:
+                if not allowed:
+                    await route.fulfill(status=403, json={"error": "Schedule not published"})
+                else:
+                    await route.fallback()
                 return
             response = await route.fetch()
             data = await response.json()
@@ -617,9 +625,29 @@ class SmokeCheck:
             for path in ("/demo-open", "/demo-open/results"):
                 await page.goto(self.base_url + path, wait_until="domcontentloaded")
                 unavailable_tab = page.locator("#event-tab-schedule")
-                await expect(unavailable_tab).to_have_text("Schedule not posted")
+                await expect(unavailable_tab).to_have_text("Schedule")
                 await expect(unavailable_tab).to_be_disabled()
+                assert await unavailable_tab.get_attribute("href") is None
                 await expect(page.locator('.event-route-tabs a[href^="/demo-open/schedule"]')).to_have_count(0)
+            # This separate page explicitly expects the denied read response; all mutations
+            # still use the context-wide guard, and no backend publication state changes.
+            denied_page = await context.new_page()
+            try:
+                async with denied_page.expect_response(
+                    lambda response: urlsplit(response.url).path == schedule_api
+                ) as denied:
+                    await denied_page.goto(self.base_url + "/demo-open/schedule", wait_until="domcontentloaded")
+                assert (await denied.value).status == 403
+                await expect(
+                    denied_page.get_by_text("The schedule has not been posted yet.", exact=True)
+                ).to_be_visible()
+                await expect(denied_page.locator("#event-tab-schedule")).to_be_disabled()
+                await expect(denied_page.locator("#event-tab-schedule")).to_have_attribute("aria-current", "page")
+                await expect(denied_page.locator(".schedule-keyboard-focus")).to_have_count(0)
+                await denied_page.locator("#event-tab-info").click()
+                await expect(denied_page).to_have_url(self.base_url + "/demo-open")
+            finally:
+                await denied_page.close()
             await page.goto(self.base_url + match_path, wait_until="domcontentloaded")
             crumb = page.get_by_role("navigation", name="breadcrumb")
             unavailable = crumb.get_by_text("Schedule not posted", exact=True)
@@ -646,7 +674,8 @@ class SmokeCheck:
                     if path == "/demo-open"
                     else page.get_by_role("navigation", name="breadcrumb")
                 )
-                await scope.get_by_role("link", name="Preview schedule", exact=True).click()
+                label = "Schedule" if path == "/demo-open" else "Preview schedule"
+                await scope.get_by_role("link", name=label, exact=True).click()
                 await expect(page.locator(".schedule-keyboard-focus")).to_be_visible()
                 await expect(page.locator("#event-tab-schedule")).to_have_attribute("aria-current", "page")
             await page.goto(self.base_url + "/demo-open", wait_until="domcontentloaded")
