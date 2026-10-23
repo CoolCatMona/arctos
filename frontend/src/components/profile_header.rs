@@ -1,6 +1,4 @@
 use crate::api;
-use crate::appearance::focus_control;
-use crate::pages::layout::{set_page_banner_hidden, use_page_banner_preferences};
 use crate::Route;
 use dioxus::prelude::*;
 
@@ -15,27 +13,14 @@ pub fn ProfileHeader(
     past_count: u32,
     edit_route: Option<Route>,
 ) -> Element {
-    let preferences = use_page_banner_preferences();
-    let key = format!("{kind}:{account_id}");
-    let hidden = preferences.read().contains(&key);
     let backend = api::base_url();
     rsx! {
         style { {include_str!("event_details.css")} }
         style { {include_str!("profile_details.css")} }
-        header { id: "page-banner", class: if hidden { "profile-detail-header is-collapsed" } else { "profile-detail-header" },
-            if !hidden {
-                div { class: "profile-cover",
-                    if let Some(photo) = banner {
-                        img { class: "profile-cover-image", src: "{backend}/static/{photo}", alt: "" }
-                    }
-                    button { id: "page-banner-dismiss", class: "profile-banner-dismiss", r#type: "button",
-                        aria_label: "Hide profile banner", title: "Hide profile banner",
-                        onclick: move |_| {
-                            set_page_banner_hidden(preferences, &key, true);
-                            focus_control("page-banner-heading");
-                        },
-                        i { class: "fas fa-xmark", aria_hidden: "true" }
-                    }
+        header { id: "page-banner", class: "profile-detail-header",
+            div { class: "profile-cover",
+                if let Some(photo) = banner {
+                    img { class: "profile-cover-image", src: "{backend}/static/{photo}", alt: "" }
                 }
             }
             div { class: "profile-header-body",

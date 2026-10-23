@@ -165,37 +165,58 @@ async def public_profiles(check: SmokeCheck, page: Page) -> None:
 
 
 async def detail_banners(check: SmokeCheck, page: Page) -> None:
-    for kind, path, next_path, unrelated in (
-        ("player", "/players/demo-player", "/players/demo-player?tab=history", "/players/demo-alex"),
-        ("team", "/teams/demo-team", "/teams/demo-team?tab=history", "/players/demo-player"),
-        ("event", "/demo-open", "/demo-open/results", "/leagues/demo-coast-league"),
-        ("league", "/leagues/demo-coast-league", "/leagues/demo-coast-league/results", "/demo-open"),
+    """Legacy hidden entity keys cannot remove identity or metadata from details."""
+    await page.goto(check.base_url + "/_api/demo-info", wait_until="domcontentloaded")
+    for kind, path, next_path, entity_key in (
+        ("player", "/players/demo-player", "/players/demo-player?tab=history", "player:demo-player"),
+        ("team", "/teams/demo-team", "/teams/demo-team?tab=history", "team:demo-team"),
+        ("event", "/demo-open", "/demo-open/results", "event:demo-open"),
+        ("league", "/leagues/demo-coast-league", "/leagues/demo-coast-league/results", "league:demo-coast-league"),
     ):
+        await page.evaluate(
+            "([key, entity]) => localStorage.setItem(key, JSON.stringify(['events', entity]))",
+            [BANNER_KEY, entity_key],
+        )
         await page.goto(check.base_url + path, wait_until="domcontentloaded")
-        banner = page.locator("#page-banner")
-        await expect(page.locator("#page-banner-dismiss")).to_be_visible()
-        title = await page.locator("#page-banner-heading").inner_text()
-        before = await banner.bounding_box()
-        await page.locator("#page-banner-dismiss").click()
-        await expect(banner).to_have_class(re.compile(r"\bis-collapsed\b"))
-        await expect(page.locator("#page-banner-heading")).to_have_text(title)
-        after = await banner.bounding_box()
-        assert before and after and after["height"] < before["height"], (before, after)
-        await page.goto(check.base_url + unrelated, wait_until="domcontentloaded")
-        await expect(page.locator("#page-banner-dismiss")).to_be_visible()
+        heading = page.locator("#page-banner-heading")
+        await expect(heading).to_be_visible()
+        title = await heading.inner_text()
+
+        async def visible_detail() -> None:
+            banner = page.locator("#page-banner")
+            await expect(banner).to_be_visible()
+            await expect(banner).not_to_have_class(re.compile(r"\bis-collapsed\b"))
+            await expect(heading).to_have_text(title)
+            await expect(page.locator("#page-banner-dismiss")).to_have_count(0)
+            if kind in ("event", "league"):
+                await expect(page.locator(".event-hero-badges")).to_be_visible()
+                await expect(page.locator(".event-hero-meta")).to_be_visible()
+                await expect(page.locator(".event-hero-actions .btn").first).to_be_visible()
+            else:
+                await profile_composition(page)
+                await expect(page.locator(".profile-event-stat")).to_be_visible()
+            await expect(page.locator(".event-route-tabs")).to_be_visible()
+            await page.locator("#utility-trigger").click()
+            await expect(page.locator("#utility-options")).to_be_visible()
+            await expect(page.locator("#page-banner-restore")).to_have_count(0)
+            await page.keyboard.press("Escape")
+            await expect(page.locator("#utility-options")).to_be_hidden()
+
+        await visible_detail()
         await page.goto(check.base_url + next_path, wait_until="domcontentloaded")
-        await expect(banner).to_have_class(re.compile(r"\bis-collapsed\b"))
-        await expect(page.locator("#page-banner-heading")).to_have_text(title)
-        if kind in ("event", "league"):
-            await expect(page.locator(".event-hero-actions .btn").first).to_be_visible()
-        else:
-            await expect(page.locator(".profile-event-stat")).to_be_visible()
-        await expect(page.locator(".event-route-tabs")).to_be_visible()
+        await visible_detail()
+        await page.locator(f"#{kind}-tab-info").click()
+        await expect(page.locator(f"#{kind}-tab-info")).to_have_attribute("aria-current", "page")
+        await visible_detail()
+        await page.go_back(wait_until="domcontentloaded")
+        await expect(page).to_have_url(check.base_url + next_path)
+        await visible_detail()
+        await page.go_forward(wait_until="domcontentloaded")
+        await expect(page.locator(f"#{kind}-tab-info")).to_have_attribute("aria-current", "page")
+        await visible_detail()
         await page.reload(wait_until="domcontentloaded")
-        await expect(banner).to_have_class(re.compile(r"\bis-collapsed\b"))
-        await restore_banner(page)
-        await expect(page.locator("#page-banner-dismiss")).to_be_visible()
-        await check.check_layout(page, f"{kind}-banner-restored", 360)
+        await visible_detail()
+        await check.check_layout(page, f"{kind}-banner-always-visible", 360)
         check.visited += 1
 
 
@@ -487,8 +508,8 @@ async def organizer_tools(check: SmokeCheck, page: Page) -> None:
         await page.locator(".organizer-tools-dismiss").click(position={"x": 2, "y": 2})
         await expect(options).to_be_hidden()
         await expect(trigger).to_be_focused()
-        await page.locator("#page-banner-dismiss").click()
-        await expect(trigger).to_be_visible()
+        await expect(page.locator("#page-banner-dismiss")).to_have_count(0)
+        await expect(page.locator(".event-hero-meta")).to_be_visible()
         await trigger.click()
         await check.check_layout(page, f"organizer-tools-{'league' if path.startswith('/leagues') else 'event'}", 320)
         check.visited += 1
@@ -542,7 +563,7 @@ async def run(args) -> int:
                 ("page-introductions", 320, introductions),
                 ("legacy-introduction", 360, legacy_introduction),
                 ("public-profile-tabs", 360, public_profiles),
-                ("detail-banner-persistence", 360, detail_banners),
+                ("detail-banners-always-visible", 360, detail_banners),
                 ("player-owner-tabs", 320, lambda check, page: owner_profile_tabs(check, page, "player")),
                 ("team-owner-tabs", 320, lambda check, page: owner_profile_tabs(check, page, "team")),
                 ("player-banner-upload", 320, lambda check, page: image_upload(check, page, "player")),

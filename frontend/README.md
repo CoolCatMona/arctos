@@ -108,11 +108,13 @@ Use `data-section` on cards containing tables or lists to keep one shared frame
 and compact rows. Use native `details.section-disclosure` for secondary records
 and settings, with a labeled summary and a count where useful. Keep current
 event information and essential actions visible. Collapsing a section keeps its
-form state intact. Events, Leagues, Players, Teams, and Stones each have a
-centered introduction with a small close button. More restores the current
-page banner. Event and profile banners collapse to a compact identity and
-retain their actions and navigation. Visibility is saved independently per
-page, separately from appearance preferences.
+form state intact. Only the top-level Events, Leagues, Players, Teams, and
+Stones introductions have a small close button; More can restore a hidden
+introduction on those pages. Their visibility is saved independently per page,
+separately from appearance preferences. Player, team, tournament, and league
+detail headers always remain visible, with no dismiss or restore control.
+Older saved hidden-header preferences for individual profiles or events are
+ignored.
 
 Player and team profiles use a centered column up to 900px wide, with a 3:1
 cover, an overlapping circular avatar, then left-aligned name, handle,

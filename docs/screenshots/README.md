@@ -5,8 +5,11 @@ of a database snapshot. Public views show existing events, leagues, and profiles
 organizer controls and registration examples use added fictional demo accounts.
 California Jugger/Light is used unless noted otherwise.
 
+Only the top-level Events, Leagues, Players, Teams, and Stones introductions
+can be dismissed. Profile, tournament, and league detail headers stay visible.
+
 - `home-mobile.png`: 360px Events page with date filters and contextual Organize control.
-- `home-dismissed-mobile.png`: 360px viewport after dismissing the Events banner.
+- `home-dismissed-mobile.png`: 360px viewport after dismissing the Events introduction.
 - `home-desktop.png`: 1280px full page.
 - `organize-mobile.png`: 360px Events page with its tournament creation action open.
 - `leagues-mobile.png`: 360px league directory with Active/Past filters and season dates.

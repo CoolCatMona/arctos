@@ -60,12 +60,6 @@ pub fn page_banner_key(route: &Route) -> Option<String> {
         Route::PlayersList {} => Some("players".into()),
         Route::TeamsList {} => Some("teams".into()),
         Route::Stones {} => Some("stones".into()),
-        Route::TournamentHome { url } | Route::TournamentHomeWithTab { url, .. }
-        | Route::Schedule { url, .. } | Route::Results { url } | Route::Bracket { url } => Some(format!("event:{url}")),
-        Route::LeagueHome { league_url } | Route::LeagueHomeWithTab { league_url, .. }
-        | Route::LeagueResults { league_url } => Some(format!("league:{league_url}")),
-        Route::PlayerProfilePage { id } | Route::PlayerProfilePageWithTab { id, .. } => Some(format!("player:{id}")),
-        Route::TeamProfilePage { id } | Route::TeamProfilePageWithTab { id, .. } => Some(format!("team:{id}")),
         _ => None,
     }
 }

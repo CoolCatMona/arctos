@@ -80,16 +80,6 @@
   .arctos-app .event-organizer-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
 }
 
-.arctos-app .event-hero-badges[hidden], .arctos-app .event-hero-meta[hidden] { display: none; }
-.arctos-app .event-banner-dismiss { top: .5rem; right: 1rem; z-index: 2; color: var(--ui-gradient-contrast); }
-.arctos-app .event-banner-dismiss:hover { color: var(--ui-gradient-contrast); background: var(--ui-on-gradient-soft); }
-.arctos-app .event-banner-dismiss:focus-visible { outline: 3px solid var(--ui-gradient-contrast); outline-offset: 2px; }
-.arctos-app .event-detail-hero.is-collapsed .event-hero-inner { padding-block: 1rem; gap: .75rem; }
-.arctos-app .event-detail-hero.is-collapsed h1 { font-size: 1.25rem; }
 
 .arctos-app .event-banner-image { width: 100%; height: clamp(9rem, 25vw, 20rem); overflow: hidden; }
 .arctos-app .event-banner-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
-
-@media (max-width: 575.98px) {
-  .arctos-app .event-detail-hero:not(.is-collapsed) .event-hero-inner { padding-top: 3.75rem; }
-}

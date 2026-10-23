@@ -242,7 +242,7 @@ origins, and blocks mutations except demo login and read-only Markdown
 rendering. It checks phones (360px and 390px), tablet (768px), and desktop
 (1280px), including discovery, account forms, tournament/league pages,
 profiles, schedules, operator/registration tools, and side competitions.
-It also checks search/date filters, banner dismissal/restoration and persistence,
+It also checks search/date filters, top-level introduction dismissal/restoration and persistence,
 profile tabs and settings disclosures, unsaved injury-edit retention, keyboard roster
 expansion, validation input retention, phone-sized
 point controls, modern browser input patterns, and a simulated failed match
@@ -299,9 +299,11 @@ Check page banners, profile navigation, uploads, and organizer access with:
 uv run python scripts/check_profile_ui.py --screenshots /tmp/arctos-profiles
 ```
 
-This covers independent introduction dismissal/restoration, legacy preferences,
-profile tabs and permission-sensitive panels, compact profile/event banners,
-keyboard focus, and all themes at phone widths. Profile geometry checks cover
+This covers independent dismissal/restoration of top-level introductions,
+legacy preferences, profile tabs and permission-sensitive panels, keyboard
+focus, and all themes at phone widths. Profile and event detail headers remain
+visible even when older preferences marked them hidden, and offer no dismiss
+or restore control. Profile geometry checks cover
 the 3:1 cover, overlapping avatar, left-aligned identity, 900px desktop column,
 and panels without card frames at 320px, 360px, and 1280px. Back/Forward checks
 preserve unsaved injury inputs and expanded team rosters. Banner uploads for players,

@@ -145,6 +145,10 @@ still JPEG, PNG, and WebP images up to 8 MiB and removes embedded metadata.
 Keep `static/uploads` alongside database backups: image files are stored there,
 while the database stores their paths.
 
+Player, team, tournament, and league detail headers stay visible. Only the
+top-level Events, Leagues, Players, Teams, and Stones introductions can be
+dismissed and restored from More.
+
 To preview an existing versioned SQLite snapshot, run the backend with:
 
 ```bash
