@@ -15,6 +15,8 @@ pub struct User {
 pub struct Tournament {
     pub url: String,
     pub name: String,
+    #[serde(default)]
+    pub banner_photo: Option<String>,
     pub start_date: String,
     pub end_date: Option<String>,
     pub location: Option<String>,
@@ -118,6 +120,8 @@ pub struct UnattachedPlayer {
 pub struct LeagueInfo {
     pub league_url: String,
     pub name: String,
+    #[serde(default)]
+    pub banner_photo: Option<String>,
     pub about: Option<String>,
     pub team_reg_fee: Option<f64>,
     pub player_reg_fee: Option<f64>,
@@ -1120,6 +1124,8 @@ pub struct PlayerProfileData {
     pub id: String,
     pub name: String,
     pub profile_photo: Option<String>,
+    #[serde(default)]
+    pub banner_photo: Option<String>,
     pub phone: Option<String>,
     pub location: Option<String>,
     pub bio: Option<String>,
@@ -1208,6 +1214,8 @@ pub struct TeamProfileData {
     pub id: String,
     pub name: String,
     pub profile_photo: Option<String>,
+    #[serde(default)]
+    pub banner_photo: Option<String>,
     pub location: Option<String>,
     pub email: Option<String>,
     pub website: Option<String>,

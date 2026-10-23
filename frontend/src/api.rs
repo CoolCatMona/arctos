@@ -2568,6 +2568,47 @@ pub async fn delete_team_profile_photo(team_id: &str) -> Result<(), String> {
     }
 }
 
+async fn upload_profile_banner(kind: &str, id: &str, bytes: bytes::Bytes) -> Result<String, String> {
+    let response = with_credentials(client().post(format!(
+        "{}/_api/{}/{}/banner-photo", base(), kind, urlencoding::encode(id)
+    )).body(bytes)).send().await.map_err(|error| error.to_string())?;
+    let data: Value = response_json(response).await?;
+    if data.get("success").and_then(Value::as_bool) == Some(true) {
+        data.get("path").and_then(Value::as_str).map(str::to_string)
+            .ok_or_else(|| "No banner path returned".to_string())
+    } else {
+        Err(data.get("error").and_then(Value::as_str).unwrap_or("Banner upload failed").to_string())
+    }
+}
+
+async fn delete_profile_banner(kind: &str, id: &str) -> Result<(), String> {
+    let response = with_credentials(client().delete(format!(
+        "{}/_api/{}/{}/banner-photo", base(), kind, urlencoding::encode(id)
+    ))).send().await.map_err(|error| error.to_string())?;
+    let data: Value = response_json(response).await?;
+    if data.get("success").and_then(Value::as_bool) == Some(true) {
+        Ok(())
+    } else {
+        Err(data.get("error").and_then(Value::as_str).unwrap_or("Could not remove banner").to_string())
+    }
+}
+
+pub async fn upload_player_banner_photo(id: &str, bytes: bytes::Bytes) -> Result<String, String> {
+    upload_profile_banner("players", id, bytes).await
+}
+
+pub async fn delete_player_banner_photo(id: &str) -> Result<(), String> {
+    delete_profile_banner("players", id).await
+}
+
+pub async fn upload_team_banner_photo(id: &str, bytes: bytes::Bytes) -> Result<String, String> {
+    upload_profile_banner("teams", id, bytes).await
+}
+
+pub async fn delete_team_banner_photo(id: &str) -> Result<(), String> {
+    delete_profile_banner("teams", id).await
+}
+
 pub async fn get_my_player_registration(
     tournament_url: &str,
 ) -> Result<MyPlayerRegistrationResponse, String> {
@@ -3792,4 +3833,20 @@ pub async fn disconnect_app(client_id: &str) -> Result<(), String> {
     .await
     .map_err(|e| e.to_string())?;
     response_json::<Value>(r).await.map(|_| ())
+}
+
+pub async fn upload_tournament_banner_photo(id: &str, bytes: bytes::Bytes) -> Result<String, String> {
+    upload_profile_banner("tournaments", id, bytes).await
+}
+
+pub async fn delete_tournament_banner_photo(id: &str) -> Result<(), String> {
+    delete_profile_banner("tournaments", id).await
+}
+
+pub async fn upload_league_banner_photo(id: &str, bytes: bytes::Bytes) -> Result<String, String> {
+    upload_profile_banner("leagues", id, bytes).await
+}
+
+pub async fn delete_league_banner_photo(id: &str) -> Result<(), String> {
+    delete_profile_banner("leagues", id).await
 }

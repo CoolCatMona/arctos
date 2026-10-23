@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::{PompfenIcon, SideCompRegistrationMode, SideCompWeaponModal};
+use crate::components::{OrganizerTools, PompfenIcon, SideCompRegistrationMode, SideCompWeaponModal};
 use crate::Route;
 use dioxus::prelude::*;
 
@@ -20,6 +20,7 @@ pub fn SideCompDetail(url: String, comp_id: i32) -> Element {
     let signed_in = matches!(me.read().as_ref(), Some(Ok(_)));
 
     rsx! {
+        style { {include_str!("../components/organizer_tools.css")} }
         div { class: "row",
             div { class: "col-12",
                 Link {
@@ -43,7 +44,28 @@ pub fn SideCompDetail(url: String, comp_id: i32) -> Element {
                         let viewer_weapon = d.viewer_weapon.clone();
                         let results_page_enabled = d.results_page_enabled;
                         rsx! {
-                            h1 { "{d.name}" }
+                            div { class: "sidecomp-heading",
+                                h1 { "{d.name}" }
+                            if viewer_is_to {
+                                OrganizerTools {
+                                    Link {
+                                        to: Route::SideCompEdit { url: url_for_edit.clone(), comp_id },
+                                        class: "dropdown-item",
+                                        "Edit"
+                                    }
+                                    Link {
+                                        to: Route::SideCompRegisterAsTo { url: url_for_register.clone(), comp_id },
+                                        class: "dropdown-item",
+                                        "Quick Register players"
+                                    }
+                                    Link {
+                                        to: Route::SideCompManageResults { url: url_for_manage.clone(), comp_id },
+                                        class: "dropdown-item",
+                                        "Manage results"
+                                    }
+                                }
+                            }
+                            }
                             p {
                                 span { class: "badge bg-secondary me-2", "{d.type_}" }
                                 if registration_open {
@@ -58,25 +80,6 @@ pub fn SideCompDetail(url: String, comp_id: i32) -> Element {
                             if let Some(desc) = description.as_ref() {
                                 if !desc.is_empty() {
                                     p { style: "white-space: pre-wrap;", "{desc}" }
-                                }
-                            }
-                            if viewer_is_to {
-                                div { class: "mb-3",
-                                    Link {
-                                        to: Route::SideCompEdit { url: url_for_edit.clone(), comp_id },
-                                        class: "btn btn-outline-secondary me-2",
-                                        "Edit"
-                                    }
-                                    Link {
-                                        to: Route::SideCompRegisterAsTo { url: url_for_register.clone(), comp_id },
-                                        class: "btn btn-outline-primary me-2",
-                                        "Quick Register players"
-                                    }
-                                    Link {
-                                        to: Route::SideCompManageResults { url: url_for_manage.clone(), comp_id },
-                                        class: "btn btn-outline-warning",
-                                        "Manage results"
-                                    }
                                 }
                             }
                             div { class: "mb-3 d-flex flex-wrap gap-2",

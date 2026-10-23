@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::PenaltyDisplay;
+use crate::components::{EventTab, EventTabs, PenaltyDisplay, ProfileHeader};
 use crate::types::{NoteMatchInfo, PlayerInjury, PlayerNoteItem};
 use crate::Route;
 use dioxus::prelude::*;
@@ -80,19 +80,25 @@ fn editable_injury_from_api(inj: &PlayerInjury) -> EditableInjury {
 #[component]
 pub fn PlayerProfilePage(id: String) -> Element {
     let route = use_route::<Route>();
-    let id = match &route {
-        Route::PlayerProfilePage { id } => id.clone(),
+    let (id, tab) = match &route {
+        Route::PlayerProfilePage { id } => (id.clone(), "info".to_string()),
+        Route::PlayerProfilePageWithTab { id, tab } => (id.clone(), tab.clone()),
         _ => return rsx! { div { class: "alert alert-danger", "Invalid route" } },
     };
     let mut id_signal = use_signal(|| id.clone());
-    id_signal.set(id);
+    if *id_signal.peek() != id { id_signal.set(id.clone()); }
     rsx! {
-        PlayerProfile { id: id_signal }
+        PlayerProfile { key: "{id}", id: id_signal, tab }
     }
 }
 
 #[component]
-pub fn PlayerProfile(id: Signal<String>) -> Element {
+pub fn PlayerProfilePageWithTab(id: String, tab: String) -> Element {
+    rsx! { PlayerProfilePage { id } }
+}
+
+#[component]
+pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
     let data = use_resource(use_reactive(&id, move |sid| {
         let i = sid().clone();
         async move { api::player_profile(&i).await.map_err(|e| e.to_string()) }
@@ -101,7 +107,6 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
     let mut injuries_initialized_for = use_signal(|| None::<String>);
     let me = use_resource(move || async move { api::me().await });
     let val = data.value();
-    let backend = api::base_url();
     let mut injury_error = use_signal(|| None::<String>);
     let mut injury_saving = use_signal(|| false);
     let mut bio_markdown = use_signal(|| Option::<String>::None);
@@ -169,6 +174,24 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
             }
         }).collect();
         let penalty_rows_empty = penalty_rows.is_empty();
+        let show_injuries = can_edit_injuries || !d.injuries.is_empty();
+        let show_infractions = can_edit_profile || !penalty_rows_empty;
+        let active_tab = match tab.as_str() {
+            "history" => "history",
+            "injuries" if show_injuries => "injuries",
+            "infractions" if show_infractions => "infractions",
+            _ => "info",
+        };
+        let mut tabs = vec![
+            EventTab { id: "info".into(), label: "Information".into(), icon: "fas fa-info-circle".into(), href: Some(format!("/players/{player_id}?tab=info")) },
+            EventTab { id: "history".into(), label: format!("History ({})", d.registrations.len()), icon: "fas fa-history".into(), href: Some(format!("/players/{player_id}?tab=history")) },
+        ];
+        if show_infractions {
+            tabs.push(EventTab { id: "infractions".into(), label: format!("Infractions ({})", penalty_rows.len()), icon: "fas fa-flag".into(), href: Some(format!("/players/{player_id}?tab=infractions")) });
+        }
+        if show_injuries {
+            tabs.push(EventTab { id: "injuries".into(), label: format!("Injuries ({injury_total})"), icon: "fas fa-notes-medical".into(), href: Some(format!("/players/{player_id}?tab=injuries")) });
+        }
         let penalty_row_elements: Vec<_> = penalty_rows
             .into_iter()
             .map(|row| {
@@ -205,60 +228,28 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
             })
             .collect();
         return rsx! {
-            div { class: "row",
-                div { class: "col-12",
-                    header { class: "profile-heading",
-                        h1 { "{d.player.name}" }
-                        dl { class: "profile-event-stat", title: "Confirmed past registrations",
-                            dt { "Past events" }
-                            dd { "{d.past_event_count}" }
-                        }
-                    }
-                    nav { aria_label: "breadcrumb",
-                        ol { class: "breadcrumb",
-                            li { class: "breadcrumb-item", Link { to: Route::PlayersList {}, "Players" } }
-                            li { class: "breadcrumb-item active", "{d.player.name}" }
-                        }
-                    }
-                }
+            div { class: "profile-page",
+            ProfileHeader {
+                account_id: d.player.id.clone(), kind: "player".to_string(), name: d.player.name.clone(),
+                avatar: d.player.profile_photo.clone(), banner: d.player.banner_photo.clone(), location: d.player.location.clone(),
+                past_count: d.past_event_count,
+                edit_route: can_edit_profile.then(|| Route::EditPlayerProfile { player_id: d.player.id.clone() }),
             }
-
-            div { class: "row",
-                div { class: "col-md-8",
-                    div { class: "card",
-                        div { class: "card-header d-flex justify-content-between align-items-center",
-                            h5 { class: "mb-0", "Player Information" }
-                            if can_edit_profile {
-                                Link {
-                                    to: Route::EditPlayerProfile { player_id: d.player.id.clone() },
-                                    class: "btn btn-outline-secondary btn-sm",
-                                    "✎"
-                                }
-                            }
-                        }
-                        div { class: "card-body",
-                            if let Some(photo) = &d.player.profile_photo {
-                                div { class: "text-center mb-3",
-                                    img { src: "{backend}/static/{photo}", alt: "Profile Photo", class: "rounded-circle", style: "width: 100px; height: 100px; object-fit: cover;" }
-                                }
-                            }
-                            p { strong { "Username: " } "@{d.player.id}" }
-                            p { strong { "Display Name: " } "{d.player.name}" }
-                            if let Some(loc) = &d.player.location {
-                                p { strong { "Location: " } "{loc}" }
-                            }
-                            if let Some(phone) = &d.player.phone {
+            EventTabs { prefix: "player".to_string(), label: "Player sections".to_string(), active: active_tab.to_string(), tabs }
+            div { class: "profile-detail-content",
+                    section { id: "player-section-info", class: "profile-section", hidden: active_tab != "info", aria_labelledby: "player-tab-info",
+                        div { class: "profile-section-body",
+                            if let Some(phone) = d.player.phone.as_ref().filter(|value| !value.trim().is_empty()) {
                                 p { strong { "Phone: " } "{phone}" }
                             }
                             if let Some(bio) = &d.player.bio {
                                 if !bio.is_empty() {
-                                    div { class: "mt-3",
-                                        h6 { strong { "Bio:" } }
+                                    div { class: "profile-bio",
                                         if let Some(Ok(html)) = bio_html.value().read().as_ref() {
                                             if html.is_empty() {
                                                 div { class: "markdown-content", style: "white-space: pre-wrap;", "{bio}" }
                                             } else {
-                                                div { dangerous_inner_html: "{html}" }
+                                                div { class: "markdown-content", dangerous_inner_html: "{html}" }
                                             }
                                         } else {
                                             div { class: "markdown-content", style: "white-space: pre-wrap;", "{bio}" }
@@ -266,21 +257,25 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                                     }
                                 }
                             }
+                            if d.player.phone.as_ref().is_none_or(|value| value.trim().is_empty())
+                                && d.player.bio.as_ref().is_none_or(|value| value.trim().is_empty()) {
+                                p { class: "text-muted mb-0", "No profile details added yet." }
+                            }
                         }
                     }
 
-                    details {
+                    section {
                         id: "player-tournament-history", key: "{d.player.id}-history",
-                        class: "card data-section section-disclosure profile-disclosure mt-3",
-                        summary { class: "card-header",
+                        class: "data-section profile-section", hidden: active_tab != "history", aria_labelledby: "player-tab-history",
+                        div { class: "profile-section-heading",
                             h2 { class: "h5 mb-0", "Tournament History ({d.registrations.len()})" }
                         }
-                        div { class: "card-body",
+                        div { class: "profile-section-body",
                             if d.registrations.is_empty() {
                                 p { class: "text-muted", "No tournament registrations yet." }
                             } else {
-                                div { class: "table-responsive",
-                                    table { class: "table table-striped profile-history-table",
+                                div { class: "profile-table-scroll",
+                                    table { class: "table profile-history-table",
                                         thead {
                                             tr {
                                                 th { "Tournament" }
@@ -364,22 +359,22 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                         }
                     }
 
-                    if can_edit_injuries || !d.injuries.is_empty() {
-                        details {
+                    if show_injuries {
+                        section {
                             id: "player-injury-history", key: "{d.player.id}-injuries",
-                            class: "card data-section data-section-editor section-disclosure profile-disclosure mt-3",
-                            summary { class: "card-header",
+                            class: "data-section data-section-editor profile-section", hidden: active_tab != "injuries", aria_labelledby: "player-tab-injuries",
+                            div { class: "profile-section-heading",
                                 h2 { class: "h5 mb-0", "Injury History ({injury_total})" }
                                 if active_injuries > 0 {
                                     span { class: "badge bg-warning profile-disclosure-status", "{active_injuries} active" }
                                 }
                             }
-                            div { class: "card-body",
+                            div { class: "profile-section-body",
                                 if let Some(err) = injury_error() {
                                     div { class: "alert alert-danger", "{err}" }
                                 }
-                                div { class: "table-responsive",
-                                    table { class: "table table-striped profile-injury-table",
+                                div { class: "profile-table-scroll",
+                                    table { class: "table profile-injury-table",
                                         thead {
                                             tr {
                                                 th { "Date" }
@@ -658,16 +653,17 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                         }
                     }
 
-                    if !penalty_rows_empty {
-                        details {
+                    if show_infractions {
+                        section {
                             id: "player-penalties", key: "{d.player.id}-penalties",
-                            class: "card data-section section-disclosure profile-disclosure mt-3",
-                            summary { class: "card-header",
-                                h2 { class: "h5 mb-0", "Penalties ({penalty_row_elements.len()})" }
+                            class: "data-section profile-section", hidden: active_tab != "infractions", aria_labelledby: "player-tab-infractions",
+                            div { class: "profile-section-heading",
+                                h2 { class: "h5 mb-0", "Infractions ({penalty_row_elements.len()})" }
                             }
-                            div { class: "card-body",
-                                div { class: "table-responsive",
-                                    table { class: "table table-striped table-sm",
+                            div { class: "profile-section-body",
+                                if penalty_rows_empty { p { class: "text-muted", "No infractions recorded." } }
+                                div { class: "profile-table-scroll",
+                                    table { class: "table table-sm",
                                         thead {
                                             tr {
                                                 th { "Date" }
@@ -686,7 +682,6 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                             }
                         }
                     }
-                }
                     if penalty_desc_modal().is_some() {
                         div { class: "modal show", style: "display: block;",
                             div { class: "modal-dialog modal-dialog-centered",
@@ -704,6 +699,7 @@ pub fn PlayerProfile(id: Signal<String>) -> Element {
                         }
                         div { class: "modal-backdrop show" }
                     }
+            }
             }
         };
     }

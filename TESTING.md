@@ -70,8 +70,8 @@ Coverage settings live under `[tool.coverage.*]` in `pyproject.toml`:
 - **Branch coverage** is on, so untested `else` branches count as misses.
 - **`fail_under = 30`** is a soft floor that catches significant
   regressions without blocking small fluctuations. CI enforces it with
-  `just coverage-check`. Current actual coverage is around 33% (with
-  branch coverage on); raise the floor when overall coverage grows.
+  `just coverage-check`. Use the generated report for current branch coverage;
+  raise the floor when overall coverage grows.
 
 ## Structure
 
@@ -191,6 +191,34 @@ t = Tournament(url="my-event", ..., registrable_config_id=cfg.id)
 
 **Don't use `db.session.begin()`** — `test_db` already manages the transaction. Call `db.session.add()` / `db.session.commit()` directly.
 
+## Images, migrations, and demo snapshots
+
+Image tests exercise raw-byte avatar and banner uploads independently of the
+browser crop editor. They cover file and decoded-pixel limits, still-image
+validation, metadata removal, typed account ownership and organizer access,
+failed writes, unique image URLs, and conservative cleanup of existing files.
+Migration tests verify the nullable banner columns introduced by revisions
+`0023_profile_banners` and `0024_event_banners` without replacing existing rows.
+
+The snapshot launcher has a focused test suite:
+
+```bash
+uv run pytest tests/unit/test_dev_demo.py -n 4
+```
+
+It constructs temporary databases; no personal snapshot is needed. Checks
+include migration from a known older revision, byte-for-byte preservation of
+the source and existing demo, additive fixtures, password/edit preservation,
+reserved IDs across both account types, committed WAL data, unknown-revision
+rejection, failed preparation cleanup, and atomic publication without
+overwriting a concurrently created destination. `--seed-only` is checked
+without starting Flask. See [the local demo instructions](README.md#try-the-interface-with-sample-events)
+for the optional snapshot launcher.
+
+Pure Rust tests run separately with `just frontend-test`; this includes image
+header validation and crop geometry as well as counters, time sync, and UI
+state helpers.
+
 
 ## Mobile browser verification
 
@@ -215,7 +243,7 @@ rendering. It checks phones (360px and 390px), tablet (768px), and desktop
 (1280px), including discovery, account forms, tournament/league pages,
 profiles, schedules, operator/registration tools, and side competitions.
 It also checks search/date filters, banner dismissal/restoration and persistence,
-profile/settings disclosures, unsaved injury-edit retention, keyboard roster
+profile tabs and settings disclosures, unsaved injury-edit retention, keyboard roster
 expansion, validation input retention, phone-sized
 point controls, modern browser input patterns, and a simulated failed match
 finalization without changing a real match. Phone runs exercise bracket
@@ -260,9 +288,34 @@ This checks tournament, league, and league-event tabs, keyboard navigation,
 registration and schedule destinations, roster details, and theme contrast at
 320px and 360px. Direct Schedule, Results, and Bracket views keep the shared
 banner visible; keyboard focus reveals offscreen navigation links without
-scrolling the page. Browser history preserves schedule filters. It compares player/team profile and directory counts with the
+scrolling the page. Browser history preserves schedule filters. It compares
+player/team profile and directory counts with the
 API, including zero and nonzero values supplied through GET-only browser
 fixtures. Desktop views are checked at 1280px.
+
+Check page banners, profile navigation, uploads, and organizer access with:
+
+```bash
+uv run python scripts/check_profile_ui.py --screenshots /tmp/arctos-profiles
+```
+
+This covers independent introduction dismissal/restoration, legacy preferences,
+profile tabs and permission-sensitive panels, compact profile/event banners,
+keyboard focus, and all themes at phone widths. Profile geometry checks cover
+the 3:1 cover, overlapping avatar, left-aligned identity, 900px desktop column,
+and panels without card frames at 320px, 360px, and 1280px. Back/Forward checks
+preserve unsaved injury inputs and expanded team rosters. Banner uploads for players,
+teams, tournaments, and leagues use intercepted responses to check failure,
+success, removal, retained form input, and Save blocking while an image edit
+is pending.
+Crop checks cover keyboard, mouse, and touch positioning, cancellation without
+uploading, retrying after failure, exported PNG dimensions/pixels, and object
+URL cleanup. Avatar uploads use the same checks for player and team accounts.
+Organizer menus are checked for guest/owner visibility, links, Escape, outside
+clicks, and narrow-screen layout. Upload tests do not write images or records to
+the demo backend. Backend tests separately exercise image validation, typed
+ownership, storage cleanup, and both database migrations. Pending image editors
+are cancelled on navigation and release their temporary object URLs.
 
 Check the Stones controls against the same demo:
 

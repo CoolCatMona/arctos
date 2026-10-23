@@ -1,6 +1,7 @@
 //! Stones Player: globally synchronized stones using a Bayesian filter for time offset.
 
 use crate::api;
+use crate::components::PageIntro;
 use crate::types::StonesResponse;
 use dioxus::prelude::*;
 
@@ -467,9 +468,8 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
         div { class: "container stones-page",
             div { class: "row",
                 div { class: "col-12",
-                    header { class: "stones-heading",
-                        h1 { "Stones Player" }
-                        p { "A synchronized beat every 1.5 seconds." }
+                    PageIntro { page_key: "stones", title: "Stones", focus_target: "stones-start-pause",
+                        "Stones mark time during a jugger match, with a beat every 1.5 seconds."
                     }
                     div { class: "card stones-player-card",
                         div { class: "card-body",

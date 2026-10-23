@@ -219,7 +219,7 @@ async def profile_counts(check: SmokeCheck, page: Page) -> None:
     for kind in ("player", "team"):
         path = f"/{kind}s"
         owner = f"demo-{kind}"
-        listing = await api_json(page.context, check.base_url, "/_api" + path)
+        listing = await api_json(page.context, check.base_url, "/_api" + path + "?search=" + owner)
         profile = await api_json(page.context, check.base_url, f"/_api{path}/{owner}")
         item = next(item for item in listing[kind + "s"] if item["id"] == owner)
         assert item["past_event_count"] == profile["past_event_count"], "Directory/profile totals disagree"
@@ -230,6 +230,9 @@ async def profile_counts(check: SmokeCheck, page: Page) -> None:
                 (f"/{owner}", ".profile-event-stat dd"),
             ):
                 await page.goto(check.base_url + path + suffix, wait_until="domcontentloaded")
+                if not suffix:
+                    await page.locator(f"#{kind}-search").fill(owner)
+                    await page.get_by_role("search").get_by_role("button", name="Search", exact=True).click()
                 await expect(page.locator(selector)).to_have_text(str(count))
                 await check_contrast(page, selector)
                 await check.check_layout(page, f"{kind}-{'profile' if suffix else 'directory'}-{label}", width)

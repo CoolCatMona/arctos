@@ -135,7 +135,7 @@ async def palette_matrix(check: SmokeCheck, page: Page) -> None:
             await check.check_layout(page, f"appearance-home-{palette}-{mode}", WIDTH)
             await check_contrast(
                 page,
-                ".arctos-app, .arctos-event-card, .arctos-introduction > p, "
+                ".arctos-app, .arctos-event-card, #page-banner p, "
                 "#organize-trigger, .arctos-segment.is-active, .arctos-event-card .btn, .arctos-card-title a, "
                 ".arctos-meta-list li, .arctos-league-link",
             )
@@ -553,11 +553,11 @@ async def storage_disabled(check: SmokeCheck, browser) -> None:
         await preference(page, "field", "dark")
         await close_menu(page)
         await check.check_layout(page, "appearance-storage-unavailable", WIDTH)
-        await page.locator("#arctos-introduction-dismiss").click()
-        await expect(page.locator("#arctos-introduction")).to_be_hidden()
+        await page.locator("#page-banner-dismiss").click()
+        await expect(page.locator("#page-banner")).to_be_hidden()
         await page.locator("#utility-trigger").click()
-        await page.get_by_role("button", name="Show home banner", exact=True).click()
-        await expect(page.locator("#arctos-introduction")).to_be_visible()
+        await page.locator("#page-banner-restore").click()
+        await expect(page.locator("#page-banner")).to_be_visible()
         await page.reload(wait_until="domcontentloaded")
         await preference(page, "california", "light")
 

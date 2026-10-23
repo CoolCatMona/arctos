@@ -1,4 +1,5 @@
 use crate::api;
+use crate::components::{EventTab, EventTabs, ProfileHeader};
 use crate::types::{TeamRegItem, TournamentPlayerItem};
 use crate::Route;
 use dioxus::prelude::*;
@@ -152,19 +153,25 @@ fn RegistrationRow(
 #[component]
 pub fn TeamProfilePage(id: String) -> Element {
     let route = use_route::<Route>();
-    let id = match &route {
-        Route::TeamProfilePage { id } => id.clone(),
+    let (id, tab) = match &route {
+        Route::TeamProfilePage { id } => (id.clone(), "info".to_string()),
+        Route::TeamProfilePageWithTab { id, tab } => (id.clone(), tab.clone()),
         _ => return rsx! { div { class: "alert alert-danger", "Invalid route" } },
     };
     let mut id_signal = use_signal(|| id.clone());
-    id_signal.set(id);
+    if *id_signal.peek() != id { id_signal.set(id.clone()); }
     rsx! {
-        TeamProfile { id: id_signal }
+        TeamProfile { key: "{id}", id: id_signal, tab }
     }
 }
 
 #[component]
-pub fn TeamProfile(id: Signal<String>) -> Element {
+pub fn TeamProfilePageWithTab(id: String, tab: String) -> Element {
+    rsx! { TeamProfilePage { id } }
+}
+
+#[component]
+pub fn TeamProfile(id: Signal<String>, tab: String) -> Element {
     let data = use_resource(use_reactive(&id, move |sid| {
         let i = sid().clone();
         async move { api::team_profile(&i).await.map_err(|e| e.to_string()) }
@@ -224,88 +231,73 @@ pub fn TeamProfile(id: Signal<String>) -> Element {
 
     rsx! {
         if let Some(Ok(d)) = val.read().as_ref() {
-            div { class: "row",
-                div { class: "col-12",
-                    header { class: "profile-heading",
-                        h1 { "{d.team.name}" }
-                        dl { class: "profile-event-stat", title: "Confirmed past registrations",
-                            dt { "Past events" }
-                            dd { "{d.past_event_count}" }
-                        }
-                    }
-                    nav { aria_label: "breadcrumb",
-                        ol { class: "breadcrumb",
-                            li { class: "breadcrumb-item", Link { to: Route::TeamsList {}, "Teams" } }
-                            li { class: "breadcrumb-item active", "{d.team.name}" }
-                        }
-                    }
+            {
+                let own_profile = me.read().as_ref().and_then(|result| result.as_ref().ok())
+                    .is_some_and(|user| user.user_type == "team" && user.id == d.team.id);
+                let show_notes = own_profile || !d.team_notes.is_empty();
+                let active_tab = match tab.as_str() {
+                    "history" => "history",
+                    "notes" if show_notes => "notes",
+                    _ => "info",
+                };
+                let mut tabs = vec![
+                    EventTab { id: "info".into(), label: "Information".into(), icon: "fas fa-info-circle".into(), href: Some(format!("/teams/{}?tab=info", d.team.id)) },
+                    EventTab { id: "history".into(), label: format!("History ({})", d.registrations.len()), icon: "fas fa-history".into(), href: Some(format!("/teams/{}?tab=history", d.team.id)) },
+                ];
+                if show_notes {
+                    tabs.push(EventTab { id: "notes".into(), label: format!("Notes ({})", d.team_notes.len()), icon: "far fa-note-sticky".into(), href: Some(format!("/teams/{}?tab=notes", d.team.id)) });
                 }
+                rsx! {
+            div { class: "profile-page",
+            ProfileHeader {
+                account_id: d.team.id.clone(), kind: "team".to_string(), name: d.team.name.clone(),
+                avatar: d.team.profile_photo.clone(), banner: d.team.banner_photo.clone(), location: d.team.location.clone(),
+                past_count: d.past_event_count,
+                edit_route: own_profile.then(|| Route::EditTeamProfile { team_id: d.team.id.clone() }),
             }
-
-            div { class: "row",
-                div { class: "col-md-8",
-                    div { class: "card",
-                        div { class: "card-header d-flex justify-content-between align-items-center",
-                            h5 { class: "mb-0", "Team Information" }
-                            if me.read().as_ref().and_then(|r| r.as_ref().ok())
-                                .map(|u| u.user_type == "team" && u.id == d.team.id)
-                                .unwrap_or(false)
-                            {
-                                Link {
-                                    to: Route::EditTeamProfile { team_id: d.team.id.clone() },
-                                    class: "btn btn-outline-secondary btn-sm",
-                                    "✎"
-                                }
-                            }
-                        }
-                        div { class: "card-body",
-                            if let Some(photo) = &d.team.profile_photo {
-                                div { class: "text-center mb-3",
-                                    img { src: "{backend}/static/{photo}", alt: "Team Photo", class: "rounded", style: "width: 150px; height: 150px; object-fit: cover;" }
-                                }
-                            }
-                            p { strong { "Team Name: " } "{d.team.name}" }
-                            if let Some(loc) = &d.team.location {
-                                p { strong { "Location: " } "{loc}" }
-                            }
-                            if let Some(site) = &d.team.website {
+            EventTabs { prefix: "team".to_string(), label: "Team sections".to_string(), active: active_tab.to_string(), tabs }
+            div { class: "profile-detail-content",
+                    section { id: "team-section-info", class: "profile-section", hidden: active_tab != "info", aria_labelledby: "team-tab-info",
+                        div { class: "profile-section-body",
+                            if let Some(site) = d.team.website.as_ref().filter(|value| !value.trim().is_empty()) {
                                 p { strong { "Website: " } a { href: "{site}", target: "_blank", "{site}" } }
                             }
-                            if let Some(email) = &d.team.email {
+                            if let Some(email) = d.team.email.as_ref().filter(|value| !value.trim().is_empty()) {
                                 p { strong { "Email: " } "{email}" }
                             }
                             if let Some(about) = &d.team.about {
                                 if !about.is_empty() {
-                                    p { strong { "About: " } }
                                     if let Some(Ok(html)) = about_html.value().read().as_ref() {
                                         if html.is_empty() {
                                             div { class: "markdown-content", style: "white-space: pre-wrap;", "{about}" }
                                         } else {
-                                            div { dangerous_inner_html: "{html}" }
+                                            div { class: "markdown-content", dangerous_inner_html: "{html}" }
                                         }
                                     } else {
                                         div { class: "markdown-content", style: "white-space: pre-wrap;", "{about}" }
                                     }
                                 }
                             }
+                            if d.team.website.as_ref().is_none_or(|value| value.trim().is_empty())
+                                && d.team.email.as_ref().is_none_or(|value| value.trim().is_empty())
+                                && d.team.about.as_ref().is_none_or(|value| value.trim().is_empty()) {
+                                p { class: "text-muted mb-0", "No profile details added yet." }
+                            }
                         }
                     }
 
-                    details {
+                    section {
                         id: "team-tournament-registrations", key: "{d.team.id}-registrations",
-                        class: "card data-section section-disclosure profile-disclosure mt-3",
-                        // Owners need direct access to their Manage Roster actions.
-                        open: me.read().as_ref().and_then(|result| result.as_ref().ok())
-                            .is_some_and(|user| user.user_type == "team" && user.id == d.team.id),
-                        summary { class: "card-header",
+                        class: "data-section profile-section", hidden: active_tab != "history", aria_labelledby: "team-tab-history",
+                        div { class: "profile-section-heading",
                             h2 { class: "h5 mb-0", "Tournament Registrations ({d.registrations.len()})" }
                         }
-                        div { class: "card-body",
+                        div { class: "profile-section-body",
                             if d.registrations.is_empty() {
                                 p { class: "text-muted", "No tournament registrations yet." }
                             } else {
-                                div { class: "table-responsive",
-                                    table { class: "table table-striped profile-history-table",
+                                div { class: "profile-table-scroll",
+                                    table { class: "table profile-history-table",
                                         thead {
                                             tr {
                                                 th { style: "width: 2rem;", "" }
@@ -349,16 +341,17 @@ pub fn TeamProfile(id: Signal<String>) -> Element {
                         }
                     }
 
-                    if !d.team_notes.is_empty() {
-                        details {
+                    if show_notes {
+                        section {
                             id: "team-notes", key: "{d.team.id}-notes",
-                            class: "card data-section section-disclosure profile-disclosure mt-3",
-                            summary { class: "card-header",
+                            class: "data-section profile-section", hidden: active_tab != "notes", aria_labelledby: "team-tab-notes",
+                            div { class: "profile-section-heading",
                                 h2 { class: "h5 mb-0", "Notes Received ({d.team_notes.len()})" }
                             }
-                            div { class: "card-body",
-                                div { class: "table-responsive",
-                                    table { class: "table table-striped table-sm",
+                            div { class: "profile-section-body",
+                                if d.team_notes.is_empty() { p { class: "text-muted", "No notes recorded." } }
+                                div { class: "profile-table-scroll",
+                                    table { class: "table table-sm",
                                         thead {
                                             tr {
                                                 th { "Date" }
@@ -385,6 +378,8 @@ pub fn TeamProfile(id: Signal<String>) -> Element {
                         }
                     }
 
+            }
+            }
                 }
             }
         } else if let Some(Err(e)) = val.read().as_ref() {

@@ -1,6 +1,8 @@
 //! Shared event identity, metadata, and registration actions.
 
 use crate::Route;
+use crate::appearance::focus_control;
+use crate::pages::layout::{page_banner_key, set_page_banner_hidden, use_page_banner_preferences};
 use dioxus::html::input_data::MouseButton;
 use dioxus::prelude::*;
 
@@ -105,6 +107,8 @@ pub fn EventTabs(prefix: String, label: String, active: String, tabs: Vec<EventT
 #[derive(Clone, PartialEq, Props)]
 pub struct EventHeaderProps {
     pub title: String,
+    #[props(default)]
+    pub banner: Option<String>,
     pub kind: String,
     pub date: Option<String>,
     pub location: Option<String>,
@@ -119,12 +123,33 @@ pub struct EventHeaderProps {
 
 #[component]
 pub fn EventHeader(props: EventHeaderProps) -> Element {
+    let preferences = use_page_banner_preferences();
+    let key = page_banner_key(&use_route::<Route>()).unwrap_or_else(|| "event".into());
+    let collapsed = preferences.read().contains(&key);
     rsx! {
         style { {include_str!("event_details.css")} }
-        header { class: "event-detail-hero",
+        header { id: "page-banner", class: if collapsed { "event-detail-hero is-collapsed" } else { "event-detail-hero" },
+            if !collapsed {
+                if let Some(path) = props.banner {
+                    div { class: "event-banner-image",
+                        img { src: "{crate::api::base_url()}/static/{path}", alt: "" }
+                    }
+                }
+            }
             div { class: "container-wide event-hero-inner",
+            if !collapsed {
+                button {
+                    id: "page-banner-dismiss", class: "arctos-intro-dismiss event-banner-dismiss", r#type: "button",
+                    aria_label: "Hide event banner", title: "Hide event banner",
+                    onclick: move |_| {
+                        set_page_banner_hidden(preferences, &key, true);
+                        focus_control("page-banner-heading");
+                    },
+                    i { class: "fa-solid fa-xmark", aria_hidden: "true" }
+                }
+            }
             div { class: "event-hero-main",
-                div { class: "event-hero-badges",
+                div { class: "event-hero-badges", hidden: collapsed,
                     span { class: "event-kind-badge", i { class: "fas fa-trophy", aria_hidden: "true" } "{props.kind}" }
                     if props.registration_open {
                         span { class: "event-registration-badge", i { class: "fas fa-circle-check", aria_hidden: "true" } "Registration open" }
@@ -133,8 +158,8 @@ pub fn EventHeader(props: EventHeaderProps) -> Element {
                         Link { to: Route::LeagueHome { league_url: url }, class: "arctos-event-league-badge", "Part of {name}" }
                     }
                 }
-                h1 { "{props.title}" }
-                ul { class: "event-hero-meta",
+                h1 { id: "page-banner-heading", tabindex: "-1", "{props.title}" }
+                ul { class: "event-hero-meta", hidden: collapsed,
                     if let Some(date) = props.date {
                         li { i { class: "far fa-calendar-alt", aria_hidden: "true" } span { "{date}" } }
                     }

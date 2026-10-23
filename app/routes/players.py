@@ -6,6 +6,8 @@ Hosts the ``players`` blueprint at ``/_api``:
 - ``/players/<player_id>`` (GET, PUT) - read and edit player profile.
 - ``/players/<player_id>/profile-photo`` (POST, DELETE) - upload and
   remove the player's profile photo.
+- ``/players/<player_id>/banner-photo`` (POST, DELETE) - replace or remove
+  the player's validated profile banner.
 - ``/players/<player_id>/injuries`` (GET, POST) - list and add injuries.
 - ``/players/<player_id>/injuries/<injury_id>`` (GET, PUT, DELETE) -
   read, edit, and remove a single injury record.
@@ -13,10 +15,9 @@ Hosts the ``players`` blueprint at ``/_api``:
 
 from __future__ import annotations
 
-import os
 from datetime import datetime
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
@@ -24,9 +25,17 @@ from app.serializers.registration_serializer import player_reg_waiver_api
 from app.services.profile_stats_service import past_event_counts
 from app.utils.datetime_helpers import dt_iso
 from app.utils.helpers import can_head_ref_match, get_registrable_config
+from app.utils.profile_banner_helpers import (
+    BannerUploadError,
+    read_banner_upload,
+    remove_profile_banner,
+    replace_profile_banner,
+)
 from app.utils.profile_photo_helpers import (
-    profile_photo_upload_dir,
-    safe_profile_photo_filename,
+    PhotoUploadError,
+    read_profile_photo_upload,
+    remove_profile_photo,
+    replace_profile_photo,
 )
 from app.utils.user_helpers import is_player
 from models import (
@@ -273,6 +282,7 @@ def player_profile(player_id):
                 "id": player.id,
                 "name": player.name,
                 "profile_photo": player.profile_photo,
+                "banner_photo": player.banner_photo,
                 "phone": (player.phone if (current_user.is_authenticated and current_user.id == player_id) else None),
                 "location": player.location,
                 "bio": player.bio,
@@ -430,41 +440,38 @@ def update_player_profile(player_id):
     return jsonify({"success": True})
 
 
+@bp.route("/players/<player_id>/banner-photo", methods=["POST", "DELETE"])
+@login_required
+def player_banner_photo(player_id):
+    """Replace or remove a banner belonging to this player account only."""
+    if not is_player(current_user) or current_user.id != player_id:
+        return jsonify({"error": "You can only change the banner on your own player profile"}), 403
+    player = Player.query.get_or_404(player_id)
+    try:
+        if request.method == "DELETE":
+            remove_profile_banner(player, "player")
+            return jsonify({"success": True})
+        path = replace_profile_banner(player, "player", read_banner_upload())
+        return jsonify({"success": True, "path": path})
+    except BannerUploadError as error:
+        return jsonify({"error": str(error)}), error.status
+
+
 @bp.route("/players/<player_id>/profile-photo", methods=["POST"])
 @login_required
 def upload_player_profile_photo(player_id):
-    """Upload or replace player profile photo. Uses predictable path so overwrites previous."""
+    """Validate and replace the player's avatar without overwriting a cached URL."""
     if current_user.id != player_id or not is_player(current_user):
         return (
             jsonify({"error": "You can only upload a photo for your own profile"}),
             403,
         )
     player = Player.query.get_or_404(player_id)
-    data = request.get_data()
-    if not data or len(data) == 0:
-        return jsonify({"error": "No image data"}), 400
-    upload_dir = profile_photo_upload_dir()
-    os.makedirs(upload_dir, exist_ok=True)
-    # Predictable name: one file per player, always overwritten
-    filename = safe_profile_photo_filename("player", player_id)
-    file_path = os.path.join(upload_dir, filename)
-    old_path = player.profile_photo
-    rel_path = f"uploads/profiles/{filename}"
     try:
-        if old_path and old_path != rel_path:
-            old_full = os.path.join(current_app.root_path, "..", "static", old_path)
-            if os.path.isfile(old_full):
-                try:
-                    os.remove(old_full)
-                except OSError:
-                    pass
-        with open(file_path, "wb") as f:
-            f.write(data)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    player.profile_photo = rel_path
-    db.session.commit()
-    return jsonify({"success": True, "path": rel_path})
+        path = replace_profile_photo(player, "player", read_profile_photo_upload())
+        return jsonify({"success": True, "path": path})
+    except PhotoUploadError as error:
+        return jsonify({"error": str(error)}), error.status
 
 
 @bp.route("/players/<player_id>/profile-photo", methods=["DELETE"])
@@ -477,14 +484,8 @@ def delete_player_profile_photo(player_id):
             403,
         )
     player = Player.query.get_or_404(player_id)
-    old_path = player.profile_photo
-    if old_path:
-        old_full = os.path.join(current_app.root_path, "..", "static", old_path)
-        if os.path.isfile(old_full):
-            try:
-                os.remove(old_full)
-            except OSError:
-                pass
-    player.profile_photo = None
-    db.session.commit()
-    return jsonify({"success": True})
+    try:
+        remove_profile_photo(player, "player")
+        return jsonify({"success": True})
+    except PhotoUploadError as error:
+        return jsonify({"error": str(error)}), error.status

@@ -129,7 +129,7 @@ async def controls(check, page, stones) -> None:
     assert not duplicates, "Duplicate audio sources were scheduled on the same beat"
     await start.click()
     await expect(start).to_have_text("Pause")
-    await page.get_by_role("navigation", name="Main navigation").get_by_role("link", name="Home", exact=True).click()
+    await page.get_by_role("navigation", name="Main navigation").get_by_role("link", name="Events", exact=True).click()
     await expect(page.locator("#event-search")).to_be_visible()
     await page.wait_for_function("window.stonesSources.every(source => source.ctx.state === 'closed')")
     await page.get_by_role("navigation", name="Main navigation").get_by_role("link", name="Stones", exact=True).click()

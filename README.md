@@ -132,9 +132,34 @@ just frontend   # Dioxus app, http://127.0.0.1:8080
 
 Open **http://127.0.0.1:8080**. Use `demo-organizer`, `demo-player`, or `demo-team` with the password
 `arctos-demo-only` (also printed at startup). It includes public events, league registration, rosters, live and
-completed matches, and a side competition. Demo records live only in
+completed matches, and side competitions. Two scoring examples each have 16 entrants: **Open Dueling — Practice** starts without results, while **Dueling Standings — Practice** has sample wins and losses. Both remain active so `demo-organizer` can enter or correct results. Demo records live only in
 `instance/demo.db`; rerunning preserves changes and never touches
 `instance/tournament.db`. These are local test accounts, not production users.
+
+Existing databases need migrations `0023_profile_banners` and `0024_event_banners` for uploaded profile and event banners. Run `uv sync --group test`, back up your database, and apply pending migrations before starting the updated backend. For the demo, set `SQLALCHEMY_DATABASE_URI=sqlite:////absolute/path/to/arctos/instance/demo.db` when running Alembic. See [the banner migration notes](migrations/README.md#profile-and-event-banners) for unversioned databases. Fresh demos already include these columns.
+
+Profile owners can edit avatars and covers from Edit profile; tournament and
+league organizers can edit covers from Settings. The image editor supports
+dragging, zoom, and keyboard position controls before upload. The server accepts
+still JPEG, PNG, and WebP images up to 8 MiB and removes embedded metadata.
+Keep `static/uploads` alongside database backups: image files are stored there,
+while the database stores their paths.
+
+To preview an existing versioned SQLite snapshot, run the backend with:
+
+```bash
+uv run python -m scripts.dev_demo --snapshot /absolute/path/to/snapshot.db
+```
+
+This reads the source without modifying it, migrates a working copy at
+`instance/snapshot-demo/demo.db`, and adds the fictional demo accounts and
+examples. Repeating the command preserves the working copy and its edits.
+The ordinary `instance/demo.db` is kept separately. Snapshots with reserved
+demo IDs are rejected instead of changing existing accounts. The snapshot must
+have a known Alembic revision; the launcher never stamps an unknown or
+unversioned database. Add `--seed-only` to prepare the copy without starting
+the server. Uploaded media is not copied by this command; make its existing
+`static/uploads` files available separately.
 
 For a phone on your local network, start the frontend with
 `just frontend --addr 0.0.0.0`, then open your computer's LAN address on port

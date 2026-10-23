@@ -1,7 +1,7 @@
 use crate::api;
 use crate::components::{
     EditRegistrationContext, EditRegistrationModal, EventAbout, EventHeader, EventTab, EventTabs,
-    EventTeamsList, LeagueRegistrationButtons,
+    EventTeamsList, LeagueRegistrationButtons, OrganizerTools,
 };
 use crate::types::{ToEntry, User};
 use crate::Route;
@@ -125,6 +125,7 @@ pub fn LeagueHomeContent(
                 rsx! {
             div { class: "event-detail-page",
                 EventHeader {
+                    banner: d.league.banner_photo.clone(),
                     title: d.league.name.clone(),
                     kind: "League".to_string(),
                     date: None,
@@ -150,6 +151,14 @@ pub fn LeagueHomeContent(
                         }
                     } else {
                         button { r#type: "button", class: "btn btn-secondary", disabled: true, "Registration closed" }
+                    }
+                    if viewer_is_to {
+                        OrganizerTools {
+                            Link { to: Route::LeagueSettings { league_url: league_url.clone() }, class: "dropdown-item", i { class: "fas fa-sliders-h", aria_hidden: "true" } "Settings" }
+                            Link { to: Route::LeagueNewTournament { league_url: league_url.clone() }, class: "dropdown-item", i { class: "fas fa-plus", aria_hidden: "true" } "Add Event" }
+                            Link { to: Route::LeagueManage { league_url: league_url.clone() }, class: "dropdown-item", i { class: "fas fa-users", aria_hidden: "true" } "Registration Management" }
+                            button { r#type: "button", class: "dropdown-item text-danger", onclick: move |_| { delete_modal_open.set(true); delete_confirm_url.set(String::new()); delete_error.set(None); }, i { class: "fas fa-trash", aria_hidden: "true" } "Delete League" }
+                        }
                     }
                 }
                 if show_registration_success() {
@@ -285,17 +294,7 @@ pub fn LeagueHomeContent(
 
                 }
                 }
-                if viewer_is_to && content.is_none() {
-                    section { class: "event-organizer-card",
-                        div { class: "card-header", h2 { i { class: "fas fa-cog", aria_hidden: "true" } "Organizer tools" } }
-                        div { class: "card-body event-organizer-actions",
-                            Link { to: Route::LeagueSettings { league_url: league_url.clone() }, class: "btn btn-outline-secondary", i { class: "fas fa-sliders-h", aria_hidden: "true" } "Settings" }
-                            Link { to: Route::LeagueNewTournament { league_url: league_url.clone() }, class: "btn btn-outline-secondary", i { class: "fas fa-plus", aria_hidden: "true" } "Add Event" }
-                            Link { to: Route::LeagueManage { league_url: league_url.clone() }, class: "btn btn-outline-secondary", i { class: "fas fa-users", aria_hidden: "true" } "Registration Management" }
-                            button { r#type: "button", class: "btn btn-outline-danger", onclick: move |_| { delete_modal_open.set(true); delete_confirm_url.set(String::new()); delete_error.set(None); }, i { class: "fas fa-trash", aria_hidden: "true" } "Delete League" }
-                        }
-                    }
-                }
+
                 }
             if show_edit_modal() {
                 if let Some(Ok(me)) = me_res.read().as_ref() {

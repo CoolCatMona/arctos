@@ -10,50 +10,71 @@ pub fn use_auth_invalidate() -> Signal<u32> {
 }
 
 #[derive(Clone, Copy)]
-struct HomeBannerHidden(Signal<bool>);
+struct PageBannerPreferences(Signal<std::collections::HashSet<String>>);
 
-pub fn use_home_banner_hidden() -> Signal<bool> {
-    use_context::<HomeBannerHidden>().0
+pub fn use_page_banner_preferences() -> Signal<std::collections::HashSet<String>> {
+    use_context::<PageBannerPreferences>().0
 }
 
 #[cfg(target_arch = "wasm32")]
-const INTRODUCTION_STORAGE_KEY: &str = "arctos.introduction.hidden.v1";
+const PAGE_BANNERS_STORAGE_KEY: &str = "arctos.page-banners.hidden.v1";
 
-fn home_banner_is_hidden() -> bool {
+fn stored_page_banners() -> std::collections::HashSet<String> {
     #[cfg(target_arch = "wasm32")]
-    if let Some(storage) =
-        web_sys::window().and_then(|window| window.local_storage().ok().flatten())
-    {
-        return storage
-            .get_item(INTRODUCTION_STORAGE_KEY)
-            .ok()
-            .flatten()
-            .as_deref()
-            == Some("true");
+    if let Some(storage) = web_sys::window().and_then(|window| window.local_storage().ok().flatten()) {
+        if let Some(saved) = storage.get_item(PAGE_BANNERS_STORAGE_KEY).ok().flatten() {
+            if let Ok(keys) = serde_json::from_str(&saved) {
+                return keys;
+            }
+        }
+        // Keep the previous Events banner preference when upgrading.
+        if storage.get_item("arctos.introduction.hidden.v1").ok().flatten().as_deref() == Some("true") {
+            return std::collections::HashSet::from(["events".to_string()]);
+        }
     }
-    false
+    std::collections::HashSet::new()
 }
 
-pub fn remember_home_banner(hidden: bool) {
-    #[cfg(target_arch = "wasm32")]
-    if let Some(storage) =
-        web_sys::window().and_then(|window| window.local_storage().ok().flatten())
-    {
-        let _ = storage.set_item(
-            INTRODUCTION_STORAGE_KEY,
-            if hidden { "true" } else { "false" },
-        );
+pub fn set_page_banner_hidden(
+    mut preferences: Signal<std::collections::HashSet<String>>,
+    key: &str,
+    hidden: bool,
+) {
+    if hidden {
+        preferences.write().insert(key.to_string());
+    } else {
+        preferences.write().remove(key);
     }
-    #[cfg(not(target_arch = "wasm32"))]
-    let _ = hidden;
+    #[cfg(target_arch = "wasm32")]
+    if let Some(storage) = web_sys::window().and_then(|window| window.local_storage().ok().flatten()) {
+        if let Ok(saved) = serde_json::to_string(&*preferences.read()) {
+            let _ = storage.set_item(PAGE_BANNERS_STORAGE_KEY, &saved);
+        }
+    }
 }
 
-fn focus_restored_home_banner() {
+pub fn page_banner_key(route: &Route) -> Option<String> {
+    match route {
+        Route::Index {} => Some("events".into()),
+        Route::LeaguesIndex {} => Some("leagues".into()),
+        Route::PlayersList {} => Some("players".into()),
+        Route::TeamsList {} => Some("teams".into()),
+        Route::Stones {} => Some("stones".into()),
+        Route::TournamentHome { url } | Route::TournamentHomeWithTab { url, .. }
+        | Route::Schedule { url, .. } | Route::Results { url } | Route::Bracket { url } => Some(format!("event:{url}")),
+        Route::LeagueHome { league_url } | Route::LeagueHomeWithTab { league_url, .. }
+        | Route::LeagueResults { league_url } => Some(format!("league:{league_url}")),
+        Route::PlayerProfilePage { id } | Route::PlayerProfilePageWithTab { id, .. } => Some(format!("player:{id}")),
+        Route::TeamProfilePage { id } | Route::TeamProfilePageWithTab { id, .. } => Some(format!("team:{id}")),
+        _ => None,
+    }
+}
+
+fn focus_restored_page_banner() {
     #[cfg(target_arch = "wasm32")]
     spawn(async move {
-        // Let the shared signal remove the banner's hidden attribute first.
         gloo_timers::future::TimeoutFuture::new(0).await;
-        focus_control("arctos-introduction-heading");
+        focus_control("page-banner-heading");
     });
 }
 
@@ -93,9 +114,9 @@ fn page_title_for_route(route: &Route) -> String {
         Route::EditPlayerProfile { .. } => "Edit Profile".into(),
         Route::EditTeamProfile { .. } => "Edit Profile".into(),
         Route::PlayersList { .. } => "Players".into(),
-        Route::PlayerProfilePage { id } => format!("{id}"),
+        Route::PlayerProfilePage { id } | Route::PlayerProfilePageWithTab { id, .. } => format!("{id}"),
         Route::TeamsList { .. } => "Teams".into(),
-        Route::TeamProfilePage { id } => format!("{id}"),
+        Route::TeamProfilePage { id } | Route::TeamProfilePageWithTab { id, .. } => format!("{id}"),
         Route::Stones { .. } => "Stones".into(),
         Route::About { .. } => "About".into(),
         Route::NewTournament { .. } => "Create Tournament".into(),
@@ -136,8 +157,8 @@ const ICONS: Asset = asset!("/assets/vendor/fontawesome");
 pub fn Layout() -> Element {
     let auth_version = use_signal(|| 0u32);
     provide_context(auth_version);
-    let mut introduction_hidden = use_signal(home_banner_is_hidden);
-    provide_context(HomeBannerHidden(introduction_hidden));
+    let banner_preferences = use_signal(stored_page_banners);
+    provide_context(PageBannerPreferences(banner_preferences));
     let user = use_resource(move || {
         let _ = auth_version();
         async move { api::me().await }
@@ -154,9 +175,12 @@ pub fn Layout() -> Element {
     let route = use_route::<Route>();
     let page_title = format!("{} | Arctos", page_title_for_route(&route));
     let path = route.to_string();
+    let banner_key = page_banner_key(&route);
     let event_page = matches!(route, Route::TournamentHome { .. } | Route::TournamentHomeWithTab { .. }
         | Route::Schedule { .. } | Route::Results { .. } | Route::Bracket { .. }
-        | Route::LeagueHome { .. } | Route::LeagueHomeWithTab { .. } | Route::LeagueResults { .. });
+        | Route::LeagueHome { .. } | Route::LeagueHomeWithTab { .. } | Route::LeagueResults { .. }
+        | Route::PlayerProfilePage { .. } | Route::PlayerProfilePageWithTab { .. }
+        | Route::TeamProfilePage { .. } | Route::TeamProfilePageWithTab { .. });
     let current_user = user
         .read()
         .as_ref()
@@ -344,16 +368,15 @@ pub fn Layout() -> Element {
                                     }
                                     Link { to: Route::Docs {}, class: "dropdown-item", "Help & documentation" }
                                     Link { to: Route::About {}, class: "dropdown-item", "About Arctos" }
-                                    if path == "/" && introduction_hidden() {
+                                    if let Some(key) = banner_key.clone().filter(|key| banner_preferences.read().contains(key)) {
                                         button {
-                                            id: "arctos-introduction-restore", r#type: "button", class: "dropdown-item",
+                                            id: "page-banner-restore", r#type: "button", class: "dropdown-item",
                                             onclick: move |_| {
-                                                introduction_hidden.set(false);
-                                                remember_home_banner(false);
+                                                set_page_banner_hidden(banner_preferences, &key, false);
                                                 utility_open.set(false);
-                                                focus_restored_home_banner();
+                                                focus_restored_page_banner();
                                             },
-                                            "Show home banner"
+                                            "Show page banner"
                                         }
                                     }
                                 }

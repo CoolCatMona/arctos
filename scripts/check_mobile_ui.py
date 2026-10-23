@@ -195,8 +195,28 @@ class SmokeCheck:
                 return {left: r.left, right: r.right, viewport: document.documentElement.clientWidth};
             }""")
             assert abs(banner["left"]) <= 1 and abs(banner["right"] - banner["viewport"]) <= 1, (
-                f"Event banner does not span the viewport: {banner}"
+                f"Detail banner does not span the viewport: {banner}"
             )
+        if await page.locator(".profile-page").count():
+            profile = await page.locator(".profile-page").evaluate("""el => {
+                const r = el.getBoundingClientRect();
+                return {left: r.left, right: r.right, width: r.width, viewport: document.documentElement.clientWidth};
+            }""")
+            assert profile["width"] <= 901 and abs(profile["left"] - (profile["viewport"] - profile["right"])) <= 1, (
+                f"Profile column must be centered and bounded: {profile}"
+            )
+        if await page.locator("#page-banner-dismiss").is_visible():
+            collisions = await page.locator("#page-banner").evaluate("""banner => {
+                const close = banner.querySelector('#page-banner-dismiss').getBoundingClientRect();
+                const overlaps = r => Math.min(close.right, r.right) - Math.max(close.left, r.left) > 1
+                    && Math.min(close.bottom, r.bottom) - Math.max(close.top, r.top) > 1;
+                return [...banner.querySelectorAll('#page-banner-heading, .event-hero-badges > *')].flatMap(el => {
+                    const range = document.createRange(); range.selectNodeContents(el);
+                    const rects = el.id === 'page-banner-heading' ? [...range.getClientRects()] : [el.getBoundingClientRect()];
+                    return rects.some(overlaps) ? [el.textContent.trim()] : [];
+                });
+            }""")
+            assert not collisions, f"Banner close target overlaps heading or badges: {collisions}"
         if name == "run-match" and width < 576:
             await expect(page.locator("#points-table .winner-option").first).to_be_visible()
             points = await page.locator("#points-table").evaluate("""table => ({
@@ -624,6 +644,7 @@ class SmokeCheck:
                 await expect(page.locator(".schedule-keyboard-focus")).to_be_visible()
                 await expect(page.locator("#event-tab-schedule")).to_have_attribute("aria-current", "page")
             await page.goto(self.base_url + "/demo-open", wait_until="domcontentloaded")
+            await page.locator("#organizer-tools-trigger").click()
             await page.get_by_role("link", name="Edit Schedule", exact=True).click()
             await expect(page.locator(".schedule-editor-split")).to_be_visible()
             for path, destination in (
@@ -667,10 +688,9 @@ class SmokeCheck:
 
     async def introduction_visibility(self, page: Page) -> None:
         await page.goto(self.base_url, wait_until="domcontentloaded")
-        dismiss = page.locator("#arctos-introduction-dismiss")
-        intro = page.locator("#arctos-introduction")
-        await expect(page.get_by_role("heading", name="Arctos", exact=True)).to_be_visible()
-        await expect(page.locator("#arctos-introduction-toggle")).to_have_count(0)
+        dismiss = page.locator("#page-banner-dismiss")
+        intro = page.locator("#page-banner")
+        await expect(page.locator("#page-banner-heading")).to_have_text("Events")
         box = await dismiss.bounding_box()
         assert box and box["width"] >= 44 and box["height"] >= 44, "Banner close target is too small"
         assert await intro.evaluate("el => getComputedStyle(el).textAlign") == "center"
@@ -684,7 +704,7 @@ class SmokeCheck:
         await page.keyboard.press("Enter")
         await expect(intro).to_be_hidden()
         await expect(page.locator("#event-discovery")).to_be_focused()
-        await expect(page.get_by_role("heading", name="Arctos", exact=True)).to_have_count(0)
+        await expect(page.locator("#page-banner-heading")).to_be_hidden()
         await expect(page.locator("#event-search")).to_have_value("Summer Cup")
         await expect(page.locator(".arctos-event-card")).to_have_count(1)
         after = await page.locator("#event-search").bounding_box()
@@ -702,9 +722,9 @@ class SmokeCheck:
         await expect(intro).to_be_hidden()
         await page.locator("#event-search").fill("Summer Cup")
         await page.locator("#utility-trigger").click()
-        await page.get_by_role("button", name="Show home banner", exact=True).click()
+        await page.locator("#page-banner-restore").click()
         await expect(intro).to_be_visible()
-        await expect(page.locator("#arctos-introduction-heading")).to_be_focused()
+        await expect(page.locator("#page-banner-heading")).to_be_focused()
         await expect(page.locator("#event-search")).to_have_value("Summer Cup")
         await expect(page.locator(".arctos-event-card")).to_have_count(1)
         await page.reload(wait_until="domcontentloaded")
@@ -742,31 +762,32 @@ class SmokeCheck:
         count = profile["past_event_count"]
         assert isinstance(count, int) and count >= 0, "Invalid public past-event count"
         await page.goto(self.base_url + f"/{account_type}s", wait_until="domcontentloaded")
+        await page.locator(f"#{account_type}-search").fill(account_id)
+        await page.get_by_role("search").get_by_role("button", name="Search", exact=True).click()
         card = page.locator(f'.arctos-directory-card[href="{path}"]')
         await expect(card.locator(".arctos-directory-event-count strong")).to_have_text(str(count))
         await card.click()
         await expect(page.locator(".profile-event-stat dt")).to_have_text("Past events")
         await expect(page.locator(".profile-event-stat dd")).to_have_text(str(count))
 
-    async def player_disclosures(self, page: Page) -> None:
+    async def player_profile_tabs(self, page: Page) -> None:
         await self.login(page, "demo-player")
         await self.profile_event_count(page, "player", "demo-player")
         history = page.locator("#player-tournament-history")
-        await expect(history).to_be_visible()
-        await expect(history).to_have_js_property("open", False)
-        summary = history.locator("summary")
-        await summary.focus()
+        await expect(history).to_be_hidden()
+        await page.locator("#player-tab-history").focus()
         await page.keyboard.press("Enter")
-        await expect(history).to_have_js_property("open", True)
+        await expect(page.locator("#player-tab-history")).to_have_attribute("aria-current", "page")
         await expect(history.locator("tbody tr").first).to_be_visible()
         await self.profile_rows_fit(page, "#player-tournament-history table")
-        await page.keyboard.press("Space")
-        await expect(history).to_have_js_property("open", False)
-        await expect(summary).to_be_focused()
+        await page.locator("#player-tab-info").click()
+        await expect(history).to_be_hidden()
 
+        await page.goto(self.base_url + "/players/demo-player", wait_until="domcontentloaded")
         injuries = page.locator("#player-injury-history")
-        await expect(injuries).to_have_js_property("open", False)
-        await injuries.locator("summary").click()
+        await expect(injuries).to_be_hidden()
+        await page.locator("#player-tab-injuries").click()
+        description_count = await injuries.get_by_label("Injury description", exact=True).count()
         await injuries.get_by_role("button", name="New Injury", exact=True).click()
         description = injuries.get_by_label("Injury description", exact=True).last
         await description.fill("Unsaved injury description")
@@ -774,21 +795,27 @@ class SmokeCheck:
         await active.uncheck()
         await active.check()
         await self.profile_rows_fit(page, "#player-injury-history table")
-        await injuries.locator("summary").click()
-        await expect(description).to_be_hidden()
-        await expect(injuries.locator("summary")).to_contain_text("active")
-        await injuries.locator("summary").click()
+        await page.go_back()
+        await expect(page.locator("#player-tab-info")).to_have_attribute("aria-current", "page")
+        await page.go_forward()
         await expect(description).to_have_value("Unsaved injury description")
+        await expect(active).to_be_checked()
+        await page.locator("#player-tab-history").click()
+        await expect(description).to_be_hidden()
+        await page.locator("#player-tab-injuries").click()
+        await expect(description).to_have_value("Unsaved injury description")
+        await expect(active).to_be_checked()
         await injuries.get_by_role("button", name="Cancel", exact=True).last.click()
-        await expect(description).to_have_count(0)
-        for section in await page.locator("details.section-disclosure").all():
-            box = await section.locator("summary").bounding_box()
-            assert box and box["height"] >= 44, "Disclosure target is too small"
+        await expect(injuries.get_by_label("Injury description", exact=True)).to_have_count(description_count)
+        for tab in await page.locator(".event-route-tabs a").all():
+            box = await tab.bounding_box()
+            assert box and box["height"] >= 44 and box["width"] >= 44, "Profile navigation target is too small"
 
-    async def team_disclosures(self, page: Page) -> None:
+    async def team_profile_tabs(self, page: Page) -> None:
         await self.profile_event_count(page, "team", "demo-team")
         registrations = page.locator("#team-tournament-registrations")
-        await expect(registrations).to_have_js_property("open", True)
+        await expect(registrations).to_be_hidden()
+        await page.locator("#team-tab-history").click()
         row = registrations.locator("tbody > tr").filter(has=page.locator('a[href="/demo-open"]')).first
         toggle = row.get_by_role("button")
         await toggle.focus()
@@ -798,9 +825,14 @@ class SmokeCheck:
         await expect(players).to_be_visible()
         await expect(players.get_by_role("link").first).to_be_visible()
         await self.profile_rows_fit(page, "#team-tournament-registrations table")
-        await registrations.locator("summary").click()
+        await page.go_back()
+        await expect(page.locator("#team-tab-info")).to_have_attribute("aria-current", "page")
+        await page.go_forward()
+        await expect(players).to_be_visible()
+        await expect(toggle).to_have_attribute("aria-expanded", "true")
+        await page.locator("#team-tab-info").click()
         await expect(players).to_be_hidden()
-        await registrations.locator("summary").click()
+        await page.locator("#team-tab-history").click()
         await expect(players).to_be_visible()
         await expect(toggle).to_have_attribute("aria-expanded", "true")
         await toggle.click()
@@ -813,13 +845,21 @@ class SmokeCheck:
             sections = page.locator("details.section-disclosure")
             await expect(sections).to_have_count(2)
             for section in await sections.all():
-                await expect(section).to_have_js_property("open", True)
+                initially_open = "penalty-types-section" not in (await section.get_attribute("class") or "")
+                await expect(section).to_have_js_property("open", initially_open)
                 summary = section.locator("summary")
                 await summary.focus()
                 await page.keyboard.press("Enter")
-                await expect(section.locator(".card-body")).to_be_hidden()
+                await expect(section).to_have_js_property("open", not initially_open)
                 await page.keyboard.press("Space")
-                await expect(section.locator(".card-body")).to_be_visible()
+                await expect(section).to_have_js_property("open", initially_open)
+            if path == "/demo-open/settings":
+                advanced = page.locator("#head-ref-options")
+                await expect(advanced).to_have_js_property("open", False)
+                await advanced.locator("summary").click()
+                await expect(advanced.get_by_role("checkbox").first).to_be_visible()
+                await advanced.locator("summary").click()
+                await expect(advanced).to_have_js_property("open", False)
 
     async def login(self, page: Page, username: str = DEMO_USER) -> None:
         await page.goto(self.base_url + "/login", wait_until="domcontentloaded")
@@ -1093,8 +1133,8 @@ async def run(args: argparse.Namespace) -> int:
                         Screen("team-profile-edit", "/teams/demo-team/edit", "main form"),
                     ):
                         await check.visit(page, screen, width)
-                    await check.workflow(page, "team-disclosures", width, lambda: check.team_disclosures(page))
-                    await check.workflow(page, "player-disclosures", width, lambda: check.player_disclosures(page))
+                    await check.workflow(page, "team-profile-tabs", width, lambda: check.team_profile_tabs(page))
+                    await check.workflow(page, "player-profile-tabs", width, lambda: check.player_profile_tabs(page))
                 finally:
                     if check.mock_gate:
                         check.mock_gate.set()

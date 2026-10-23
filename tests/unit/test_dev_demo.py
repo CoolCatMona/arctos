@@ -3,6 +3,9 @@
 from datetime import datetime, timedelta, timezone
 import sqlite3
 
+from alembic import command
+from alembic.script import ScriptDirectory
+from flask import Flask
 import pytest
 
 from app import create_app
@@ -18,6 +21,7 @@ from models import (
     Point,
     SideComp,
     SideCompRegistration,
+    SideCompResult,
     Team,
     TeamRegistration,
     Tournament,
@@ -61,10 +65,12 @@ def test_reseeding_preserves_edits_and_does_not_touch_other_database(demo_path):
 
 
 def test_seed_has_valid_relationships_permissions_and_match_state(demo_app):
-    assert Player.query.count() == 6
+    assert Player.query.count() == 16
     assert Team.query.count() == 4
     assert Tournament.query.count() == 4
     assert League.query.count() == 1
+    assert {player.id for player in Player.query.all()} == dev_demo.RESERVED_PLAYER_IDS
+    assert {team.id for team in Team.query.all()} == dev_demo.RESERVED_TEAM_IDS
     assert db.session.execute(db.text("PRAGMA foreign_key_check")).all() == []
     organizer = db.session.get(Player, dev_demo.ORGANIZER_ID)
     assert organizer.check_password(dev_demo.DEMO_PASSWORD)
@@ -91,7 +97,7 @@ def test_seed_has_valid_relationships_permissions_and_match_state(demo_app):
         assert all(point.end_stamp - point.stamp == timedelta(seconds=point.nstones * 1.5) for point in points)
         if match.status == MatchStatus.COMPLETED:
             assert match.match_winner == WinnerSide.TEAM1 and match.finalized_at
-    competition = SideComp.query.one()
+    competition = SideComp.query.filter_by(name="Sideline Dueling — Demo").one()
     assert competition.registration_open and competition.active
     entries = SideCompRegistration.query.filter_by(comp=competition.id).all()
     assert len(entries) == 3 and len({entry.entry_number for entry in entries}) == 3
@@ -140,3 +146,251 @@ def test_seed_only_never_runs_the_server(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(dev_demo.Flask, "run", lambda *args, **kwargs: pytest.fail("Server started"))
     dev_demo.main(["--seed-only"])
     assert "Created sample data" in capsys.readouterr().out
+
+
+def test_practice_competitions_are_populated_editable_and_not_reset(demo_app):
+    examples = dev_demo.add_practice_side_competitions()
+    assert len(examples) == 2
+    empty, scored = examples
+    organizer = db.session.get(Player, dev_demo.ORGANIZER_ID)
+    for competition in examples:
+        assert PermissionService.is_tournament_organizer(competition.event, organizer)
+        assert competition.active and not competition.finalized and competition.track_losses
+        entries = SideCompRegistration.query.filter_by(comp=competition.id).all()
+        assert len(entries) == 16 and len({entry.entry_number for entry in entries}) == 16
+        assert all(entry.is_complete() for entry in entries)
+    assert SideCompResult.query.filter_by(comp=empty.id).count() == 0
+    assert SideCompResult.query.filter_by(comp=scored.id).count() > 50
+    entry = SideCompRegistration.query.filter_by(comp=empty.id).first()
+    dev_demo.SideCompService.log_result(empty.id, registration_id=entry.id, points=1, ref_user_id=organizer.id).unwrap()
+    scored.active = False
+    db.session.commit()
+    before = (
+        Player.query.count(),
+        SideComp.query.count(),
+        SideCompRegistration.query.count(),
+        SideCompResult.query.count(),
+    )
+    assert [comp.id for comp in dev_demo.add_practice_side_competitions()] == [empty.id, scored.id]
+    assert not scored.active
+    assert before == (
+        Player.query.count(),
+        SideComp.query.count(),
+        SideCompRegistration.query.count(),
+        SideCompResult.query.count(),
+    )
+
+
+@pytest.fixture
+def versioned_snapshot(tmp_path):
+    """Reconstruct the known pre-banner schema without opening a real snapshot."""
+    path = tmp_path / "source.db"
+    bootstrap = Flask("snapshot_test")
+    bootstrap.config.update(SQLALCHEMY_DATABASE_URI=f"sqlite:///{path}", SQLALCHEMY_TRACK_MODIFICATIONS=False)
+    db.init_app(bootstrap)
+    with bootstrap.app_context():
+        try:
+            db.create_all()
+            db.session.add_all(
+                [
+                    Player(id="snapshot-player", name="Existing player", pw_hash="existing-player-password"),
+                    Team(id="snapshot-team", name="Existing team", pw_hash="existing-team-password"),
+                    Tournament(
+                        url="snapshot-event",
+                        name="Existing event",
+                        start_date=datetime(2026, 1, 1),
+                        end_date=datetime(2026, 1, 2),
+                        registrable_config=dev_demo._config(),
+                    ),
+                    League(url="snapshot-league", name="Existing league", registrable_config=dev_demo._config()),
+                ]
+            )
+            db.session.commit()
+        finally:
+            db.session.remove()
+            db.engine.dispose()
+    config = dev_demo._migration_config(path)
+    command.stamp(config, "head")
+    command.downgrade(config, "0022_oauth_provider")
+    return path
+
+
+def test_snapshot_copy_migrates_additively_without_touching_source_or_other_databases(
+    versioned_snapshot, tmp_path, monkeypatch
+):
+    source = versioned_snapshot
+    before = source.read_bytes()
+    original_records = {}
+    with sqlite3.connect(source) as connection:
+        for table, key in [("players", "id"), ("teams", "id"), ("tournaments", "url"), ("leagues", "url")]:
+            cursor = connection.execute(f"SELECT * FROM {table} ORDER BY {key}")
+            original_records[table] = ([column[0] for column in cursor.description], cursor.fetchall())
+    ordinary = tmp_path / "instance" / "demo.db"
+    ordinary.parent.mkdir()
+    ordinary.write_bytes(b"ordinary demo edits")
+    protected = ordinary.with_name("tournament.db")
+    protected.write_bytes(b"ordinary tournament data")
+    monkeypatch.setattr(dev_demo, "DEFAULT_DATABASE", ordinary)
+    monkeypatch.setenv("SQLALCHEMY_DATABASE_URI", f"sqlite:///{protected}")
+    monkeypatch.setattr(dev_demo, "create_app", lambda *_: pytest.fail("Preparation ran application startup"))
+    destination = ordinary.parent / "snapshot-demo" / "demo.db"
+    assert dev_demo.prepare_snapshot_demo_database(source, destination)
+    assert source.read_bytes() == before
+    assert ordinary.read_bytes() == b"ordinary demo edits"
+    assert protected.read_bytes() == b"ordinary tournament data"
+    with sqlite3.connect(destination) as connection:
+        head = ScriptDirectory.from_config(dev_demo._migration_config(destination)).get_current_head()
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (head,)
+        for table, (columns, rows) in original_records.items():
+            key = "id" if table in {"players", "teams"} else "url"
+            for row in rows:
+                saved = connection.execute(
+                    f"SELECT {','.join(columns)} FROM {table} WHERE {key} = ?", (row[columns.index(key)],)
+                ).fetchone()
+                assert saved == row
+            assert "banner_photo" in {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+        assert connection.execute("SELECT COUNT(*) FROM players").fetchone()[0] == 17
+        assert connection.execute("SELECT COUNT(*) FROM teams").fetchone()[0] == 5
+        assert connection.execute("SELECT COUNT(*) FROM tournaments").fetchone()[0] == 5
+        assert connection.execute("SELECT COUNT(*) FROM leagues").fetchone()[0] == 2
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+    assert sorted(path.name for path in destination.parent.iterdir()) == ["demo.db"]
+
+
+def test_snapshot_restarts_preserve_edits_passwords_and_new_records(versioned_snapshot, tmp_path):
+    destination = tmp_path / "snapshot-demo" / "demo.db"
+    assert dev_demo.prepare_snapshot_demo_database(versioned_snapshot, destination)
+    with sqlite3.connect(destination) as connection:
+        connection.execute(
+            "UPDATE players SET name = ?, pw_hash = ? WHERE id = ?",
+            ("Local edit", "changed-password", dev_demo.ORGANIZER_ID),
+        )
+        connection.execute("INSERT INTO players (id, name) VALUES ('new-local-player', 'New local player')")
+        connection.execute("UPDATE tournaments SET name = 'Local event edit' WHERE url = ?", (dev_demo.LIVE_EVENT,))
+    before = destination.read_bytes()
+    assert dev_demo.prepare_snapshot_demo_database(versioned_snapshot, destination) is False
+    assert destination.read_bytes() == before
+    # Once copied, the original need not remain available to reopen the demo.
+    assert dev_demo.prepare_snapshot_demo_database(tmp_path / "unavailable.db", destination) is False
+    assert destination.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("table", "key", "reserved_id"),
+    [
+        ("players", "id", dev_demo.ORGANIZER_ID),
+        ("players", "id", "demo-duelist-10"),
+        ("teams", "id", dev_demo.TEAM_ID),
+        ("teams", "id", dev_demo.ORGANIZER_ID),
+        ("players", "id", dev_demo.TEAM_ID),
+        ("tournaments", "url", dev_demo.LEAGUE_EVENT),
+        ("leagues", "url", dev_demo.LEAGUE_ID),
+    ],
+)
+def test_snapshot_rejects_reserved_ids_before_seeding(
+    versioned_snapshot, tmp_path, monkeypatch, table, key, reserved_id
+):
+    with sqlite3.connect(versioned_snapshot) as connection:
+        connection.execute(f"UPDATE {table} SET {key} = ?", (reserved_id,))
+    before = versioned_snapshot.read_bytes()
+    destination = tmp_path / "copy" / "demo.db"
+    monkeypatch.setattr(
+        dev_demo, "_seed_database", lambda *_args, **_kwargs: pytest.fail("Seeded a colliding snapshot")
+    )
+    with pytest.raises(ValueError, match="reserved demo IDs"):
+        dev_demo.prepare_snapshot_demo_database(versioned_snapshot, destination)
+    assert versioned_snapshot.read_bytes() == before
+    assert list(destination.parent.iterdir()) == []
+
+
+@pytest.mark.parametrize("revision", [None, "not-a-known-revision"])
+def test_snapshot_never_stamps_unknown_or_unversioned_databases(versioned_snapshot, tmp_path, revision):
+    with sqlite3.connect(versioned_snapshot) as connection:
+        if revision is None:
+            connection.execute("DROP TABLE alembic_version")
+        else:
+            connection.execute("UPDATE alembic_version SET version_num = ?", (revision,))
+    before = versioned_snapshot.read_bytes()
+    destination = tmp_path / "copy" / "demo.db"
+    with pytest.raises(ValueError, match="[Rr]evision"):
+        dev_demo.prepare_snapshot_demo_database(versioned_snapshot, destination)
+    assert versioned_snapshot.read_bytes() == before
+    assert list(destination.parent.iterdir()) == []
+
+
+@pytest.mark.parametrize("failure", ["migration", "seed"])
+def test_snapshot_failure_does_not_publish_a_partial_copy(versioned_snapshot, tmp_path, monkeypatch, failure):
+    before = versioned_snapshot.read_bytes()
+    destination = tmp_path / "copy" / "demo.db"
+
+    def fail(*_args, **_kwargs):
+        raise RuntimeError("deliberate failure")
+
+    if failure == "migration":
+        monkeypatch.setattr(dev_demo.command, "upgrade", fail)
+    else:
+        monkeypatch.setattr(dev_demo, "_seed_database", fail)
+    with pytest.raises(RuntimeError, match="deliberate failure"):
+        dev_demo.prepare_snapshot_demo_database(versioned_snapshot, destination)
+    assert versioned_snapshot.read_bytes() == before
+    assert list(destination.parent.iterdir()) == []
+
+
+def test_snapshot_backup_includes_committed_wal_data(versioned_snapshot, tmp_path, monkeypatch):
+    destination = tmp_path / "copy" / "demo.db"
+    # Keep the writer open so its committed row stays in the WAL during backup.
+    with sqlite3.connect(versioned_snapshot) as writer:
+        writer.execute("PRAGMA journal_mode=WAL")
+        writer.execute("PRAGMA wal_autocheckpoint=0")
+        writer.execute("INSERT INTO players (id, name) VALUES ('wal-player', 'Committed WAL player')")
+        writer.commit()
+        assert versioned_snapshot.with_name(versioned_snapshot.name + "-wal").stat().st_size > 0
+        before = versioned_snapshot.read_bytes()
+        monkeypatch.setattr(dev_demo, "_seed_database", lambda *_args, **_kwargs: None)
+        assert dev_demo.prepare_snapshot_demo_database(versioned_snapshot, destination)
+        assert versioned_snapshot.read_bytes() == before
+        with sqlite3.connect(destination) as connection:
+            assert connection.execute("SELECT name FROM players WHERE id = 'wal-player'").fetchone() == (
+                "Committed WAL player",
+            )
+            assert connection.execute("PRAGMA journal_mode").fetchone() == ("delete",)
+    assert sorted(path.name for path in destination.parent.iterdir()) == ["demo.db"]
+
+
+def test_snapshot_publication_cannot_overwrite_a_concurrent_destination(versioned_snapshot, tmp_path, monkeypatch):
+    destination = tmp_path / "copy" / "demo.db"
+
+    def concurrent_writer(*_args, **_kwargs):
+        destination.write_bytes(b"another process created this file")
+
+    monkeypatch.setattr(dev_demo, "_seed_database", concurrent_writer)
+    with pytest.raises(FileExistsError):
+        dev_demo.prepare_snapshot_demo_database(versioned_snapshot, destination)
+    assert destination.read_bytes() == b"another process created this file"
+    assert sorted(path.name for path in destination.parent.iterdir()) == ["demo.db"]
+
+
+def test_snapshot_rejects_source_destination_alias_and_ordinary_demo(versioned_snapshot, tmp_path, monkeypatch):
+    ordinary = tmp_path / "instance" / "demo.db"
+    monkeypatch.setattr(dev_demo, "DEFAULT_DATABASE", ordinary)
+    with pytest.raises(ValueError, match="separate directory"):
+        dev_demo.prepare_snapshot_demo_database(versioned_snapshot, ordinary)
+    destination = tmp_path / "demo.db"
+    destination.hardlink_to(versioned_snapshot)
+    with pytest.raises(ValueError, match="different files"):
+        dev_demo.prepare_snapshot_demo_database(versioned_snapshot, destination)
+
+
+def test_snapshot_seed_only_uses_separate_destination_without_starting_server(
+    versioned_snapshot, tmp_path, monkeypatch, capsys
+):
+    destination = tmp_path / "snapshot-demo" / "demo.db"
+    monkeypatch.setattr(dev_demo, "DEFAULT_SNAPSHOT_DATABASE", destination)
+    calls = []
+    monkeypatch.setattr(
+        dev_demo, "prepare_snapshot_demo_database", lambda source, target: calls.append((source, target)) or True
+    )
+    monkeypatch.setattr(dev_demo, "create_demo_app", lambda *_: pytest.fail("Server application created"))
+    dev_demo.main(["--seed-only", "--snapshot", str(versioned_snapshot)])
+    assert calls == [(versioned_snapshot, destination)]
+    assert str(destination) in capsys.readouterr().out

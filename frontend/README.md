@@ -31,7 +31,16 @@ just demo                    # isolated sample backend on 127.0.0.1:5006
 just frontend                # frontend on 127.0.0.1:8080
 ```
 
-Use `just dev` instead of `just demo` for your normal local database.
+Use `just dev` instead of `just demo` for your normal local database. To
+preview a versioned snapshot, start the backend with:
+
+```bash
+uv run python -m scripts.dev_demo --snapshot /absolute/path/to/snapshot.db
+```
+
+It creates a separate migrated copy at `instance/snapshot-demo/demo.db`, adds
+demo accounts without replacing existing records, and preserves the working
+copy across restarts. The source and ordinary demo database stay untouched.
 Dioxus proxies API and static requests to Flask, so requests and cookies use
 the same origin. For phone testing on your LAN:
 `just frontend --addr 0.0.0.0`, then open the computer's LAN address at port
@@ -85,10 +94,13 @@ history statistic, not verified attendance; upcoming and cancelled
 registrations are excluded.
 
 Event and league detail pages share `EventHeader`, `EventAbout`, and `EventTabs`.
-The banner spans the viewport, with registration actions beside event details.
+The centered banner spans the viewport, with registration and a compact
+Organizer tools menu beneath event details. Organizers can upload a banner
+image from Settings; profile owners can do the same from Edit profile.
 Navigation tabs link to information, rosters, schedules, results, brackets,
 league rounds, and side events using real URLs. The selected link uses
-`aria-current="page"`; unpublished schedules remain disabled. Native links
+`aria-current="page"`; unpublished schedules remain disabled for visitors who
+lack preview permission. Native links
 preserve keyboard access, bookmarks, and browser history
 ([W3C link guidance](https://www.w3.org/WAI/ARIA/apg/patterns/link/)).
 
@@ -96,8 +108,40 @@ Use `data-section` on cards containing tables or lists to keep one shared frame
 and compact rows. Use native `details.section-disclosure` for secondary records
 and settings, with a labeled summary and a count where useful. Keep current
 event information and essential actions visible. Collapsing a section keeps its
-form state intact. The home banner can be dismissed and restored from More;
-its visibility is saved separately from appearance preferences.
+form state intact. Events, Leagues, Players, Teams, and Stones each have a
+centered introduction with a small close button. More restores the current
+page banner. Event and profile banners collapse to a compact identity and
+retain their actions and navigation. Visibility is saved independently per
+page, separately from appearance preferences.
+
+Player and team profiles use a centered column up to 900px wide, with a 3:1
+cover, an overlapping circular avatar, then left-aligned name, handle,
+location, and past-event count. Information, tournament history, and authorized
+infractions, injuries, or notes occupy flat panels below the URL navigation.
+Profile panels use content and dividers rather than card frames. Switching
+tabs keeps unsaved injury inputs and roster expansion intact, including browser
+Back/Forward; server permissions still determine which records are visible.
+
+Organizer settings use checkboxes for saved choices such as registration
+availability. Head referee permissions and secondary side competition rules
+are under Advanced options, with the current policy or restrictions visible in
+the summary. Penalty types use one full-width disclosure, closed initially;
+organizer lists start expanded. Image uploads open a crop preview before
+sending anything. Drag or use the
+position sliders, adjust Zoom, then Save banner or Save photo. Cancel leaves
+the stored image unchanged. Parent form submission waits while an image edit
+is pending; upload failures retain both the crop and other form fields.
+
+Uploads accept still JPEG, PNG, or WebP up to 8 MiB, 8192 pixels per side, and
+24 megapixels. File headers are checked before browser decoding. The editor
+exports covers up to 1500×500 and avatars up to 512×512. The server separately
+validates and normalizes images, caps uncropped uploads at 2400×1600 for banners
+and 1024×1024 for avatars, and removes embedded metadata. Images are stored as
+files; the database holds only their paths. Fresh filenames avoid stale caches,
+and old files are removed only after a successful replacement. Avatar cleanup
+also preserves legacy files still referenced by another account. Banners and
+avatars have separate paths and controls; changing one does not replace the
+other.
 
 The Stones page keeps playback controls beside the local stone count. Pause
 retains the count; Reset stops playback and clears it without changing clock
@@ -202,15 +246,17 @@ file upload that the server pushes to YouTube. Jump-to-point uses
 
 Backend: `just test` / `just coverage-check`.
 
-Frontend: Pure Rust unit tests (time sync, filters, display helpers,
-…) run on the host target with the `just frontend-test` recipe.
+Frontend: Pure Rust unit tests for time sync, counters, filters, display
+helpers, image bounds, and crop geometry run on the host target with
+`just frontend-test`.
 
 Run the browser matrix against the demo with
 `uv run python scripts/check_mobile_ui.py` from the repository root while
 `just demo` and `just frontend` are running. It covers phone, tablet, and
 desktop layouts plus common input and save failures. See
 [`TESTING.md`](../TESTING.md#mobile-browser-verification) for browser setup
-and the remaining real-device checks.
+and the focused appearance, event, profile/crop, and Stones checks, plus the
+remaining real-device checks.
 
 ## When the SPA cannot reach the backend
 

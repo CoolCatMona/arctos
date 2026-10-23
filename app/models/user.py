@@ -42,6 +42,7 @@ class Player(UserMixin, db.Model):
             inbox).
         phone: Optional contact phone number.
         profile_photo: Server-relative path to the uploaded profile image.
+        banner_photo: Server-relative path to the optional profile banner.
         bio: Free-text biography.
         location: Player's city or region.
     """
@@ -55,6 +56,7 @@ class Player(UserMixin, db.Model):
     email = db.Column(db.String(AUTH_STRING_LEN), nullable=True)
     phone = db.Column(db.String(PHONE_LEN))
     profile_photo = db.Column(db.String(AUTH_STRING_LEN))
+    banner_photo = db.Column(db.String(AUTH_STRING_LEN), nullable=True)
     bio = db.Column(db.Text)
     location = db.Column(db.String(SHORT_NAME_LEN))
 
@@ -101,6 +103,7 @@ class Team(UserMixin, db.Model):
             the same club may share an inbox.
         icon: Base64-encoded team icon image.
         profile_photo: Server-relative path to the uploaded profile photo.
+        banner_photo: Server-relative path to the optional profile banner.
         socials: Free-text social media links.
         website: Team website URL.
         location: Team's city or region.
@@ -117,6 +120,7 @@ class Team(UserMixin, db.Model):
     email = db.Column(db.String(AUTH_STRING_LEN), nullable=True)
     icon = db.Column(db.Text)  # base64 image
     profile_photo = db.Column(db.String(AUTH_STRING_LEN))  # Path to uploaded photo
+    banner_photo = db.Column(db.String(AUTH_STRING_LEN), nullable=True)
     socials = db.Column(db.Text)
     website = db.Column(db.String(LONG_NAME_LEN))
     location = db.Column(db.String(SHORT_NAME_LEN))

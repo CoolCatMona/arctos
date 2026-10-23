@@ -10,6 +10,7 @@ Read:
 
 Management:
 - ``/leagues/<league_url>/settings`` (POST)
+- ``/leagues/<league_url>/banner-photo`` (POST, DELETE)
 - ``/leagues/<league_url>/add-to`` (POST), ``/leagues/<league_url>/remove-to`` (POST)
 - ``/leagues/<league_url>/delete`` (POST)
 - ``/leagues/<league_url>/manage`` (GET)
@@ -51,6 +52,12 @@ from app.services.registration_resolver import (
 )
 from app.services.team_stats_service import compute_team_stats
 from app.utils.user_helpers import is_player, is_team
+from app.utils.profile_banner_helpers import (
+    BannerUploadError,
+    read_banner_upload,
+    remove_banner,
+    replace_banner,
+)
 from models import (
     League,
     Match,
@@ -66,6 +73,23 @@ from models import (
 )
 
 bp = Blueprint("leagues", __name__, url_prefix="/_api")
+
+
+@bp.route("/leagues/<league_url>/banner-photo", methods=["POST", "DELETE"])
+@login_required
+def league_banner_photo(league_url):
+    """Replace or remove a banner using the league's typed TO permissions."""
+    league = League.query.get_or_404(league_url)
+    if not PermissionService.is_league_organizer(league_url, current_user):
+        return jsonify({"error": "Only league organizers can change this banner."}), 403
+    try:
+        if request.method == "DELETE":
+            remove_banner(league, "league", league.url)
+            return jsonify({"success": True})
+        path = replace_banner(league, "league", league.url, read_banner_upload())
+        return jsonify({"success": True, "path": path})
+    except BannerUploadError as error:
+        return jsonify({"error": str(error)}), error.status
 
 
 @bp.route("/leagues", methods=["GET"])

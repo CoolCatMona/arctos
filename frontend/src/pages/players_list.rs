@@ -1,4 +1,5 @@
 use crate::api;
+use crate::components::PageIntro;
 use crate::Route;
 use dioxus::prelude::*;
 
@@ -19,9 +20,8 @@ pub fn PlayersList() -> Element {
     let val = data.value();
     let backend = api::base_url();
     rsx! {
-        header { class: "arctos-page-intro",
-            h1 { "Players" }
-            p { "Find player profiles and results." }
+        PageIntro { page_key: "players", title: "Players", focus_target: "page-content",
+            "Find players, learn about them, and see their tournament history."
         }
         form {
             class: "arctos-directory-search", role: "search",

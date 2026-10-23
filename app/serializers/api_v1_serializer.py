@@ -63,6 +63,7 @@ def tournament_json(tournament) -> dict:
     return {
         "id": tournament.url,
         "name": tournament.name,
+        "banner_photo": _photo_path(tournament.banner_photo),
         "start_date": iso(tournament.start_date),
         "end_date": iso(tournament.end_date),
         "location": tournament.location,
@@ -79,6 +80,7 @@ def league_json(league) -> dict:
     return {
         "id": league.url,
         "name": league.name,
+        "banner_photo": _photo_path(league.banner_photo),
         "about": league.about,
         "published": bool(league.published),
         "registration": _registration_settings_json(league.registrable_config),

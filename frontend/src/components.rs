@@ -1,6 +1,10 @@
 //! Reusable UI components.
 
 mod appearance_menu;
+mod banner_upload;
+mod image_crop;
+mod page_intro;
+mod profile_header;
 mod ass_entry;
 mod change_password_card;
 mod connected_apps_card;
@@ -14,6 +18,7 @@ mod league_registration_buttons;
 mod penalty_display;
 mod markdown;
 mod organize_menu;
+mod organizer_tools;
 mod results_games_table;
 mod sidecomp_weapon_modal;
 mod team_label;
@@ -21,6 +26,9 @@ mod team_token_input;
 
 pub use ass_entry::AssEntry;
 pub use appearance_menu::AppearanceMenu;
+pub use banner_upload::{BannerUpload, BannerAccountKind, PhotoUpload};
+pub use page_intro::PageIntro;
+pub use profile_header::ProfileHeader;
 pub use change_password_card::ChangePasswordCard;
 pub use connected_apps_card::ConnectedAppsCard;
 pub use edit_registration_modal::{EditRegistrationContext, EditRegistrationModal};
@@ -33,6 +41,7 @@ pub use league_registration_buttons::LeagueRegistrationButtons;
 pub use penalty_display::PenaltyDisplay;
 pub use markdown::Markdown;
 pub use organize_menu::{OrganizeContext, OrganizeMenu};
+pub use organizer_tools::OrganizerTools;
 pub use results_games_table::{ResultsGamesTable, rows_for_team};
 pub use sidecomp_weapon_modal::{
     default_allowed_weapons, AllowedWeaponsCheckboxes, PompfenIcon, SideCompRegistrationMode,

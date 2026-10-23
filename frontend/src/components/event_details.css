@@ -2,21 +2,21 @@
 .arctos-app .app-main.event-full-width { width: 100%; max-width: none; padding: 0; }
 .arctos-app .event-detail-page { min-width: 0; }
 .arctos-app .event-detail-hero { width: 100%; margin: 0; border: 0; border-radius: 0; background: linear-gradient(115deg, var(--ui-gradient-start), var(--ui-gradient-end)); color: var(--ui-gradient-contrast); }
-.arctos-app .event-hero-inner { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, auto); align-items: start; gap: 2rem; padding-block: 3rem; }
+.arctos-app .event-hero-inner { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 1.5rem; padding-block: 2.5rem; text-align: center; }
 .arctos-app .event-detail-hero h1 { margin: 0; color: var(--ui-gradient-contrast); font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.2; letter-spacing: -.025em; overflow-wrap: anywhere; }
 .arctos-app .event-detail-content { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; padding-block: 2rem 3rem; }
 .arctos-app .event-detail-content > * { min-width: 0; }
 .arctos-app .event-hero-main, .arctos-app .event-hero-actions { position: relative; z-index: 1; min-width: 0; }
-.arctos-app .event-hero-badges { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: 1rem; }
+.arctos-app .event-hero-badges { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .6rem; margin-bottom: 1rem; }
 .arctos-app .event-kind-badge, .arctos-app .event-registration-badge { display: inline-flex; align-items: center; gap: .45rem; padding: .4rem .65rem; border-radius: .5rem; font-size: .8rem; font-weight: 700; }
 .arctos-app .event-kind-badge { color: var(--ui-gradient-contrast); background: var(--ui-on-gradient-soft); border: 1px solid var(--ui-on-gradient-border); }
 .arctos-app .event-registration-badge { color: var(--ui-success-text); background: var(--ui-success-soft); border: 1px solid var(--ui-success-border); }
 .arctos-app .event-hero-badges .arctos-event-league-badge { margin: 0; }
-.arctos-app .event-hero-meta { display: flex; flex-wrap: wrap; gap: .8rem 1.5rem; list-style: none; padding: 0; margin: 1.1rem 0 0; font-size: .95rem; }
+.arctos-app .event-hero-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: .8rem 1.5rem; list-style: none; padding: 0; margin: 1.1rem 0 0; font-size: .95rem; }
 .arctos-app .event-hero-meta li { display: flex; align-items: baseline; gap: .6rem; min-width: 0; }
 .arctos-app .event-hero-meta li i { width: 1rem; flex-shrink: 0; text-align: center; }
 .arctos-app .event-hero-meta li span { overflow-wrap: anywhere; }
-.arctos-app .event-hero-actions { display: grid; gap: .6rem; padding-top: .15rem; }
+.arctos-app .event-hero-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem; padding-top: .15rem; }
 .arctos-app .event-hero-actions .btn { min-height: 48px; margin: 0; color: var(--ui-text); background: var(--ui-surface); border: 1px solid var(--ui-border); }
 .arctos-app .event-hero-actions .btn:hover:not(:disabled) { color: var(--ui-link); background: var(--ui-surface-hover); border-color: var(--ui-control-border); }
 .arctos-app .event-hero-actions .btn:focus-visible { outline: 3px solid var(--ui-gradient-contrast); outline-offset: 3px; }
@@ -72,10 +72,24 @@
 @media (max-width: 767.98px) {
   .arctos-app .event-hero-inner { grid-template-columns: minmax(0, 1fr); padding-block: 2rem; gap: 1.5rem; }
   .arctos-app .event-hero-actions { width: 100%; }
-  .arctos-app .event-hero-meta { display: grid; gap: .8rem; }
+  .arctos-app .event-hero-meta { display: grid; justify-items: center; gap: .8rem; }
   .arctos-app .event-info-grid { grid-template-columns: minmax(0, 1fr); }
   .arctos-app .event-route-tabs { gap: .4rem; scroll-padding-inline: 16px; }
   .arctos-app .event-route-tab { min-height: 52px; font-size: .9rem; }
   .arctos-app .event-detail-content { padding-block: 1.5rem 2rem; }
   .arctos-app .event-organizer-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+}
+
+.arctos-app .event-hero-badges[hidden], .arctos-app .event-hero-meta[hidden] { display: none; }
+.arctos-app .event-banner-dismiss { top: .5rem; right: 1rem; z-index: 2; color: var(--ui-gradient-contrast); }
+.arctos-app .event-banner-dismiss:hover { color: var(--ui-gradient-contrast); background: var(--ui-on-gradient-soft); }
+.arctos-app .event-banner-dismiss:focus-visible { outline: 3px solid var(--ui-gradient-contrast); outline-offset: 2px; }
+.arctos-app .event-detail-hero.is-collapsed .event-hero-inner { padding-block: 1rem; gap: .75rem; }
+.arctos-app .event-detail-hero.is-collapsed h1 { font-size: 1.25rem; }
+
+.arctos-app .event-banner-image { width: 100%; height: clamp(9rem, 25vw, 20rem); overflow: hidden; }
+.arctos-app .event-banner-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+@media (max-width: 575.98px) {
+  .arctos-app .event-detail-hero:not(.is-collapsed) .event-hero-inner { padding-top: 3.75rem; }
 }

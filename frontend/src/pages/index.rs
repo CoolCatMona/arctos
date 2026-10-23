@@ -1,7 +1,5 @@
 use crate::api;
-use crate::appearance::focus_control;
-use crate::components::{OrganizeContext, OrganizeMenu};
-use crate::pages::layout::{remember_home_banner, use_home_banner_hidden};
+use crate::components::{OrganizeContext, OrganizeMenu, PageIntro};
 use crate::types::{Tournament, UserRegStatus};
 use crate::Route;
 use chrono::{Local, NaiveDate};
@@ -56,7 +54,6 @@ pub fn Index() -> Element {
         use_resource(move || async move { api::tournaments().await.map_err(|e| e.to_string()) });
     let mut show_past = use_signal(|| false);
     let mut search = use_signal(String::new);
-    let mut introduction_hidden = use_home_banner_hidden();
     let val = tournaments.value();
     let counts = val.read().as_ref().and_then(|result| result.as_ref().ok()).map(|data| {
         let past = data.tournaments.iter().filter(|event| is_past_in_local_tz(event)).count();
@@ -64,29 +61,12 @@ pub fn Index() -> Element {
     });
 
     rsx! {
-        section {
-            id: "arctos-introduction", class: "arctos-discovery-hero arctos-introduction", hidden: introduction_hidden(),
-            button {
-                id: "arctos-introduction-dismiss", class: "arctos-intro-dismiss",
-                r#type: "button", aria_label: "Dismiss home banner", title: "Dismiss home banner",
-                onclick: move |_| {
-                    introduction_hidden.set(true);
-                    remember_home_banner(true);
-                    focus_control("event-discovery");
-                },
-                i { class: "fa-solid fa-xmark", aria_hidden: "true" }
-            }
-            h1 { id: "arctos-introduction-heading", tabindex: "-1", "Arctos" }
-            p {
-                "Tournaments, teams, and players in "
-                a { href: "https://en.wikipedia.org/wiki/Jugger", "jugger" }
-                "."
-            }
+        PageIntro { page_key: "events", title: "Events", focus_target: "event-discovery",
+            "A tournament brings teams together for a series of "
+            a { href: "https://en.wikipedia.org/wiki/Jugger", "jugger" }
+            " matches. Find an upcoming event or look back at past results."
         }
         section { id: "event-discovery", class: "arctos-discovery", aria_label: "Find an event", tabindex: "-1",
-            if introduction_hidden() {
-                h1 { class: "visually-hidden", "Events" }
-            }
             div { class: "arctos-discovery-toolbar",
                 div { class: "arctos-discovery-actions",
                     div { class: "arctos-segmented", role: "group", aria_label: "Event dates",

@@ -1,23 +1,33 @@
-"""Run a local Arctos demo backed only by ``instance/demo.db``.
+"""Run a local Arctos demo in a dedicated database.
 
 Run ``uv run python -m scripts.dev_demo`` from the repository root, then use
 Dioxus's same-origin development proxy. The API listens on 127.0.0.1:5006.
 ``--seed-only`` prepares the database without starting a server. No .env file,
 Google credentials, external services, or ARCTOS_CORS_DEV setting is needed.
 
-The initial data is fictional. All demo accounts use the printed demo password.
+Without ``--snapshot``, fictional data is created in ``instance/demo.db``.
+``--snapshot PATH`` copies an existing versioned SQLite database read-only into
+``instance/snapshot-demo/demo.db``, migrates the copy, and adds fictional demo
+accounts and events. The source and ordinary demo database are left untouched.
+All demo accounts use the printed demo password.
 A populated database is never reseeded: edits and newly created records survive
-restarts. This command has no reset flag and never opens tournament.db.
+restarts. This command has no reset flag and never writes to tournament.db.
 """
 
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+import os
 from pathlib import Path
 import sqlite3
+import tempfile
 
+from alembic import command
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from flask import Flask
 from sqlalchemy import event
 
@@ -27,9 +37,23 @@ from app.services._common import Scope
 from app.services.dual_write import set_head_ref_allowlist_ids, set_match_players, set_match_referees
 from app.services.registration_service import RegistrationService
 from app.services.sidecomp_service import SideCompService
-from models import Field, League, Match, Player, Point, RegistrableConfig, Team, TO, Tournament, db
+from models import (
+    Field,
+    League,
+    Match,
+    Player,
+    PlayerRegistration,
+    Point,
+    RegistrableConfig,
+    SideComp,
+    Team,
+    TO,
+    Tournament,
+    db,
+)
 
 DEFAULT_DATABASE = Path(__file__).resolve().parents[1] / "instance" / "demo.db"
+DEFAULT_SNAPSHOT_DATABASE = DEFAULT_DATABASE.parent / "snapshot-demo" / "demo.db"
 DEMO_PASSWORD = "arctos-demo-only"
 ORGANIZER_ID = "demo-organizer"
 PLAYER_ID = "demo-player"
@@ -39,6 +63,11 @@ UPCOMING_EVENT = "demo-summer-cup"
 PAST_EVENT = "demo-spring-cup"
 LEAGUE_ID = "demo-coast-league"
 LEAGUE_EVENT = "demo-league-round-one"
+RESERVED_PLAYER_IDS = frozenset(
+    [ORGANIZER_ID, PLAYER_ID, "demo-alex", "demo-riley", "demo-sam", "demo-jordan"]
+    + [f"demo-duelist-{index:02}" for index in range(1, 11)]
+)
+RESERVED_TEAM_IDS = frozenset([TEAM_ID, "demo-foxes", "demo-owls", "demo-wolves"])
 
 
 def _demo_path(database_path: Path) -> Path:
@@ -81,7 +110,7 @@ def _config() -> RegistrableConfig:
 
 
 def _seed(now: datetime) -> None:
-    """Create actual domain records; callers guarantee that the DB is empty."""
+    """Add fictional records; callers guarantee every reserved demo ID is free."""
     players = [
         (ORGANIZER_ID, "Morgan Field", "Portland, Oregon"),
         (PLAYER_ID, "Casey Newcomer", "Seattle, Washington"),
@@ -204,6 +233,90 @@ def _seed(now: datetime) -> None:
     for player_id, weapon in [(ORGANIZER_ID, "LONG"), ("demo-alex", "STAFF"), ("demo-sam", "QTIP")]:
         SideCompService.register_player(competition.id, player_id=player_id, weapon=weapon).unwrap()
 
+    add_practice_side_competitions()
+
+
+def add_practice_side_competitions() -> list[SideComp]:
+    """Add scoring examples once; never reset existing competitions or results.
+
+    Intended only for the local demo app, including an existing demo database.
+    The caller must already have an application context for that database.
+    """
+    examples = [
+        ("Open Dueling — Practice", False),
+        ("Dueling Standings — Practice", True),
+    ]
+    existing = {comp.name: comp for comp in SideComp.query.filter_by(event=LIVE_EVENT).all()}
+    if all(name in existing for name, _ in examples):
+        return [existing[name] for name, _ in examples]
+    entrants = [ORGANIZER_ID, PLAYER_ID, "demo-alex", "demo-riley", "demo-sam", "demo-jordan"]
+    names = [
+        "Avery Brook",
+        "Taylor Ash",
+        "Quinn Lake",
+        "Robin Vale",
+        "Jamie Fern",
+        "Drew Stone",
+        "Skyler Reed",
+        "Rowan Pine",
+        "Charlie West",
+        "Cameron Moss",
+    ]
+    for index, name in enumerate(names, start=1):
+        player_id = f"demo-duelist-{index:02}"
+        if db.session.get(Player, player_id) is None:
+            player = Player(id=player_id, name=name, bio="Fictional player for trying side competition scoring.")
+            player.set_password(DEMO_PASSWORD)
+            db.session.add(player)
+        entrants.append(player_id)
+    db.session.commit()
+    for player_id in entrants:
+        if not PlayerRegistration.query.filter_by(event=LIVE_EVENT, player=player_id).first():
+            registration = RegistrationService.register_player(Scope.event(LIVE_EVENT), player_id, None).unwrap()
+            registration.status = RegistrationStatus.CONFIRMED
+    db.session.commit()
+    weapons = ["LONG", "STAFF", "QTIP", "BOARD", "FLORENTINE"]
+    competitions = []
+    for name, with_results in examples:
+        if name in existing:
+            competitions.append(existing[name])
+            continue
+        competition = SideCompService.create(
+            LIVE_EVENT,
+            actor_user_id=ORGANIZER_ID,
+            actor_user_type="player",
+            name=name,
+            type="DUELING",
+            allowed_weapons=weapons,
+            description=(
+                "Practice entering and correcting results. Sample scores are already filled in."
+                if with_results
+                else "Practice entering results from a clean start."
+            ),
+        ).unwrap()
+        competition.registration_open = True
+        competition.active = True
+        competition.track_losses = True
+        db.session.commit()
+        for index, player_id in enumerate(entrants):
+            registration = SideCompService.register_player_as_to(
+                competition.id,
+                actor_user_id=ORGANIZER_ID,
+                actor_user_type="player",
+                player_id=player_id,
+                weapon=weapons[index % len(weapons)],
+            ).unwrap()
+            if with_results:
+                for points in [1] * (1 + index % 6) + [-1] * (index % 4):
+                    SideCompService.log_result(
+                        competition.id,
+                        registration_id=registration.id,
+                        points=points,
+                        ref_user_id=ORGANIZER_ID,
+                    ).unwrap()
+        competitions.append(competition)
+    return competitions
+
 
 def _match(
     event_slug: str,
@@ -267,12 +380,8 @@ def _match(
             )
 
 
-def prepare_demo_database(database_path: Path = DEFAULT_DATABASE, *, now: datetime | None = None) -> bool:
-    """Seed an empty dedicated DB; return False without edits when it has data."""
-    path = _demo_path(database_path)
-    if _has_data(path):
-        return False
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _seed_database(path: Path, now: datetime | None, *, create_schema: bool) -> None:
+    """Seed without application startup, which recomputes existing matches."""
     bootstrap = Flask("arctos_demo_seed")
     bootstrap.config.update(SQLALCHEMY_DATABASE_URI=f"sqlite:///{path}", SQLALCHEMY_TRACK_MODIFICATIONS=False)
     db.init_app(bootstrap)
@@ -282,8 +391,9 @@ def prepare_demo_database(database_path: Path = DEFAULT_DATABASE, *, now: dateti
         def enable_foreign_keys(connection, _record):
             connection.execute("PRAGMA foreign_keys=ON")
 
-        db.create_all()
         try:
+            if create_schema:
+                db.create_all()
             # All models store naive UTC timestamps.
             timestamp = now or datetime.now(timezone.utc)
             if timestamp.tzinfo is not None:
@@ -292,6 +402,103 @@ def prepare_demo_database(database_path: Path = DEFAULT_DATABASE, *, now: dateti
         finally:
             db.session.remove()
             db.engine.dispose()
+
+
+def prepare_demo_database(database_path: Path = DEFAULT_DATABASE, *, now: datetime | None = None) -> bool:
+    """Seed an empty dedicated DB; return False without edits when it has data."""
+    path = _demo_path(database_path)
+    if _has_data(path):
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _seed_database(path, now, create_schema=True)
+    return True
+
+
+def _migration_config(path: Path) -> Config:
+    """Use an explicit copy URL; environment settings must not select a DB."""
+    config = Config()
+    config.set_main_option("script_location", str(Path(__file__).resolve().parents[1] / "migrations"))
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{path}".replace("%", "%%"))
+    return config
+
+
+def _validate_snapshot_revision(path: Path, config: Config) -> None:
+    with closing(sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True)) as connection:
+        try:
+            versions = connection.execute("SELECT version_num FROM alembic_version").fetchall()
+        except sqlite3.OperationalError as error:
+            raise ValueError(
+                "The snapshot must have an existing, known Alembic revision; unversioned databases are not stamped automatically."
+            ) from error
+        if len(versions) != 1:
+            raise ValueError("The snapshot must have exactly one known Alembic revision.")
+        revision = versions[0][0]
+        scripts = ScriptDirectory.from_config(config)
+        if revision not in {script.revision for script in scripts.walk_revisions()}:
+            raise ValueError(f"Unknown snapshot Alembic revision: {revision!r}.")
+
+
+def _check_reserved_ids(path: Path) -> None:
+    """Check the migrated schema, including tables absent in older revisions."""
+    with closing(sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True)) as connection:
+        # Legacy login lookup uses the ID alone, so an opposite-type account
+        # would shadow a fixture just as an account of the intended type would.
+        accounts = RESERVED_PLAYER_IDS | RESERVED_TEAM_IDS
+        reserved = [
+            ("players", "id", accounts),
+            ("teams", "id", accounts),
+            ("tournaments", "url", {LIVE_EVENT, UPCOMING_EVENT, PAST_EVENT, LEAGUE_EVENT}),
+            ("leagues", "url", {LEAGUE_ID}),
+        ]
+        collisions = []
+        for table, key, ids in reserved:
+            placeholders = ",".join("?" for _ in ids)
+            rows = connection.execute(f"SELECT {key} FROM {table} WHERE {key} IN ({placeholders})", sorted(ids))
+            collisions.extend(f"{table}: {row[0]}" for row in rows)
+        if collisions:
+            raise ValueError("The snapshot contains reserved demo IDs: " + ", ".join(sorted(collisions)))
+
+
+def prepare_snapshot_demo_database(
+    snapshot_path: Path, database_path: Path = DEFAULT_SNAPSHOT_DATABASE, *, now: datetime | None = None
+) -> bool:
+    """Publish a migrated, additive copy once; never replace an existing copy."""
+    path = _demo_path(database_path)
+    source = Path(snapshot_path).absolute()
+    if path.resolve() == DEFAULT_DATABASE.resolve() or (
+        path.exists() and DEFAULT_DATABASE.exists() and path.samefile(DEFAULT_DATABASE)
+    ):
+        raise ValueError("Snapshot demos must use a separate directory from instance/demo.db.")
+    if path.resolve() == source.resolve() or (path.exists() and source.exists() and path.samefile(source)):
+        raise ValueError("The snapshot source and demo destination must be different files.")
+    if path.exists():
+        if _has_data(path):
+            return False
+        raise ValueError("The snapshot demo destination already exists but is empty; it will not be overwritten.")
+    if not source.is_file():
+        raise ValueError("The snapshot source must be an existing SQLite file.")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".snapshot-demo-", suffix=".db", dir=path.parent)
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        # SQLite backup includes committed WAL contents, unlike copying the
+        # main file or opening it with immutable=1.
+        with closing(sqlite3.connect(f"{source.as_uri()}?mode=ro", uri=True)) as original:
+            with closing(sqlite3.connect(temporary)) as copy:
+                original.backup(copy)
+                copy.execute("PRAGMA journal_mode=DELETE")
+        config = _migration_config(temporary)
+        _validate_snapshot_revision(temporary, config)
+        command.upgrade(config, "head")
+        _check_reserved_ids(temporary)
+        _seed_database(temporary, now, create_schema=False)
+        # Same-filesystem hard linking is atomic and fails if another process
+        # created the destination while this copy was being prepared.
+        os.link(temporary, path)
+    finally:
+        for suffix in ("", "-journal", "-wal", "-shm"):
+            temporary.with_name(temporary.name + suffix).unlink(missing_ok=True)
     return True
 
 
@@ -324,13 +531,21 @@ def create_demo_app(database_path: Path = DEFAULT_DATABASE) -> Flask:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seed-only", action="store_true", help="Create sample data if empty, then exit.")
+    parser.add_argument(
+        "--snapshot", type=Path, help="Copy a versioned SQLite snapshot once into instance/snapshot-demo/demo.db."
+    )
     args = parser.parse_args(argv)
-    if args.seed_only:
+    database_path = DEFAULT_SNAPSHOT_DATABASE if args.snapshot is not None else DEFAULT_DATABASE
+    if args.snapshot is not None:
+        seeded = prepare_snapshot_demo_database(args.snapshot, database_path)
+        if not args.seed_only:
+            app = create_demo_app(database_path)
+    elif args.seed_only:
         seeded = prepare_demo_database()
     else:
         app = create_demo_app()
         seeded = app.config["DEMO_DATABASE_SEEDED"]
-    print(f"Demo database: {DEFAULT_DATABASE}")
+    print(f"Demo database: {database_path}")
     print("Created sample data." if seeded else "Using existing demo data; your changes are preserved.")
     print(f"Demo-only password: {DEMO_PASSWORD}")
     print(f"Organizer: {ORGANIZER_ID} | Player: {PLAYER_ID} | Team: {TEAM_ID}")

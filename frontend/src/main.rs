@@ -164,11 +164,17 @@ enum Route {
     #[route("/players")]
     PlayersList {},
 
+    #[route("/players/:id?:tab")]
+    PlayerProfilePageWithTab { id: String, tab: String },
+
     #[route("/players/:id")]
     PlayerProfilePage { id: String },
 
     #[route("/teams")]
     TeamsList {},
+
+    #[route("/teams/:id?:tab")]
+    TeamProfilePageWithTab { id: String, tab: String },
 
     #[route("/teams/:id")]
     TeamProfilePage { id: String },

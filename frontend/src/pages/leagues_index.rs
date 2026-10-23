@@ -1,6 +1,6 @@
 use super::index::{final_day_has_passed, format_date_display, listing_date, UserRegBadges};
 use crate::api;
-use crate::components::{OrganizeContext, OrganizeMenu};
+use crate::components::{OrganizeContext, OrganizeMenu, PageIntro};
 use crate::types::{LeagueEventDates, LeagueInfo, UserRegStatus};
 use crate::Route;
 use chrono::{Local, NaiveDate};
@@ -28,9 +28,8 @@ pub fn LeaguesIndex() -> Element {
         (response.leagues.len() - past, past)
     });
     rsx! {
-        header { class: "arctos-page-intro",
-            h1 { "Leagues" }
-            p { "Event series with shared registration and standings." }
+        PageIntro { page_key: "leagues", title: "Leagues", focus_target: "page-content",
+            "A league connects tournaments across a season, with shared registration and standings."
         }
         div { class: "arctos-discovery-toolbar",
             div { class: "arctos-discovery-actions",

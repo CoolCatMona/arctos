@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::{ChangePasswordCard, ConnectedAppsCard};
+use crate::components::{BannerAccountKind, BannerUpload, PhotoUpload, ChangePasswordCard, ConnectedAppsCard};
 use crate::types::{UpdatePlayerProfileRequest};
 use dioxus::prelude::*;
 use dioxus::prelude::use_navigator;
@@ -13,11 +13,11 @@ pub fn EditPlayerProfile(player_id: String) -> Element {
     let mut location = use_signal(|| "".to_string());
     let mut bio = use_signal(|| "".to_string());
     let mut profile_photo = use_signal(|| None::<String>);
+    let mut banner_photo = use_signal(|| None::<String>);
+    let banner_busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let mut loading = use_signal(|| true);
-    let mut photo_upload_error = use_signal(|| None::<String>);
-    let mut photo_uploading = use_signal(|| false);
-    let mut photo_removing = use_signal(|| false);
+    let photo_busy = use_signal(|| false);
 
     let me = use_resource(move || async move { api::me().await });
 
@@ -31,6 +31,7 @@ pub fn EditPlayerProfile(player_id: String) -> Element {
                 location.set(p.location.unwrap_or_default());
                 bio.set(p.bio.unwrap_or_default());
                 profile_photo.set(p.profile_photo);
+                banner_photo.set(p.banner_photo);
             }
             Err(e) => error.set(Some(e)),
         }
@@ -38,10 +39,10 @@ pub fn EditPlayerProfile(player_id: String) -> Element {
     }));
 
     let player_id_for_submit = player_id.clone();
-    let player_id_for_remove = player_id.clone();
     let onsubmit = move |_evt: Event<FormData>| {
         let player_id = player_id_for_submit.clone();
         async move {
+            if banner_busy() || photo_busy() { return; }
             loading.set(true);
             error.set(None);
             
@@ -64,7 +65,7 @@ pub fn EditPlayerProfile(player_id: String) -> Element {
         }
     };
 
-    let own_profile = me.read().as_ref().and_then(|r| r.as_ref().ok()).map(|u| u.id == player_id).unwrap_or(false);
+    let own_profile = me.read().as_ref().and_then(|r| r.as_ref().ok()).map(|u| u.user_type == "player" && u.id == player_id).unwrap_or(false);
 
     rsx! {
         div { class: "row",
@@ -98,86 +99,11 @@ pub fn EditPlayerProfile(player_id: String) -> Element {
                             if let Some(err) = error() {
                                 div { class: "alert alert-danger", "{err}" }
                             }
-                            if let Some(err) = photo_upload_error() {
-                                div { class: "alert alert-warning", "Photo: {err}" }
+                            if own_profile {
+                                PhotoUpload { kind: BannerAccountKind::Player, account_id: player_id.clone(), photo: profile_photo, busy: photo_busy }
                             }
-                            div { class: "mb-3",
-                                label { class: "form-label", "Profile Picture" }
-                                if let Some(photo) = profile_photo() {
-                                    div { class: "d-flex align-items-center gap-3 mb-2",
-                                        img {
-                                            src: "{api::base_url()}/static/{photo}",
-                                            alt: "Profile",
-                                            class: "rounded-circle",
-                                            style: "width: 80px; height: 80px; object-fit: cover;"
-                                        }
-                                        div { class: "d-flex flex-column gap-1",
-                                            span { class: "text-muted", "Upload a new image to replace." }
-                                            button {
-                                                class: "btn btn-outline-danger btn-sm align-self-start",
-                                                r#type: "button",
-                                                disabled: photo_removing(),
-                                                onclick: move |_| {
-                                                    let pid = player_id_for_remove.clone();
-                                                    photo_upload_error.set(None);
-                                                    photo_removing.set(true);
-                                                    spawn(async move {
-                                                        match api::delete_player_profile_photo(&pid).await {
-                                                            Ok(()) => profile_photo.set(None),
-                                                            Err(e) => photo_upload_error.set(Some(e)),
-                                                        }
-                                                        photo_removing.set(false);
-                                                    });
-                                                },
-                                                if photo_removing() {
-                                                    span { class: "spinner-border spinner-border-sm me-1", role: "status" }
-                                                }
-                                                "Remove picture"
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    p { class: "text-muted small mb-2", "No profile picture set." }
-                                }
-                                input {
-                                    class: "form-control",
-                                    r#type: "file",
-                                    accept: "image/*",
-                                    disabled: photo_uploading(),
-                                    onchange: move |evt| {
-                                        let pid = player_id.clone();
-                                        #[cfg(target_arch = "wasm32")]
-                                        {
-                                            use dioxus::html::HasFileData;
-                                            let files = evt.files();
-                                            if let Some(file) = files.into_iter().next() {
-                                                photo_upload_error.set(None);
-                                                photo_uploading.set(true);
-                                                spawn(async move {
-                                                    match file.read_bytes().await {
-                                                        Ok(bytes) => {
-                                                            match api::upload_player_profile_photo(&pid, bytes).await {
-                                                                Ok(path) => {
-                                                                    profile_photo.set(Some(path));
-                                                                }
-                                                                Err(e) => {
-                                                                    photo_upload_error.set(Some(e));
-                                                                }
-                                                            }
-                                                        }
-                                                        Err(_) => {
-                                                            photo_upload_error.set(Some("Failed to read file".to_string()));
-                                                        }
-                                                    }
-                                                    photo_uploading.set(false);
-                                                });
-                                            }
-                                        }
-                                    }
-                                }
-                                if photo_uploading() {
-                                    span { class: "spinner-border spinner-border-sm ms-2", role: "status" }
-                                }
+                            if own_profile {
+                                BannerUpload { kind: BannerAccountKind::Player, account_id: player_id.clone(), photo: banner_photo, busy: banner_busy }
                             }
                             form {
                                 onsubmit: onsubmit,
@@ -228,7 +154,7 @@ pub fn EditPlayerProfile(player_id: String) -> Element {
                                     }
                                     
                                     div { class: "d-grid gap-2",
-                                        button { class: "btn btn-primary", "type": "submit", "Update Profile" }
+                                        button { class: "btn btn-primary", "type": "submit", disabled: banner_busy() || photo_busy(), "Update Profile" }
                                         Link {
                                             class: "btn btn-outline-secondary",
                                             to: Route::PlayerProfilePage { id: player_id.clone() },

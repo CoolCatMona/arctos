@@ -1,4 +1,5 @@
 use crate::api;
+use crate::components::PageIntro;
 use crate::Route;
 use dioxus::prelude::*;
 
@@ -13,9 +14,8 @@ pub fn TeamsList() -> Element {
     let val = data.value();
     let backend = api::base_url();
     rsx! {
-        header { class: "arctos-page-intro",
-            h1 { "Teams" }
-            p { "Find team profiles and results." }
+        PageIntro { page_key: "teams", title: "Teams", focus_target: "page-content",
+            "Find teams, meet their players, and see where they’ve competed."
         }
         form {
             class: "arctos-directory-search", role: "search",

@@ -1,7 +1,7 @@
 use crate::api;
 use crate::components::{
     EditRegistrationContext, EditRegistrationModal, EventAbout, EventHeader, EventTab, EventTabs,
-    EventTeamsList, LeagueRegistrationButtons, PompfenIcon,
+    EventTeamsList, LeagueRegistrationButtons, OrganizerTools, PompfenIcon,
 };
 use crate::types::{ToEntry, User};
 use crate::Route;
@@ -123,6 +123,7 @@ pub fn TournamentHomeContent(
                 rsx! {
             div { class: "event-detail-page",
                 EventHeader {
+                    banner: d.tournament.banner_photo.clone(),
                     title: d.tournament.name.clone(),
                     kind: if league.is_some() { "League event".to_string() } else { "Tournament".to_string() },
                     date: Some(format_date_display(&d.tournament.start_date, d.tournament.end_date.as_ref())),
@@ -203,6 +204,20 @@ pub fn TournamentHomeContent(
                         }
                     }
 
+                    if viewer_is_to {
+                        OrganizerTools {
+                            Link { to: Route::TournamentSettings { url: url.clone() }, class: "dropdown-item", i { class: "fas fa-sliders-h", aria_hidden: "true" } "Settings" }
+                            Link { to: Route::ScheduleEdit { url: url.clone() }, class: "dropdown-item", i { class: "far fa-calendar-alt", aria_hidden: "true" } "Edit Schedule" }
+                            if let Some(l) = league {
+                                Link { to: Route::LeagueManage { league_url: l.league_url.clone() }, class: "dropdown-item", i { class: "fas fa-users", aria_hidden: "true" } "Registration Management" }
+                            } else {
+                                Link { to: Route::Manage { url: url.clone() }, class: "dropdown-item", i { class: "fas fa-users", aria_hidden: "true" } "Registration Management" }
+                            }
+                            Link { to: Route::ManageFootage { url: url.clone() }, class: "dropdown-item", i { class: "fas fa-video", aria_hidden: "true" } "Manage Footage" }
+                            Link { to: Route::SideCompNew { url: url.clone() }, class: "dropdown-item", i { class: "fas fa-plus", aria_hidden: "true" } "Add side competition" }
+                            button { r#type: "button", class: "dropdown-item text-danger", onclick: move |_| { delete_modal_open.set(true); delete_confirm_url.set(String::new()); delete_error.set(None); }, i { class: "fas fa-trash", aria_hidden: "true" } "Delete Tournament" }
+                        }
+                    }
                 }
                 EventTabs {
                     prefix: "event".to_string(), label: "Event sections".to_string(), active: active_tab.clone(), tabs,
@@ -298,19 +313,15 @@ pub fn TournamentHomeContent(
                 }
                 section { id: "event-section-sidecomps", class: "event-section", aria_labelledby: "event-tab-sidecomps", hidden: active_tab != "sidecomps",
                     div { class: "card",
-                        div { class: "card-header", h2 { "Side events" } }
-                        div { class: "card-body",
-                                if viewer_is_to {
-                                    div { class: "mb-3 d-flex justify-content-end",
-                                        Link {
-                                            to: Route::SideCompNew { url: url.clone() },
-                                            class: "btn btn-sm btn-outline-success",
-                                            title: "Add side competition",
-                                            aria_label: "Add side competition",
-                                            i { class: "fas fa-plus", aria_hidden: "true" } "Add side competition"
-                                        }
-                                    }
+                        div { class: "card-header sidecomp-heading",
+                            h2 { "Side events" }
+                            if viewer_is_to {
+                                Link { to: Route::SideCompNew { url: url.clone() }, class: "btn btn-outline-secondary",
+                                    i { class: "fas fa-plus", aria_hidden: "true" } "Add side competition"
                                 }
+                            }
+                        }
+                        div { class: "card-body",
                                 match sidecomps.read().as_ref() {
                                     Some(Ok(rows)) => {
                                         if rows.is_empty() {
@@ -417,22 +428,7 @@ pub fn TournamentHomeContent(
                     }
                 }
                 }
-                if viewer_is_to && content.is_none() {
-                    section { class: "event-organizer-card",
-                        div { class: "card-header", h2 { i { class: "fas fa-cog", aria_hidden: "true" } "Organizer tools" } }
-                        div { class: "card-body event-organizer-actions",
-                            Link { to: Route::TournamentSettings { url: url.clone() }, class: "btn btn-outline-secondary", i { class: "fas fa-sliders-h", aria_hidden: "true" } "Settings" }
-                            Link { to: Route::ScheduleEdit { url: url.clone() }, class: "btn btn-outline-primary", i { class: "far fa-calendar-alt", aria_hidden: "true" } "Edit Schedule" }
-                            if let Some(l) = league {
-                                Link { to: Route::LeagueManage { league_url: l.league_url.clone() }, class: "btn btn-outline-secondary", i { class: "fas fa-users", aria_hidden: "true" } "Registration Management" }
-                            } else {
-                                Link { to: Route::Manage { url: url.clone() }, class: "btn btn-outline-secondary", i { class: "fas fa-users", aria_hidden: "true" } "Registration Management" }
-                            }
-                            Link { to: Route::ManageFootage { url: url.clone() }, class: "btn btn-outline-secondary", i { class: "fas fa-video", aria_hidden: "true" } "Manage Footage" }
-                            button { r#type: "button", class: "btn btn-outline-danger", onclick: move |_| { delete_modal_open.set(true); delete_confirm_url.set(String::new()); delete_error.set(None); }, i { class: "fas fa-trash", aria_hidden: "true" } "Delete Tournament" }
-                        }
-                    }
-                }
+
                 }
             if show_edit_player_modal() {
                 if let Some(Ok(me)) = me_res.read().as_ref() {

@@ -1,6 +1,8 @@
 use crate::api;
+use crate::components::{BannerAccountKind, BannerUpload};
 use crate::Route;
 use dioxus::prelude::*;
+use std::collections::HashMap;
 use wasm_bindgen::JsCast;
 
 const PREDEFINED_COLORS: &[&str] = &[
@@ -463,6 +465,14 @@ pub fn TournamentSettings(url: String) -> Element {
         let u = url_for_data.clone();
         async move { api::tournament_detail(&u).await.map_err(|e| e.to_string()) }
     });
+    let mut draft_values = use_signal(HashMap::<String, String>::new);
+    let mut draft_checks = use_signal(HashMap::<String, bool>::new);
+    let mut draft_initialized = use_signal(|| false);
+    let mut banner_photo = use_signal(|| None::<String>);
+    let banner_busy = use_signal(|| false);
+    let mut banner_initialized = use_signal(|| false);
+    let mut saving = use_signal(|| false);
+    let mut save_error = use_signal(|| None::<String>);
     let mut editing_pt_id = use_signal(|| None as Option<i32>);
     let mut add_new_penalty = use_signal(|| false);
     let mut edit_name = use_signal(|| String::new());
@@ -484,6 +494,35 @@ pub fn TournamentSettings(url: String) -> Element {
 
     use_effect(move || {
         if let Some(Ok(d)) = val.read().as_ref() {
+            // Keep the form draft independent of upload status and detail refreshes.
+            if !draft_initialized() {
+                draft_values.set(HashMap::from([
+                    ("name".into(), d.tournament.name.clone()),
+                    ("location".into(), d.tournament.location.clone().unwrap_or_default()),
+                    ("start_date".into(), d.tournament.start_date.split('T').next().unwrap_or(&d.tournament.start_date).to_string()),
+                    ("end_date".into(), d.tournament.end_date.as_deref().map(|value| value.split('T').next().unwrap_or(value)).unwrap_or_default().to_string()),
+                    ("n_max_teams".into(), d.tournament.n_max_teams.map(|value| value.to_string()).unwrap_or_default()),
+                    ("max_team_size_roster".into(), d.tournament.max_team_size_roster.map(|value| value.to_string()).unwrap_or_default()),
+                    ("max_team_size_field".into(), d.tournament.max_team_size_field.map(|value| value.to_string()).unwrap_or_default()),
+                    ("team_reg_fee".into(), d.tournament.team_reg_fee.unwrap_or(0.0).to_string()),
+                    ("player_reg_fee".into(), d.tournament.player_reg_fee.unwrap_or(0.0).to_string()),
+                    ("about".into(), d.tournament.about.clone().unwrap_or_default()),
+                    ("head_refs_allowed_list".into(), d.tournament.head_refs_allowed_list.clone().unwrap_or_default()),
+                ]));
+                draft_checks.set(HashMap::from([
+                    ("head_refs_allow_anyone".into(), d.tournament.head_refs_allow_anyone),
+                    ("head_refs_allow_reffing_teams".into(), d.tournament.head_refs_allow_reffing_teams),
+                    ("published".into(), d.tournament.published),
+                    ("schedule_published".into(), d.tournament.schedule_published),
+                    ("team_registration_open".into(), d.tournament.team_registration_open),
+                    ("player_registration_open".into(), d.tournament.player_registration_open),
+                ]));
+                draft_initialized.set(true);
+            }
+            if !banner_initialized() {
+                banner_photo.set(d.tournament.banner_photo.clone());
+                banner_initialized.set(true);
+            }
             // Only initialize once so user toggles aren't overwritten by rerenders.
             if !waiver_toggle_initialized() {
                 require_waiver_signature_ui.set(d.tournament.waiver_required);
@@ -497,8 +536,9 @@ pub fn TournamentSettings(url: String) -> Element {
         }
     });
     rsx! {
+        style { {include_str!("../components/organizer_tools.css")} }
         if let Some(Ok(d)) = val.read().as_ref() {
-            div { class: "penalty-settings-wrap",
+            div { class: "penalty-settings-wrap organizer-settings",
                 div { class: "row",
                 div { class: "col-12",
                     h1 { "{d.tournament.name} - Settings" }
@@ -512,16 +552,20 @@ pub fn TournamentSettings(url: String) -> Element {
             }
 
             div { class: "row",
-                div { class: "col-md-8",
+                div { class: "col-12",
                     div { class: "card",
                         div { class: "card-header",
                             h5 { class: "mb-0", "Tournament Information" }
                         }
                         div { class: "card-body",
+                            BannerUpload { kind: BannerAccountKind::Tournament, account_id: url.clone(), photo: banner_photo, busy: banner_busy }
                             form {
                                 id: "tournament-settings-form",
                                 onsubmit: move |ev| {
                                     ev.prevent_default();
+                                    if saving() || banner_busy() || waiver_reading() { return; }
+                                    saving.set(true);
+                                    save_error.set(None);
                                     let mut params: Vec<(String, String)> = vec![
                                         ("name".into(), get_form_value("name")),
                                         ("location".into(), get_form_value("location")),
@@ -574,28 +618,32 @@ pub fn TournamentSettings(url: String) -> Element {
                                                             Ok(_) => {}
                                                             Err(e) => {
                                                                 waiver_upload_error.set(Some(e));
+                                                                saving.set(false);
                                                                 return;
                                                             }
                                                         }
                                                     }
                                                     nav.push(Route::TournamentHome { url: url_submit });
+                                                } else {
+                                                    save_error.set(Some(res.error.unwrap_or_else(|| "Could not save settings. Try again.".into())));
                                                 }
                                             }
-                                            Err(_) => {}
+                                            Err(error) => save_error.set(Some(error)),
                                         }
+                                        saving.set(false);
                                     });
                                 },
                                 div { class: "row",
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
                                             label { r#for: "name", class: "form-label", "Tournament Name" }
-                                            input { r#type: "text", class: "form-control", id: "name", name: "name", value: "{d.tournament.name}", required: true }
+                                            input { r#type: "text", class: "form-control", id: "name", name: "name", value: draft_values.read().get("name").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("name".into(), event.value()); }, required: true }
                                         }
                                     }
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
                                             label { r#for: "location", class: "form-label", "Location" }
-                                            input { r#type: "text", class: "form-control", id: "location", name: "location", value: "{d.tournament.location.as_deref().unwrap_or(\"\")}" }
+                                            input { r#type: "text", class: "form-control", id: "location", name: "location", value: draft_values.read().get("location").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("location".into(), event.value()); } }
                                         }
                                     }
                                 }
@@ -604,13 +652,13 @@ pub fn TournamentSettings(url: String) -> Element {
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
                                             label { r#for: "start_date", class: "form-label", "Start Date" }
-                                            input { r#type: "date", class: "form-control", id: "start_date", name: "start_date", value: "{d.tournament.start_date.split('T').next().unwrap_or(&d.tournament.start_date)}", required: true }
+                                            input { r#type: "date", class: "form-control", id: "start_date", name: "start_date", value: draft_values.read().get("start_date").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("start_date".into(), event.value()); }, required: true }
                                         }
                                     }
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
                                             label { r#for: "end_date", class: "form-label", "End Date" }
-                                            input { r#type: "date", class: "form-control", id: "end_date", name: "end_date", value: "{d.tournament.end_date.as_deref().map(|s| s.split('T').next().unwrap_or(s)).unwrap_or(\"\")}", required: true }
+                                            input { r#type: "date", class: "form-control", id: "end_date", name: "end_date", value: draft_values.read().get("end_date").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("end_date".into(), event.value()); }, required: true }
                                         }
                                     }
                                 }
@@ -620,13 +668,13 @@ pub fn TournamentSettings(url: String) -> Element {
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
                                             label { r#for: "n_max_teams", class: "form-label", "Max Teams" }
-                                            input { r#type: "number", class: "form-control", id: "n_max_teams", name: "n_max_teams", value: "{d.tournament.n_max_teams.map(|v| v.to_string()).unwrap_or_default()}", min: "1" }
+                                            input { r#type: "number", class: "form-control", id: "n_max_teams", name: "n_max_teams", value: draft_values.read().get("n_max_teams").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("n_max_teams".into(), event.value()); }, min: "1" }
                                         }
                                     }
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
                                             label { r#for: "max_team_size_roster", class: "form-label", "Max Team Size (Roster)" }
-                                            input { r#type: "number", class: "form-control", id: "max_team_size_roster", name: "max_team_size_roster", value: "{d.tournament.max_team_size_roster.map(|v| v.to_string()).unwrap_or_default()}", min: "1" }
+                                            input { r#type: "number", class: "form-control", id: "max_team_size_roster", name: "max_team_size_roster", value: draft_values.read().get("max_team_size_roster").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("max_team_size_roster".into(), event.value()); }, min: "1" }
                                             div { class: "form-text", "Maximum players on team roster" }
                                         }
                                     }
@@ -636,7 +684,7 @@ pub fn TournamentSettings(url: String) -> Element {
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
                                             label { r#for: "max_team_size_field", class: "form-label", "Max Team Size (Field)" }
-                                            input { r#type: "number", class: "form-control", id: "max_team_size_field", name: "max_team_size_field", value: "{d.tournament.max_team_size_field.map(|v| v.to_string()).unwrap_or_default()}", min: "1" }
+                                            input { r#type: "number", class: "form-control", id: "max_team_size_field", name: "max_team_size_field", value: draft_values.read().get("max_team_size_field").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("max_team_size_field".into(), event.value()); }, min: "1" }
                                             div { class: "form-text", "Maximum players on field at once" }
                                         }
                                     }
@@ -650,7 +698,7 @@ pub fn TournamentSettings(url: String) -> Element {
                                             label { r#for: "team_reg_fee", class: "form-label", "Team Registration Fee" }
                                             div { class: "input-group",
                                                 span { class: "input-group-text", "$" }
-                                                input { r#type: "number", class: "form-control", id: "team_reg_fee", name: "team_reg_fee", value: "{d.tournament.team_reg_fee.unwrap_or(0.0)}", step: "0.01", min: "0" }
+                                                input { r#type: "number", class: "form-control", id: "team_reg_fee", name: "team_reg_fee", value: draft_values.read().get("team_reg_fee").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("team_reg_fee".into(), event.value()); }, step: "0.01", min: "0" }
                                             }
                                         }
                                     }
@@ -659,7 +707,7 @@ pub fn TournamentSettings(url: String) -> Element {
                                             label { r#for: "player_reg_fee", class: "form-label", "Player Registration Fee" }
                                             div { class: "input-group",
                                                 span { class: "input-group-text", "$" }
-                                                input { r#type: "number", class: "form-control", id: "player_reg_fee", name: "player_reg_fee", value: "{d.tournament.player_reg_fee.unwrap_or(0.0)}", step: "0.01", min: "0" }
+                                                input { r#type: "number", class: "form-control", id: "player_reg_fee", name: "player_reg_fee", value: draft_values.read().get("player_reg_fee").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("player_reg_fee".into(), event.value()); }, step: "0.01", min: "0" }
                                             }
                                         }
                                     }
@@ -668,7 +716,7 @@ pub fn TournamentSettings(url: String) -> Element {
 
                                 div { class: "mb-3",
                                     label { r#for: "about", class: "form-label", "About" }
-                                    textarea { class: "form-control", id: "about", name: "about", rows: "4", "{d.tournament.about.as_deref().unwrap_or(\"\")}" }
+                                    textarea { class: "form-control", id: "about", name: "about", rows: "4", value: draft_values.read().get("about").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("about".into(), event.value()); } }
                                     div { class: "form-text",
                                         "supports "
                                         a { href: "https://www.markdownguide.org/basic-syntax/", "markdown" }
@@ -765,78 +813,82 @@ pub fn TournamentSettings(url: String) -> Element {
                                     }
                                 }
 
-                                h3 { "Head Ref Options" }
-                                p {
-                                    "This website was designed around having dedicated head refs. However, this is not always feasible, so there are a few other options. "
-                                    "If you do any of these, please make sure to communicate to players how the system works, in particular that "
-                                    i { "you cannot un-start a match!" }
-                                    br {}
-                                    "Explicitly listed player usernames will always be allowed, regardless of their registration status. "
-                                    "Anyone else must be registered if they want to head ref."
-                                    br {}
-                                    b { "Please note that only players are allowed to head ref, not teams. This is to enforce accountability for ref responsibilities, as team accounts are/can be shared." }
-                                }
+                                details { class: "settings-advanced", id: "head-ref-options",
+                                    summary { "Advanced options" small {
+                                        "Head referee permissions · "
+                                        if draft_checks.read().get("head_refs_allow_anyone").copied().unwrap_or(false) { "registered players" }
+                                        else if draft_checks.read().get("head_refs_allow_reffing_teams").copied().unwrap_or(false) { "assigned referee teams and named players" }
+                                        else { "named players" }
+                                    } }
+                                    div { class: "settings-advanced-body",
+                                    h3 { class: "h5", "Head referee permissions" }
+                                    p { class: "text-muted", "Choose which player accounts can run matches. Listed players can referee without registering; other players must be registered. Team accounts cannot head referee." }
+                                    p { class: "form-text", "Tell referees how these permissions work before play. A started match cannot be unstarted." }
                                 div { class: "mb-3",
                                     label { r#for: "head_refs_allowed_list", class: "form-label", "Explicit List of Allowed Usernames" }
-                                    input { r#type: "text", class: "form-control", id: "head_refs_allowed_list", name: "head_refs_allowed_list", value: "{d.tournament.head_refs_allowed_list.as_deref().unwrap_or(\"\")}", placeholder: "player1,player2,player3" }
+                                    input { r#type: "text", class: "form-control", id: "head_refs_allowed_list", name: "head_refs_allowed_list", value: draft_values.read().get("head_refs_allowed_list").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("head_refs_allowed_list".into(), event.value()); }, placeholder: "player1,player2,player3" }
                                     div { class: "form-text", "Comma-separated list of player IDs who can ref matches" }
                                 }
                                 div { class: "mb-3",
                                     div { class: "form-check",
-                                        input { class: "form-check-input", r#type: "checkbox", id: "head_refs_allow_anyone", name: "head_refs_allow_anyone", checked: d.tournament.head_refs_allow_anyone }
-                                        label { class: "form-check-label", r#for: "head_refs_allow_anyone", "Allow anyone to run matches" }
+                                        input { class: "form-check-input", r#type: "checkbox", id: "head_refs_allow_anyone", name: "head_refs_allow_anyone", checked: draft_checks.read().get("head_refs_allow_anyone").copied().unwrap_or(false), onchange: move |event| { draft_checks.write().insert("head_refs_allow_anyone".into(), event.checked()); } }
+                                        label { class: "form-check-label", r#for: "head_refs_allow_anyone", "Allow all registered players to run matches" }
                                         div { class: "form-text", "When enabled, players who are registered for the tournament can head ref all matches." }
                                     }
                                 }
                                 div { id: "head_ref_specific_options",
                                     div { class: "mb-3",
                                         div { class: "form-check",
-                                            input { class: "form-check-input", r#type: "checkbox", id: "head_refs_allow_reffing_teams", name: "head_refs_allow_reffing_teams", checked: d.tournament.head_refs_allow_reffing_teams }
+                                            input { class: "form-check-input", r#type: "checkbox", id: "head_refs_allow_reffing_teams", name: "head_refs_allow_reffing_teams", checked: draft_checks.read().get("head_refs_allow_reffing_teams").copied().unwrap_or(false), onchange: move |event| { draft_checks.write().insert("head_refs_allow_reffing_teams".into(), event.checked()); } }
                                             label { class: "form-check-label", r#for: "head_refs_allow_reffing_teams", "Allow reffing teams to head ref" }
                                             div { class: "form-text", "When enabled, players on teams assigned to ref a match can head ref that match." }
                                         }
                                     }
                                 }
 
-                                h3 { "Publication Status" }
+                                }
+                                }
+
+                                h3 { "Publication and registration" }
                                 div { class: "mb-3",
                                     div { class: "form-check",
-                                        input { class: "form-check-input", r#type: "checkbox", id: "published", name: "published", checked: d.tournament.published }
+                                        input { class: "form-check-input", r#type: "checkbox", id: "published", name: "published", checked: draft_checks.read().get("published").copied().unwrap_or(false), onchange: move |event| { draft_checks.write().insert("published".into(), event.checked()); } }
                                         label { class: "form-check-label", r#for: "published", "Published" }
-                                        div { class: "form-text", "show this tournament on the homepage!" }
+                                        div { class: "form-text", "Show this tournament in Events." }
                                     }
                                 }
                                 div { class: "mb-3",
                                     div { class: "form-check",
-                                        input { class: "form-check-input", r#type: "checkbox", id: "schedule_published", name: "schedule_published", checked: d.tournament.schedule_published }
+                                        input { class: "form-check-input", r#type: "checkbox", id: "schedule_published", name: "schedule_published", checked: draft_checks.read().get("schedule_published").copied().unwrap_or(false), onchange: move |event| { draft_checks.write().insert("schedule_published".into(), event.checked()); } }
                                         label { class: "form-check-label", r#for: "schedule_published", "Schedule Published (schedule visible to public)" }
-                                        div { class: "form-text", "show the schedule will be visible to all users. Still visible to TOs and head refs if unchecked." }
+                                        div { class: "form-text", "Make the schedule public. Organizers and head referees can still view an unpublished schedule." }
                                     }
                                 }
                                 if d.tournament.league.is_none() {
                                     div { class: "mb-3",
                                         div { class: "form-check",
-                                            input { class: "form-check-input", r#type: "checkbox", id: "team_registration_open", name: "team_registration_open", checked: d.tournament.team_registration_open }
-                                            label { class: "form-check-label", r#for: "team_registration_open", "Team Registration Open" }
+                                            input { class: "form-check-input", r#type: "checkbox", id: "team_registration_open", name: "team_registration_open", checked: draft_checks.read().get("team_registration_open").copied().unwrap_or(false), onchange: move |event| { draft_checks.write().insert("team_registration_open".into(), event.checked()); } }
+                                            label { class: "form-check-label", r#for: "team_registration_open", "Team registration open" }
                                         }
                                         div { class: "form-check mt-1",
-                                            input { class: "form-check-input", r#type: "checkbox", id: "player_registration_open", name: "player_registration_open", checked: d.tournament.player_registration_open }
-                                            label { class: "form-check-label", r#for: "player_registration_open", "Player Registration Open" }
+                                            input { class: "form-check-input", r#type: "checkbox", id: "player_registration_open", name: "player_registration_open", checked: draft_checks.read().get("player_registration_open").copied().unwrap_or(false), onchange: move |event| { draft_checks.write().insert("player_registration_open".into(), event.checked()); } }
+                                            label { class: "form-check-label", r#for: "player_registration_open", "Player registration open" }
                                         }
                                     }
                                 }
 
                                 div { class: "d-grid",
-                                    button { r#type: "submit", class: "btn btn-primary", "Save Settings" }
+                                    if let Some(message) = save_error() { p { class: "text-danger", role: "alert", "{message}" } }
+                                    button { r#type: "submit", class: "btn btn-primary", disabled: saving() || banner_busy() || waiver_reading(), if saving() { "Saving…" } else { "Save Settings" } }
                                 }
                             }
                         }
                     }
                 }
 
-                div { class: "col-md-4",
+                div { class: "col-12 mt-4",
                     if d.tournament.league.is_none() {
-                    details { class: "card section-disclosure", open: true,
+                    details { class: "section-disclosure penalty-types-section",
                         summary { class: "card-header", h2 { class: "h5 mb-0", "Penalty Types ({d.penalty_types.len()})" } }
                         div { class: "card-body",
                             div { class: "table-responsive",
