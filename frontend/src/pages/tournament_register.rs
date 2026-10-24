@@ -28,10 +28,11 @@ pub fn TournamentRegister(url: String) -> Element {
         let u = url_for_data.clone();
         async move { api::tournament_detail(&u).await.map_err(|e| e.to_string()) }
     });
-    let me = use_resource(move || async move { api::me().await });
+    let me = crate::auth::use_account();
     let val = data.value();
     let mut show_help_modal = use_signal(|| false);
     let mut register_error = use_signal(|| None::<String>);
+    use_effect(move || { if register_error().is_some() { crate::form_validation::focus_after_render("registration-error"); } });
     let mut busy = use_signal(|| false);
     let login_url = format!("/login?next={}", urlencoding::encode(&format!("/{url}/register")));
     let league_url = use_memo(move || {
@@ -72,13 +73,13 @@ pub fn TournamentRegister(url: String) -> Element {
                     if let Some(Ok(u)) = me.read().as_ref() {
                         if u.user_type == "player" {
                             div { class: "edit-section",
-                                div { class: "edit-section-heading", h5 { class: "mb-0", "Player registration" } p { class: "text-muted mb-0 mt-2", "Registering as {u.name} (@{u.id})" } }
+                                div { class: "edit-section-heading", h3 { class: "h5 mb-0", "Player registration" } p { class: "text-muted mb-0 mt-2", "Registering as {u.name} (@{u.id})" } }
                                 div { class: "edit-section-body",
                                     if let Some(terms) = &d.tournament.terms_link {
                                         p { class: "form-text", a { href: "{terms}", target: "_blank", rel: "noopener noreferrer", "Read the event’s registration terms" } }
                                     }
                                     if let Some(err) = register_error() {
-                                        div { class: "alert alert-danger mb-3", role: "alert", "{err}" }
+                                        div { id: "registration-error", tabindex: "-1", class: "alert alert-danger mb-3", role: "alert", "{err}" }
                                     }
                                     form {
                                         id: "player-register-form",
@@ -118,30 +119,29 @@ pub fn TournamentRegister(url: String) -> Element {
                                         },
                                         div { class: "mb-3",
                                             label { r#for: "jersey_name", class: "form-label", "Jersey Name" }
-                                            input { r#type: "text", class: "form-control", id: "jersey_name", name: "jersey_name", required: true }
-                                            div { class: "form-text", "Your name for this tournament" }
+                                            input { r#type: "text", class: "form-control", id: "jersey_name", name: "jersey_name", required: true, aria_describedby: "jersey_name-help" }
+                                            div { id: "jersey_name-help", class: "form-text", "Your name for this tournament" }
                                         }
                                         div { class: "mb-3",
                                             label { r#for: "jersey_number", class: "form-label", "Jersey Number" }
                                             input { r#type: "text", class: "form-control", id: "jersey_number", name: "jersey_number" }
                                         }
                                         div { class: "mb-3",
-                                            label { r#for: "team", class: "form-label",
-                                                "Team "
-                                                button {
-                                                    r#type: "button",
-                                                    class: "btn btn-link p-0 ms-2 text-decoration-none border-0 align-baseline",
+                                            div { class: "d-flex align-items-center flex-wrap gap-2 mb-2",
+                                                label { r#for: "team", class: "form-label mb-0", "Team" }
+                                                button { id: "registration-team-help", r#type: "button",
+                                                    class: "btn btn-link text-decoration-none",
                                                     onclick: move |_| show_help_modal.set(true),
-                                                    small { "Can’t find your team?" }
+                                                    "Can’t find your team?"
                                                 }
                                             }
-                                            select { class: "form-select", id: "team", name: "team",
+                                            select { class: "form-select", id: "team", aria_describedby: "team-help", name: "team",
                                                 option { value: "", "No team — join as a free merc" }
                                                 for team in d.teams_with_counts.iter() {
                                                     option { value: "{team.team_id}", "{team.pseudonym.as_deref().unwrap_or(&team.team_name)}" }
                                                 }
                                             }
-                                            div { class: "form-text", "Your team must approve your request before you join its roster. Without a team, you register as a free merc." }
+                                            div { id: "team-help", class: "form-text", "Your team must approve your request before you join its roster. Without a team, you register as a free merc." }
                                         }
                                         if let Some(fee) = d.tournament.player_reg_fee {
                                             if fee > 0.0 {
@@ -172,12 +172,12 @@ pub fn TournamentRegister(url: String) -> Element {
                                                         }
                                                     }
                                                 }
-                                                p { class: "form-text mb-2", "Your legal name is shared only with you and event organizers." }
-                                                p { class: "form-text mb-2", "By entering your full legal name below, you agree to the terms of the waiver linked above, and affirm that the waiver you viewed matches the SHA-256 hash displayed." }
+                                                p { id: "waiver-privacy", class: "form-text mb-2", "Your legal name is shared only with you and event organizers." }
+                                                p { id: "waiver-consent", class: "form-text mb-2", "By entering your full legal name below, you agree to the terms of the waiver linked above, and affirm that the waiver you viewed matches the SHA-256 hash displayed." }
                                                 input {
                                                     r#type: "text",
                                                     class: "form-control",
-                                                    id: "waiver_legal_name_signature",
+                                                    id: "waiver_legal_name_signature", aria_describedby: "waiver-privacy waiver-consent",
                                                     name: "waiver_legal_name_signature",
                                                     autocomplete: "name",
                                                     required: true
@@ -195,13 +195,13 @@ pub fn TournamentRegister(url: String) -> Element {
                             }
                         } else if u.user_type == "team" {
                             div { class: "edit-section",
-                                div { class: "edit-section-heading", h5 { class: "mb-0", "Team registration" } p { class: "text-muted mb-0 mt-2", "Registering as {u.name} (@{u.id})" } }
+                                div { class: "edit-section-heading", h3 { class: "h5 mb-0", "Team registration" } p { class: "text-muted mb-0 mt-2", "Registering as {u.name} (@{u.id})" } }
                                 div { class: "edit-section-body",
                                     if let Some(terms) = &d.tournament.terms_link {
                                         p { class: "form-text", a { href: "{terms}", target: "_blank", rel: "noopener noreferrer", "Read the event’s registration terms" } }
                                     }
                                     if let Some(err) = register_error() {
-                                        div { class: "alert alert-danger mb-3", role: "alert", "{err}" }
+                                        div { id: "registration-error", tabindex: "-1", class: "alert alert-danger mb-3", role: "alert", "{err}" }
                                     }
                                     form {
                                         id: "team-register-form",
@@ -231,13 +231,13 @@ pub fn TournamentRegister(url: String) -> Element {
                                         },
                                         div { class: "mb-3",
                                             label { r#for: "pseudonym", class: "form-label", "Team Name for This Tournament" }
-                                            input { r#type: "text", class: "form-control", id: "pseudonym", name: "pseudonym", required: true }
-                                            div { class: "form-text", "This is how your team will be referred to in this tournament" }
+                                            input { r#type: "text", class: "form-control", id: "pseudonym", name: "pseudonym", required: true, aria_describedby: "pseudonym-help" }
+                                            div { id: "pseudonym-help", class: "form-text", "This is how your team will be referred to in this tournament" }
                                         }
                                         div { class: "mb-3",
                                             label { r#for: "shortname", class: "form-label", "Short name (optional)" }
-                                            input { r#type: "text", class: "form-control", id: "shortname", name: "shortname", maxlength: "8", placeholder: "e.g. UWaoW" }
-                                            div { class: "form-text", "Used in schedules and brackets. Leave blank to auto-shorten." }
+                                            input { r#type: "text", class: "form-control", id: "shortname", aria_describedby: "shortname-help", name: "shortname", maxlength: "8", placeholder: "e.g. UWaoW" }
+                                            div { id: "shortname-help", class: "form-text", "Used in schedules and brackets. Leave blank to auto-shorten." }
                                         }
                                         if let Some(fee) = d.tournament.team_reg_fee {
                                             if fee > 0.0 {
@@ -273,7 +273,7 @@ pub fn TournamentRegister(url: String) -> Element {
                         }
                     } else if me.read().is_none() {
                         p { role: "status", class: "text-muted", "Checking your account…" }
-                    } else {
+                    } else if matches!(me.read().as_ref(), Some(Err(api::AccountError::Unauthenticated))) {
                         div { class: "alert alert-warning",
                             h4 { "Login Required" }
                             p { "You need to be logged in to register for this tournament." }
@@ -287,6 +287,7 @@ pub fn TournamentRegister(url: String) -> Element {
 
             if show_help_modal() {
                 TeamRegistrationHelpModal {
+                    return_focus_id: Some("registration-team-help".into()),
                     context: String::from("tournament"),
                     on_close: move |_| show_help_modal.set(false),
                 }

@@ -12,7 +12,7 @@ pub fn LeagueRegistrationButtons(
     league_url: String,
     /// Aggregate flag kept for compatibility; per-role flags below take precedence.
     registration_open: bool,
-    current_user: Option<Result<User, String>>,
+    current_user: Option<Result<User, crate::api::AccountError>>,
     is_team_registered: bool,
     is_player_registered: bool,
     /// When true, Edit Registration uses a button that calls on_edit_registration; otherwise links to the registration page.
@@ -46,6 +46,8 @@ pub fn LeagueRegistrationButtons(
         style { {REGISTRATION_ACTIONS_CSS} }
         if current_user.is_none() {
             span { class: "text-muted", role: "status", "Loading registration…" }
+        } else if matches!(current_user, Some(Err(crate::api::AccountError::Unavailable))) {
+            // The shared account notice owns retry; do not imply this visitor is signed out.
         } else if show_register_only && (team_open || player_open) {
             a {
                 href: format!("/login?next={}", urlencoding::encode(&format!("/leagues/{league_url}/register"))),

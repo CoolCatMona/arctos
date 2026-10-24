@@ -164,13 +164,62 @@ async fn response_json<T: serde::de::DeserializeOwned>(
     resp.json::<T>().await.map_err(|e| e.to_string())
 }
 
-pub async fn me() -> Result<User, String> {
+/// Only an explicit 401 proves that there is no signed-in session. A failed
+/// connection or an unexpected response must not be presented as a logout.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AccountError {
+    Unauthenticated,
+    Unavailable,
+}
+
+impl std::fmt::Display for AccountError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Unauthenticated => "Log in to continue.",
+            Self::Unavailable => "Your account could not be checked. Try again.",
+        })
+    }
+}
+
+impl std::error::Error for AccountError {}
+
+fn account_status_error(status: u16) -> Option<AccountError> {
+    match status {
+        200..=299 => None,
+        401 => Some(AccountError::Unauthenticated),
+        _ => Some(AccountError::Unavailable),
+    }
+}
+
+pub async fn me() -> Result<User, AccountError> {
     let c = client();
     let r = with_credentials(c.get(format!("{}/_api/me", base())))
         .send()
         .await
-        .map_err(|e| e.to_string())?;
-    response_json(r).await
+        .map_err(|_| AccountError::Unavailable)?;
+    if let Some(error) = account_status_error(r.status().as_u16()) {
+        return Err(error);
+    }
+    response_json(r).await.map_err(|_| AccountError::Unavailable)
+}
+
+#[cfg(test)]
+mod account_error_tests {
+    use super::{account_status_error, AccountError};
+
+    #[test]
+    fn only_unauthorized_me_response_means_signed_out() {
+        assert_eq!(account_status_error(401), Some(AccountError::Unauthenticated));
+        for status in [302, 400, 403, 404, 408, 409, 429, 500, 502, 503, 504] {
+            assert_eq!(account_status_error(status), Some(AccountError::Unavailable));
+        }
+    }
+
+    #[test]
+    fn success_still_requires_a_valid_user_body() {
+        assert_eq!(account_status_error(200), None);
+        assert!(serde_json::from_str::<crate::types::User>("{}").is_err());
+    }
 }
 
 pub async fn login(username: &str, password: &str) -> Result<User, String> {

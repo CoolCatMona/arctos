@@ -14,7 +14,7 @@ fn get_query_param(name: &str) -> Option<String> {
     params.get(name)
 }
 
-fn is_current_user_to(me: Option<&Result<User, String>>, to_entries: &[ToEntry]) -> bool {
+fn is_current_user_to(me: Option<&Result<User, api::AccountError>>, to_entries: &[ToEntry]) -> bool {
     me.and_then(|r| r.as_ref().ok()).map_or(false, |u| {
         to_entries
             .iter()
@@ -63,7 +63,7 @@ pub fn LeagueHomeContent(
         let lu = url_for_data.clone();
         async move { api::league_detail(&lu).await.map_err(|e| e.to_string()) }
     });
-    let me_res = use_resource(move || async move { api::me().await });
+    let me_res = crate::auth::use_account();
     let league_url_for_warning = league_url.clone();
     let waiver_warning = use_resource(move || {
         let lu = league_url_for_warning.clone();

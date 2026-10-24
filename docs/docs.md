@@ -2,6 +2,16 @@
 
 or, "i type forever and still don't produce something that feels complete"
 
+## Start here
+
+- **Find an event or league:** browse [Events](/) or [Leagues](/leagues), then open its schedule, teams, or results.
+- **Join an event:** open the event and choose **Register**. A league event uses one registration for the league. If you joined a team, that team must approve your place on its roster.
+- **Manage your team’s roster:** sign in with the team account, open the event or league, and choose **Manage roster**.
+- **Run a match:** open its schedule entry and follow [Running Games](#running-games). Your account needs permission to head referee that match.
+- **Set up an event:** use **Organize** on [Events](/), then follow [Tournament Settings](#tournament-settings) and [Match Schedule Setup](#match-schedule-setup).
+- **Run a side event:** see [Running a Side Comp](#running-a-side-comp).
+- **Play the stone beat:** open [Stones](/stones); see [Stones](#stones) for synchronization and calibration.
+
 ## Table of Contents
 
 Just Me Yapping
@@ -48,7 +58,7 @@ For TOs
 	- [Skip Conditions](#skip-conditions)
  - [Side Comps](#side-comps)
  - [OBS Scoreboard Integration](#obs-scoreboard-integration)
- - [Recording Matches](#recording-matches)
+ - [Match Footage](#match-footage)
 
 For Developers
 
@@ -738,3 +748,10 @@ The scoreboard displays:
 The scoreboard automatically polls for updates and refreshes when
 match state changes. For stones matches, the countdown updates in
 real-time using the same synchronization system as the match pages.
+
+
+## Match Footage
+
+When a match has footage available, open the match page to view it. Use the camera selector to choose a recording and the point selector to jump to a point.
+
+Event organizers can open **Organizer tools → Footage** to find recordings by match, field, camera, status, uploader, or timestamp. **Open** lets you review the linked recording. **Delete** asks for confirmation before removing the footage entry; removal cannot be undone.

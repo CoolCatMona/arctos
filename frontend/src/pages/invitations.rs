@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::{PaymentStatusBadge, RegistrationStatusBadge};
+use crate::components::{InvitationActions, RequestEpoch, PaymentStatusBadge, RegistrationStatusBadge};
 use crate::Route;
 use dioxus::prelude::*;
 
@@ -12,11 +12,12 @@ pub fn Invitations(url: String) -> Element {
         let _ = r();
         async move { api::tournament_invitations(&u).await.map_err(|e| e.to_string()) }
     }));
-    let val = data.value();
+    let mut confirmed = use_signal(|| None::<crate::types::TournamentInvitationsResponse>);
+    let refresh_epoch = use_signal(RequestEpoch::default);
+    let snapshot = confirmed().map(Ok).or_else(|| data.read().clone());
     let backend = api::base_url();
-    let mut action_error = use_signal(|| Option::<String>::None);
     rsx! {
-        if let Some(Ok(d)) = val.read().as_ref() {
+        if let Some(Ok(d)) = snapshot.as_ref() {
             div { class: "row",
                 div { class: "col-12",
                     h2 { "{d.team_registration.pseudonym} roster" }
@@ -36,12 +37,7 @@ pub fn Invitations(url: String) -> Element {
                             h5 { class: "mb-0", "Pending Player Requests" }
                         }
                         div { class: "card-body",
-                            if let Some(err) = action_error() {
-                                div { class: "alert alert-danger alert-dismissible fade show", role: "alert",
-                                    "{err}"
-                                    button { r#type: "button", class: "btn-close", "aria-label": "Close", onclick: move |_| action_error.set(None) }
-                                }
-                            }
+                            p { class: "small text-muted", "Declining leaves the player confirmed for the event and unattached to a team." }
                             if d.invitations.is_empty() {
                                 p { class: "text-muted", "No pending requests." }
                             } else {
@@ -66,9 +62,6 @@ pub fn Invitations(url: String) -> Element {
                                             for invitation in d.invitations.iter() {
                                                 {
                                                     let inv_id = invitation.registration.id;
-                                                    let url_clone = url.clone();
-                                                    let url_accept = url.clone();
-                                                    let url_decline = url.clone();
                                                     let at_cap = d.tournament.max_team_size_roster.map(|max| d.current_team_size >= max).unwrap_or(false);
                                                     rsx! {
                                                         tr { key: "{invitation.registration.id}",
@@ -91,42 +84,10 @@ pub fn Invitations(url: String) -> Element {
                                                             td { class: "table-copy", "data-label": "Jersey name", "{invitation.registration.jersey_name.as_deref().unwrap_or(\"N/A\")}" }
                                                             td { class: "table-number", "data-label": "Jersey number", "{invitation.registration.jersey_number.as_deref().unwrap_or(\"N/A\")}" }
                                                             td { class: "roster-actions", "data-label": "Actions",
-                                                                div { class: "btn-group", role: "group",
-                                                                    button {
-                                                                        r#type: "button",
-                                                                        class: "btn btn-success btn-sm",
-                                                                        disabled: at_cap,
-                                                                        onclick: move |_| {
-                                                                            action_error.set(None);
-                                                                            let url = url_accept.clone();
-                                                                            let mut ref_sig = refresh;
-                                                                            let mut err_sig = action_error;
-                                                                            spawn(async move {
-                                                                                match api::accept_invitation(&url, inv_id).await {
-                                                                                    Ok(()) => ref_sig.set(ref_sig() + 1),
-                                                                                    Err(e) => err_sig.set(Some(e)),
-                                                                                }
-                                                                            });
-                                                                        },
-                                                                        "Accept"
-                                                                    }
-                                                                    button {
-                                                                        r#type: "button",
-                                                                        class: "btn btn-danger btn-sm",
-                                                                        onclick: move |_| {
-                                                                            action_error.set(None);
-                                                                            let url = url_decline.clone();
-                                                                            let mut ref_sig = refresh;
-                                                                            let mut err_sig = action_error;
-                                                                            spawn(async move {
-                                                                                match api::decline_invitation(&url, inv_id).await {
-                                                                                    Ok(()) => ref_sig.set(ref_sig() + 1),
-                                                                                    Err(e) => err_sig.set(Some(e)),
-                                                                                }
-                                                                            });
-                                                                        },
-                                                                        "Decline"
-                                                                    }
+                                                                InvitationActions {
+                                                                    scope_url: url.clone(), league: false,
+                                                                    registration_id: inv_id, player_name: invitation.player.name.clone(), at_capacity: at_cap,
+                                                                    refresh_epoch, on_refreshed: move |roster| confirmed.set(Some(roster)),
                                                                 }
                                                             }
                                                         }
@@ -204,10 +165,11 @@ pub fn Invitations(url: String) -> Element {
                     }
                 }
             }
-        } else if let Some(Err(e)) = val.read().as_ref() {
-            p { class: "text-danger", "{e}" }
+        } else if let Some(Err(e)) = snapshot.as_ref() {
+            p { class: "text-danger", role: "alert", "Could not load roster: {e}" }
+            button { r#type: "button", class: "btn btn-outline-secondary", onclick: move |_| refresh.set(refresh().wrapping_add(1)), "Retry loading roster" }
         } else {
-            p { "Loading…" }
+            p { role: "status", "Loading roster…" }
         }
     }
 }

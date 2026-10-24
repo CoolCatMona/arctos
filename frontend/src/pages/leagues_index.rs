@@ -1,3 +1,4 @@
+use super::directory_state::{use_directory, use_directory_scroll, Directory};
 use super::index::{final_day_has_passed, format_date_display, listing_date, UserRegBadges};
 use crate::api;
 use crate::components::{OrganizeContext, OrganizeMenu, PageIntro};
@@ -13,13 +14,20 @@ fn league_is_past(dates: Option<&LeagueEventDates>, today: NaiveDate) -> bool {
 }
 
 #[component]
+pub fn LeaguesIndexWithQuery(q: String, view: String) -> Element {
+    rsx! { LeaguesIndex {} }
+}
+
+#[component]
 pub fn LeaguesIndex() -> Element {
     let mut data = use_resource(move || async move {
         api::leagues_list().await.map_err(|error| error.to_string())
     });
-    let mut show_past = use_signal(|| false);
-    let mut search = use_signal(String::new);
+    let controls = use_directory(Directory::Leagues, true);
+    let mut search = controls.search;
+    let show_past = move || (controls.state)().past;
     let val = data.value();
+    use_directory_scroll(controls, val.read().as_ref().is_some_and(Result::is_ok));
     let today = Local::now().date_naive();
     let counts = val.read().as_ref().and_then(|result| result.as_ref().ok()).map(|response| {
         let past = response.leagues.iter().filter(|league| {
@@ -38,7 +46,7 @@ pub fn LeaguesIndex() -> Element {
                         r#type: "button",
                         class: if !show_past() { "arctos-segment is-active" } else { "arctos-segment" },
                         aria_pressed: "{!show_past()}",
-                        onclick: move |_| show_past.set(false),
+                        onclick: move |_| controls.filter(false),
                         "Active "
                         if let Some((active, _)) = counts { span { class: "arctos-count", "{active}" } }
                     }
@@ -46,7 +54,7 @@ pub fn LeaguesIndex() -> Element {
                         r#type: "button",
                         class: if show_past() { "arctos-segment is-active" } else { "arctos-segment" },
                         aria_pressed: "{show_past()}",
-                        onclick: move |_| show_past.set(true),
+                        onclick: move |_| controls.filter(true),
                         "Past "
                         if let Some((_, past)) = counts { span { class: "arctos-count", "{past}" } }
                     }
@@ -60,6 +68,8 @@ pub fn LeaguesIndex() -> Element {
                     id: "league-search", r#type: "search", class: "form-control",
                     placeholder: "Find a league…", value: "{search()}",
                     oninput: move |event| search.set(event.value()),
+                        onblur: move |_| controls.flush(),
+                        onkeydown: move |event| { if event.key() == Key::Enter { controls.flush(); } },
                 }
             }
         }
@@ -92,7 +102,7 @@ pub fn LeaguesIndex() -> Element {
                             h3 { if !query.is_empty() { "No matching leagues" } else if show_past() { "No past leagues yet" } else { "No active leagues" } }
                             p { if !query.is_empty() { "Try another league name." } else if show_past() { "Leagues appear here after their final event has ended." } else { "No leagues with current or upcoming events are listed yet." } }
                             if !query.is_empty() {
-                                button { class: "btn btn-outline-secondary", r#type: "button", onclick: move |_| search.set(String::new()), "Clear search" }
+                                button { class: "btn btn-outline-secondary", r#type: "button", onclick: move |_| controls.clear(), "Clear search" }
                             }
                         }
                     } else {

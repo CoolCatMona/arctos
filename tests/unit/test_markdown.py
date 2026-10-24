@@ -224,3 +224,13 @@ def test_render_markdown_api_returns_sanitized_html_with_existing_contract(app):
     assert "<strong>Safe</strong>" in payload["html"]
     assert "onerror" not in payload["html"]
     assert 'src="/static/example.png"' in payload["html"]
+
+
+@pytest.mark.parametrize("filename", ["docs.md", "developers.md"])
+def test_help_document_fragment_links_resolve_after_sanitization(filename):
+    """TOC/task links must target IDs retained by the production renderer."""
+    source = (Path(__file__).resolve().parents[2] / "docs" / filename).read_text()
+    nodes = Elements(render_markdown(source)).nodes
+    ids = {attrs["id"] for _, attrs in nodes if "id" in attrs}
+    fragments = {attrs["href"][1:] for tag, attrs in nodes if tag == "a" and attrs.get("href", "").startswith("#")}
+    assert fragments <= ids, f"{filename}: missing anchors {sorted(fragments - ids)}"

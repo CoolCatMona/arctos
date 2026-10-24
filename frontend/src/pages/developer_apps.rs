@@ -2,6 +2,7 @@
 
 use crate::api;
 use crate::components::{Modal, ModalKind};
+use crate::form_validation::{described_by, field_message, focus_after_render, FieldError};
 use crate::types::OAuthClient;
 use crate::Route;
 use dioxus::prelude::*;
@@ -12,6 +13,21 @@ fn redirect_uri_lines(text: &str) -> Vec<String> {
         .filter(|line| !line.is_empty())
         .map(String::from)
         .collect()
+}
+
+fn app_field_error(prefix: &str, name: &str, homepage: &str, redirects: &str) -> Option<FieldError> {
+    let invalid = if name.trim().is_empty() {
+        Some(("name", "Enter an app name."))
+    } else if !homepage.trim().is_empty()
+        && !matches!(homepage.trim().split_once(':').map(|(scheme, _)| scheme.to_ascii_lowercase()).as_deref(), Some("http" | "https")) {
+        Some(("homepage", "Use an http or https URL for the homepage."))
+    } else if redirect_uri_lines(redirects).is_empty() {
+        Some(("redirects", "Add at least one redirect URI."))
+    } else if redirect_uri_lines(redirects).len() > 10 {
+        Some(("redirects", "Add no more than 10 redirect URIs."))
+    } else { None };
+    // The service remains authoritative for redirect URI protocol validation.
+    invalid.map(|(field, message)| FieldError::new(format!("{prefix}-{field}"), message))
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -36,7 +52,7 @@ impl AppCreateAttempt {
 
 #[component]
 pub fn DeveloperApps() -> Element {
-    let me = use_resource(api::me);
+    let me = crate::auth::use_account();
     let mut refresh = use_signal(|| 0u32);
     let clients = use_resource(move || async move {
         let _ = refresh();
@@ -45,7 +61,7 @@ pub fn DeveloperApps() -> Element {
     let mut new_secret = use_signal(|| None::<(String, String)>);
     let create_pending = use_signal(|| false);
 
-    if let Some(Err(_)) = &*me.read() {
+    if let Some(Err(api::AccountError::Unauthenticated)) = &*me.read() {
         return rsx! {
             div { class: "alert alert-info",
                 "Log in to register apps. "
@@ -53,6 +69,9 @@ pub fn DeveloperApps() -> Element {
             }
         };
     }
+
+    if me.read().is_none() { return rsx! { p { role: "status", "Checking your account…" } }; }
+    if matches!(me.read().as_ref(), Some(Err(api::AccountError::Unavailable))) { return rsx! {}; }
 
     rsx! {
         h1 { "Your apps" }
@@ -112,6 +131,10 @@ fn AppCard(
     let mut homepage = use_signal(|| client.homepage_url.clone().unwrap_or_default());
     let mut redirect_uris = use_signal(|| client.redirect_uris.join("\n"));
     let mut error = use_signal(|| None::<String>);
+    let mut field_error = use_signal(|| None::<FieldError>);
+    let feedback_id = format!("app-error-{}", client.client_id);
+    let focus_id = feedback_id.clone();
+    use_effect(move || { if error().is_some() { focus_after_render(focus_id.clone()); } });
     let mut pending = use_signal(|| false);
     let mut confirm = use_signal(|| None::<bool>); // true: rotate, false: delete
     let mut confirmation_error = use_signal(|| None::<String>);
@@ -125,10 +148,14 @@ fn AppCard(
 
     let save = {
         let client_id = client_id.clone();
-        move |_| {
-            if pending() {
+        EventHandler::new(move |_| {
+            if pending() { return; }
+            if let Some(invalid) = app_field_error(&client_id, &name(), &homepage(), &redirect_uris()) {
+                focus_after_render(invalid.field_id.clone());
+                field_error.set(Some(invalid));
                 return;
             }
+            field_error.set(None);
             pending.set(true);
             error.set(None);
             let client_id = client_id.clone();
@@ -144,7 +171,7 @@ fn AppCard(
                 }
                 pending.set(false);
             });
-        }
+        })
     };
     let perform = move |_| {
         if pending() {
@@ -192,25 +219,29 @@ fn AppCard(
     rsx! {
         div { id: "app-client-{client.client_id}", class: if editing() { "edit-section mb-3" } else { "card mb-3" },
             div { class: if editing() { "edit-section-heading d-flex justify-content-between align-items-center" } else { "card-header d-flex justify-content-between align-items-center" },
-                h5 { class: "mb-0", "{client.name}" }
+                h2 { class: "h5 mb-0", "{client.name}" }
                 span { class: "badge bg-secondary", if client.confidential { "Confidential" } else { "Public" } }
             }
             div { class: if editing() { "edit-section-body" } else { "card-body" },
                 if let Some(message) = error() {
-                    div { class: "alert alert-danger py-2", role: "alert", "{message}" }
+                    div { id: feedback_id, tabindex: "-1", class: "alert alert-danger py-2", role: "alert", "{message}" }
                 }
                 p { class: "mb-1", "Client ID: " code { "{client.client_id}" } }
                 if editing() {
-                    AppFields { name, homepage, redirect_uris, prefix: client.client_id.clone(), disabled: pending() }
+                    form { onsubmit: move |event| { event.prevent_default(); save.call(()); },
+                        oninput: move |_| error.set(None),
+                    AppFields { name, homepage, redirect_uris, field_error, prefix: client.client_id.clone(), disabled: pending() }
                     div { class: "d-flex gap-2",
-                        button { class: "btn btn-primary btn-sm", disabled: pending(), onclick: save, if pending() { "Saving…" } else { "Save" } }
-                        button { class: "btn btn-outline-secondary btn-sm", disabled: pending(), onclick: move |_| {
+                        button { r#type: "submit", class: "btn btn-primary btn-sm", disabled: pending(), if pending() { "Saving…" } else { "Save" } }
+                        button { r#type: "button", class: "btn btn-outline-secondary btn-sm", disabled: pending(), onclick: move |_| {
                             name.set(original.name.clone());
                             homepage.set(original.homepage_url.clone().unwrap_or_default());
                             redirect_uris.set(original.redirect_uris.join("\n"));
                             error.set(None);
+                            field_error.set(None);
                             editing.set(false);
                         }, "Cancel" }
+                    }
                     }
                 } else {
                     if let Some(homepage) = client.homepage_url.as_ref() {
@@ -265,35 +296,49 @@ fn AppCard(
 
 #[component]
 fn AppFields(
-    name: Signal<String>,
-    homepage: Signal<String>,
-    redirect_uris: Signal<String>,
+    mut name: Signal<String>,
+    mut homepage: Signal<String>,
+    mut redirect_uris: Signal<String>,
+    mut field_error: Signal<Option<FieldError>>,
     prefix: String,
     disabled: bool,
 ) -> Element {
+    let name_id = format!("{prefix}-name");
+    let homepage_id = format!("{prefix}-homepage");
+    let redirects_id = format!("{prefix}-redirects");
     rsx! {
         div { class: "mb-2",
-            label { class: "form-label", r#for: "{prefix}-name", "Name" }
-            input { id: "{prefix}-name", disabled, class: "form-control", value: "{name}", oninput: move |e| name.set(e.value()) }
-            div { class: "form-text", "Shown to people when they sign in." }
+            label { class: "form-label", r#for: name_id.clone(), "Name" }
+            input { id: name_id.clone(), disabled, required: true, class: "form-control", value: "{name}",
+                aria_invalid: field_message(&field_error(), &name_id).is_some(),
+                aria_describedby: described_by(&field_error(), &name_id, &format!("{name_id}-help")),
+                oninput: move |e| { name.set(e.value()); field_error.set(None); } }
+            div { id: "{name_id}-help", class: "form-text", "Shown to people when they sign in." }
+            if let Some(message) = field_message(&field_error(), &name_id) { p { id: "{name_id}-error", class: "text-danger small mt-1", "{message}" } }
         }
         div { class: "mb-2",
-            label { class: "form-label", r#for: "{prefix}-homepage", "Homepage (optional)" }
-            input { id: "{prefix}-homepage", disabled, class: "form-control", value: "{homepage}", oninput: move |e| homepage.set(e.value()) }
+            label { class: "form-label", r#for: homepage_id.clone(), "Homepage (optional)" }
+            input { id: homepage_id.clone(), disabled, class: "form-control", value: "{homepage}",
+                inputmode: "url", autocapitalize: "none", spellcheck: "false",
+                aria_invalid: field_message(&field_error(), &homepage_id).is_some(),
+                aria_describedby: described_by(&field_error(), &homepage_id, ""),
+                oninput: move |e| { homepage.set(e.value()); field_error.set(None); } }
+            if let Some(message) = field_message(&field_error(), &homepage_id) { p { id: "{homepage_id}-error", class: "text-danger small mt-1", "{message}" } }
         }
         div { class: "mb-2",
-            label { class: "form-label", r#for: "{prefix}-redirects", "Redirect URIs" }
-            textarea {
-                id: "{prefix}-redirects", disabled,
-                class: "form-control font-monospace",
-                rows: "3",
-                value: "{redirect_uris}",
-                oninput: move |e| redirect_uris.set(e.value()),
+            label { class: "form-label", r#for: redirects_id.clone(), "Redirect URIs" }
+            textarea { id: redirects_id.clone(), disabled, required: true,
+                class: "form-control font-monospace", rows: "3", value: "{redirect_uris}",
+                autocapitalize: "none", spellcheck: "false",
+                aria_invalid: field_message(&field_error(), &redirects_id).is_some(),
+                aria_describedby: described_by(&field_error(), &redirects_id, &format!("{redirects_id}-help")),
+                oninput: move |e| { redirect_uris.set(e.value()); field_error.set(None); },
                 placeholder: "https://example.com/callback\nhttp://127.0.0.1/callback",
             }
-            div { class: "form-text",
-                "One per line. Use https, or http://127.0.0.1/… for apps running on the user's computer (any port is accepted)."
+            div { id: "{redirects_id}-help", class: "form-text",
+                "One per line, up to 10. Use https, an http loopback address (127.0.0.1, [::1], or localhost), or a private scheme such as com.example.app:/callback. Loopback ports may vary."
             }
+            if let Some(message) = field_message(&field_error(), &redirects_id) { p { id: "{redirects_id}-error", class: "text-danger small mt-1", "{message}" } }
         }
     }
 }
@@ -309,6 +354,8 @@ fn NewAppCard(
     let mut redirect_uris = use_signal(String::new);
     let mut confidential = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
+    let mut field_error = use_signal(|| None::<FieldError>);
+    use_effect(move || { if error().is_some() { focus_after_render("app-create-error"); } });
     let mut uncertain = use_signal(|| None::<AppCreateAttempt>);
     let mut recovered = use_signal(Vec::<OAuthClient>::new);
 
@@ -345,66 +392,14 @@ fn NewAppCard(
         });
     });
 
-    rsx! {
-        div { class: "edit-section mb-3",
-            div { class: "edit-section-heading", h5 { class: "mb-0", "Register a new app" } }
-            div { class: "edit-section-body",
-                if let Some(message) = error() {
-                    div { class: "alert alert-danger py-2", role: "alert", "{message}" }
-                }
-                if !recovered().is_empty() {
-                    div { id: "app-create-recovery", class: "alert alert-warning", role: "status",
-                        p { "Matching new app registrations were found. Nothing was registered again." }
-                        ul { class: "mb-0",
-                            for client in recovered() {
-                                li { key: "{client.client_id}",
-                                    strong { "{client.name}" }
-                                    " was created. "
-                                    if client.confidential {
-                                        "Its one-time secret is unavailable because the response was lost. "
-                                        a { href: "#app-secret-{client.client_id}", "Choose New secret for this app" }
-                                        " to review and confirm a replacement."
-                                    } else {
-                                        "This public app does not use a client secret. "
-                                        a { href: "#app-client-{client.client_id}", "Review app" }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                AppFields { name, homepage, redirect_uris, prefix: "new-app", disabled: pending() || uncertain().is_some() }
-                div { class: "mb-3",
-                    div { class: "form-check",
-                        input {
-                            class: "form-check-input",
-                            r#type: "radio",
-                            id: "app-public", name: "app-kind", disabled: pending() || uncertain().is_some(),
-                            checked: !confidential(),
-                            onchange: move |_| confidential.set(false),
-                        }
-                        label { class: "form-check-label", r#for: "app-public",
-                            "Public: runs on the user's device (desktop, mobile, or browser app) and can't keep a secret. Uses PKCE."
-                        }
-                    }
-                    div { class: "form-check",
-                        input {
-                            class: "form-check-input",
-                            r#type: "radio",
-                            id: "app-confidential", name: "app-kind", disabled: pending() || uncertain().is_some(),
-                            checked: confidential(),
-                            onchange: move |_| confidential.set(true),
-                        }
-                        label { class: "form-check-label", r#for: "app-confidential",
-                            "Confidential: runs on a server you control and can keep a client secret."
-                        }
-                    }
-                }
-                button {
-                    class: "btn btn-primary",
-                    disabled: pending() || secret_pending || uncertain().is_some(),
-                    onclick: move |_| {
+    let create = EventHandler::new(move |_| {
                         if pending() || secret_pending || uncertain().is_some() { return; }
+                        if let Some(invalid) = app_field_error("new-app", &name(), &homepage(), &redirect_uris()) {
+                            focus_after_render(invalid.field_id.clone());
+                            field_error.set(Some(invalid));
+                            return;
+                        }
+                        field_error.set(None);
                         pending.set(true);
                         error.set(None);
                         recovered.set(Vec::new());
@@ -441,11 +436,74 @@ fn NewAppCard(
                             }
                             pending.set(false);
                         });
-                    },
+    });
+
+    rsx! {
+        div { class: "edit-section mb-3",
+            div { class: "edit-section-heading", h2 { class: "h5 mb-0", "Register a new app" } }
+            div { class: "edit-section-body",
+                if let Some(message) = error() {
+                    div { id: "app-create-error", tabindex: "-1", class: "alert alert-danger py-2", role: "alert", "{message}" }
+                }
+                if !recovered().is_empty() {
+                    div { id: "app-create-recovery", class: "alert alert-warning", role: "status",
+                        p { "Matching new app registrations were found. Nothing was registered again." }
+                        ul { class: "mb-0",
+                            for client in recovered() {
+                                li { key: "{client.client_id}",
+                                    strong { "{client.name}" }
+                                    " was created. "
+                                    if client.confidential {
+                                        "Its one-time secret is unavailable because the response was lost. "
+                                        a { href: "#app-secret-{client.client_id}", "Choose New secret for this app" }
+                                        " to review and confirm a replacement."
+                                    } else {
+                                        "This public app does not use a client secret. "
+                                        a { href: "#app-client-{client.client_id}", "Review app" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                form { onsubmit: move |event| { event.prevent_default(); create.call(()); },
+                    oninput: move |_| error.set(None),
+                AppFields { name, homepage, redirect_uris, field_error, prefix: "new-app", disabled: pending() || uncertain().is_some() }
+                fieldset { class: "mb-3",
+                    legend { class: "form-label fs-6", "App type" }
+                    div { class: "form-check",
+                        input {
+                            class: "form-check-input",
+                            r#type: "radio",
+                            id: "app-public", name: "app-kind", disabled: pending() || uncertain().is_some(),
+                            checked: !confidential(),
+                            onchange: move |_| confidential.set(false),
+                        }
+                        label { class: "form-check-label", r#for: "app-public",
+                            "Public: runs on the user's device (desktop, mobile, or browser app) and can't keep a secret. Uses PKCE."
+                        }
+                    }
+                    div { class: "form-check",
+                        input {
+                            class: "form-check-input",
+                            r#type: "radio",
+                            id: "app-confidential", name: "app-kind", disabled: pending() || uncertain().is_some(),
+                            checked: confidential(),
+                            onchange: move |_| confidential.set(true),
+                        }
+                        label { class: "form-check-label", r#for: "app-confidential",
+                            "Confidential: runs on a server you control and can keep a client secret."
+                        }
+                    }
+                }
+                button {
+                    r#type: "submit", class: "btn btn-primary",
+                    disabled: pending() || secret_pending || uncertain().is_some(),
                     if pending() { "Checking…" } else { "Register app" }
                 }
                 if uncertain().is_some() {
-                    button { class: "btn btn-outline-secondary ms-2", disabled: pending(), onclick: move |_| check_saved.call(()), "Check saved apps" }
+                    button { r#type: "button", class: "btn btn-outline-secondary ms-2", disabled: pending(), onclick: move |_| check_saved.call(()), "Check saved apps" }
+                }
                 }
             }
         }
@@ -455,6 +513,16 @@ fn NewAppCard(
 #[cfg(test)]
 mod recovery_tests {
     use super::*;
+
+    #[test]
+    fn app_preflight_identifies_fields_and_leaves_redirect_protocols_to_service() {
+        assert_eq!(app_field_error("new-app", " ", "", "").unwrap().field_id, "new-app-name");
+        assert_eq!(app_field_error("edit", "App", "ftp://example.com", "https://example.com").unwrap().field_id, "edit-homepage");
+        assert_eq!(app_field_error("edit", "App", "", "\n ").unwrap().field_id, "edit-redirects");
+        assert!(app_field_error("edit", "App", "HTTPS://example.com", "com.example.app:/callback\nhttp://[::1]/callback\nhttp://localhost/callback").is_none());
+        assert!(app_field_error("edit", "App", "", &vec!["https://example.com"; 10].join("\n")).is_none());
+        assert_eq!(app_field_error("edit", "App", "", &vec!["https://example.com"; 11].join("\n")).unwrap().field_id, "edit-redirects");
+    }
 
     fn attempt() -> AppCreateAttempt {
         AppCreateAttempt {

@@ -173,7 +173,7 @@ pub fn TeamProfile(id: Signal<String>, tab: String) -> Element {
         let i = sid().clone();
         async move { api::team_profile(&i).await.map_err(|e| e.to_string()) }
     }));
-    let me = use_resource(move || async move { api::me().await });
+    let me = crate::auth::use_account();
     let val = data.value();
     let backend = api::base_url();
 

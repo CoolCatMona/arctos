@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 #[component]
 pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
     let navigator = use_navigator();
-    let detail = use_resource(move || async move { api::sidecomp_detail(comp_id).await });
+    let mut detail = use_resource(move || async move { api::sidecomp_detail(comp_id).await });
 
     let mut name = use_signal(String::new);
     let mut type_ = use_signal(String::new);
@@ -22,9 +22,10 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
     let mut initialised = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let mut submitting = use_signal(|| false);
+    let mut deleting = use_signal(|| false);
 
     if !initialised() {
-        if let Some(Ok(d)) = detail.read().as_ref() {
+        if let Some(Ok(d)) = detail.read().as_ref().filter(|result| result.as_ref().is_ok_and(|d| d.viewer_is_to)) {
             name.set(d.name.clone());
             type_.set(d.type_.clone());
             description.set(d.description.clone().unwrap_or_default());
@@ -78,10 +79,18 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                     title: "Edit side competition",
                     back: Some((Route::SideCompDetail { url: url_for_back.clone(), comp_id }, "Back to side competition".into())),
                 }
+                match detail.read().as_ref() {
+                    None => rsx! { p { role: "status", "Loading side competition…" } },
+                    Some(Err(message)) => rsx! {
+                        p { class: "text-danger", role: "alert", "Could not load side competition: {message}" }
+                        button { r#type: "button", class: "btn btn-outline-secondary", onclick: move |_| detail.restart(), "Retry loading side competition" }
+                    },
+                    Some(Ok(d)) if !d.viewer_is_to => rsx! { p { role: "alert", "Only an organizer can edit this side competition." } },
+                    Some(Ok(_)) => rsx! {
                 form {
                     onsubmit: move |evt| {
                         evt.prevent_default();
-                        if submitting() { return; }
+                        if submitting() || deleting() || !initialised() { return; }
                         let url_inner = url_for_submit.clone();
                         let n = name();
                         let t = type_();
@@ -131,6 +140,7 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                             submitting.set(false);
                         });
                     },
+                    fieldset { disabled: submitting() || deleting(),
                     div { class: "mb-3",
                         label { class: "form-label", r#for: "sidecomp-name", "Name" }
                         input {
@@ -288,30 +298,15 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                     div { class: "form-actions",
                         button { class: "btn btn-primary", r#type: "submit", disabled: submitting(), if submitting() { "Saving…" } else { "Save" } }
                     }
+                    }
                 }
                 hr {}
-                button {
-                    class: "btn btn-outline-danger", r#type: "button", disabled: submitting(),
-                    onclick: move |_| {
-                        if submitting() { return; }
-                        let confirmed = web_sys::window().and_then(|window| window.confirm_with_message("Delete this side competition and its registrations and results? This cannot be undone.").ok()).unwrap_or(false);
-                        if !confirmed { return; }
-                        submitting.set(true);
-                        let url_inner = url_for_delete.clone();
-                        spawn(async move {
-                            match api::sidecomp_delete(comp_id).await {
-                                Ok(_) => {
-                                    navigator.push(Route::TournamentHomeWithTab {
-                                        url: url_inner,
-                                        tab: "sidecomps".to_string(),
-                                    });
-                                }
-                                Err(e) => error.set(Some(e)),
-                            }
-                            submitting.set(false);
-                        });
+                super::tournament_home::SideCompDeleteAction {
+                    url: url_for_delete.clone(), comp_id, name: name(), full_label: true, disabled: submitting(),
+                    on_blocked: move |blocked| deleting.set(blocked),
+                    on_deleted: move |_| { navigator.push(Route::TournamentHomeWithTab { url: url_for_delete.clone(), tab: "sidecomps".into() }); },
+                }
                     },
-                    "Delete this side competition"
                 }
             }
         }

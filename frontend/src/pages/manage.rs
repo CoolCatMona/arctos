@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::ToolPageHeader;
+use crate::components::{RequestEpoch, ToolPageHeader};
 use crate::components::{PaymentStatusBadge, RegistrationStatusBadge, WaiverStatusBadge};
 use crate::types::{
     PlayerListItem, RegisterPlayerAsToResponse, RegisterTeamAsToResponse, TeamListItem,
@@ -78,6 +78,9 @@ pub fn Manage(url: String) -> Element {
     let mut player_search_query = use_signal(String::new);
     let mut player_search_results = use_signal(Vec::<PlayerListItem>::new);
     let mut player_searching = use_signal(|| false);
+    let mut player_search_error = use_signal(|| None::<String>);
+    let mut player_search_retry = use_signal(|| 0u32);
+    let mut player_search_epoch = use_signal(RequestEpoch::default);
     let mut selected_player = use_signal(|| None::<PlayerListItem>);
     let mut selected_team = use_signal(String::new);
     let mut jersey_number = use_signal(String::new);
@@ -90,6 +93,9 @@ pub fn Manage(url: String) -> Element {
     let mut team_search_query = use_signal(String::new);
     let mut team_search_results = use_signal(Vec::<TeamListItem>::new);
     let mut team_searching = use_signal(|| false);
+    let mut team_search_error = use_signal(|| None::<String>);
+    let mut team_search_retry = use_signal(|| 0u32);
+    let mut team_search_epoch = use_signal(RequestEpoch::default);
     let mut selected_team_for_register = use_signal(|| None::<TeamListItem>);
     let mut team_pseudonym_input = use_signal(String::new);
     let mut team_shortname_input = use_signal(String::new);
@@ -98,35 +104,41 @@ pub fn Manage(url: String) -> Element {
     // Session log for Quick Register tab
     let mut session_log = use_signal(Vec::<SessionLogEntry>::new);
 
-    // Player search effect
+    // Ignore responses for an older query, retry, or cleared selection.
     use_effect(move || {
         let q = player_search_query();
-        if q.trim().is_empty() {
-            player_search_results.set(Vec::new());
-            return;
-        }
-        player_searching.set(true);
+        let _ = player_search_retry();
+        let request = player_search_epoch.write().next();
+        player_search_results.set(Vec::new());
+        player_search_error.set(None);
+        player_searching.set(!q.trim().is_empty());
+        if q.trim().is_empty() { return; }
         spawn(async move {
-            match api::players_list(&q, 1).await {
+            let response = api::players_list(&q, 1).await;
+            if !player_search_epoch.peek().is_current(request) || *player_search_query.peek() != q { return; }
+            match response {
                 Ok(resp) => player_search_results.set(resp.players),
-                Err(_) => player_search_results.set(Vec::new()),
+                Err(error) => player_search_error.set(Some(error)),
             }
             player_searching.set(false);
         });
     });
 
-    // Team search effect
+    // Ignore responses for an older query, retry, or cleared selection.
     use_effect(move || {
         let q = team_search_query();
-        if q.trim().is_empty() {
-            team_search_results.set(Vec::new());
-            return;
-        }
-        team_searching.set(true);
+        let _ = team_search_retry();
+        let request = team_search_epoch.write().next();
+        team_search_results.set(Vec::new());
+        team_search_error.set(None);
+        team_searching.set(!q.trim().is_empty());
+        if q.trim().is_empty() { return; }
         spawn(async move {
-            match api::teams_list(&q).await {
+            let response = api::teams_list(&q).await;
+            if !team_search_epoch.peek().is_current(request) || *team_search_query.peek() != q { return; }
+            match response {
                 Ok(resp) => team_search_results.set(resp.teams),
-                Err(_) => team_search_results.set(Vec::new()),
+                Err(error) => team_search_error.set(Some(error)),
             }
             team_searching.set(false);
         });
@@ -533,8 +545,8 @@ pub fn Manage(url: String) -> Element {
                     strong { "Note: " }
                     "Quick Register bypasses payment (registration is marked paid for $0) and skips the usual approval steps (registrations land as confirmed immediately)."
                 }
-                // Sub-tab pills: Players / Teams
-                ul { class: "nav nav-pills mb-3",
+                // Registration type tabs use the shared theme and touch targets.
+                ul { class: "nav nav-tabs mb-3",
                     li { class: "nav-item",
                         button {
                             r#type: "button",
@@ -575,11 +587,17 @@ pub fn Manage(url: String) -> Element {
                                         r#type: "text",
                                         class: "form-control mb-2",
                                         placeholder: "Search by name or username",
+                                        aria_label: "Search players by name or username",
                                         value: "{player_search_query()}",
                                         oninput: move |e| player_search_query.set(e.value()),
                                     }
                                     if player_searching() {
-                                        p { class: "text-muted small mb-0", "Searching..." }
+                                        p { class: "text-muted small mb-0", role: "status", "Searching…" }
+                                    } else if let Some(message) = player_search_error() {
+                                        p { class: "text-danger small", role: "alert", "Could not search: {message}" }
+                                        button { r#type: "button", class: "btn btn-outline-secondary btn-sm", onclick: move |_| player_search_retry.set(player_search_retry().wrapping_add(1)), "Retry search" }
+                                    } else if !player_search_query().trim().is_empty() && player_search_results().is_empty() {
+                                        p { class: "text-muted small mb-0", "No matching players found." }
                                     }
                                     if !player_search_results().is_empty() {
                                         ul { class: "list-group",
@@ -795,11 +813,17 @@ pub fn Manage(url: String) -> Element {
                                         r#type: "text",
                                         class: "form-control mb-2",
                                         placeholder: "Search by team name or username",
+                                        aria_label: "Search teams by name or username",
                                         value: "{team_search_query()}",
                                         oninput: move |e| team_search_query.set(e.value()),
                                     }
                                     if team_searching() {
-                                        p { class: "text-muted small mb-0", "Searching..." }
+                                        p { class: "text-muted small mb-0", role: "status", "Searching…" }
+                                    } else if let Some(message) = team_search_error() {
+                                        p { class: "text-danger small", role: "alert", "Could not search: {message}" }
+                                        button { r#type: "button", class: "btn btn-outline-secondary btn-sm", onclick: move |_| team_search_retry.set(team_search_retry().wrapping_add(1)), "Retry search" }
+                                    } else if !team_search_query().trim().is_empty() && team_search_results().is_empty() {
+                                        p { class: "text-muted small mb-0", "No matching teams found." }
                                     }
                                     if !team_search_results().is_empty() {
                                         ul { class: "list-group",

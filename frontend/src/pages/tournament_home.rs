@@ -1,13 +1,13 @@
 use crate::api;
 use crate::components::{
-    EditRegistrationContext, EditRegistrationModal, EventAbout, EventBannerPhoto, EventHeader, EventTab, EventTabs,
-    EventTeamsList, LeagueRegistrationButtons, OrganizerTools, PompfenIcon,
+    ActionRecovery, EditRegistrationContext, EditRegistrationModal, EventAbout, EventBannerPhoto, EventHeader, EventTab, EventTabs,
+    EventTeamsList, LeagueRegistrationButtons, Modal, ModalKind, OrganizerTools, PompfenIcon,
 };
 use crate::types::{ToEntry, User};
 use crate::Route;
 use dioxus::prelude::*;
 
-fn is_current_user_to(me: Option<&Result<User, String>>, to_entries: &[ToEntry]) -> bool {
+fn is_current_user_to(me: Option<&Result<User, api::AccountError>>, to_entries: &[ToEntry]) -> bool {
     me.and_then(|r| r.as_ref().ok()).map_or(false, |u| {
         to_entries
             .iter()
@@ -54,7 +54,7 @@ pub fn TournamentHomeContent(
         let u = url_for_data.clone();
         async move { api::tournament_detail(&u).await.map_err(|e| e.to_string()) }
     });
-    let me_res = use_resource(move || async move { api::me().await });
+    let me_res = crate::auth::use_account();
     let val = data.value();
     let backend = api::base_url();
     let mut delete_modal_open = use_signal(|| false);
@@ -93,7 +93,7 @@ pub fn TournamentHomeContent(
     });
 
     let url_for_sidecomps = url.clone();
-    let sidecomps = use_resource(move || {
+    let mut sidecomps = use_resource(move || {
         let u = url_for_sidecomps.clone();
         let has_overview = show_overview();
         async move {
@@ -142,7 +142,7 @@ pub fn TournamentHomeContent(
                     registration_open: team_open || player_open,
                     badge_league_url: league.map(|l| l.league_url.clone()),
                     badge_name: league.map(|l| l.name.clone()),
-                    if content.is_none() || matches!(active_tab.as_str(), "schedule" | "results" | "bracket") {
+                    if (content.is_none() || matches!(active_tab.as_str(), "schedule" | "results" | "bracket")) && !matches!(me_res.read().as_ref(), Some(Err(api::AccountError::Unavailable))) {
                     div { class: "event-participant-actions", role: "group", aria_label: "Event registration",
                     if let Some(ref l) = d.tournament.league {
                         LeagueRegistrationButtons {
@@ -211,7 +211,7 @@ pub fn TournamentHomeContent(
                                     }
                                 }
                             }
-                        } else if team_open || player_open {
+                        } else if matches!(me_res.read().as_ref(), Some(Err(api::AccountError::Unauthenticated))) && (team_open || player_open) {
                             a {
                                 href: format!("/login?next={}", urlencoding::encode(&format!("/{url}/register"))),
                                 class: "btn btn-primary event-registration-action",
@@ -356,7 +356,7 @@ pub fn TournamentHomeContent(
                                                             rsx! {
                                                                 li {
                                                                     key: "{comp_id}",
-                                                                    class: "list-group-item d-flex justify-content-between align-items-center p-0",
+                                                                    class: "list-group-item d-flex flex-wrap justify-content-between align-items-center p-0",
                                                                     Link {
                                                                         to: Route::SideCompDetail { url: url.clone(), comp_id },
                                                                         class: "text-decoration-none text-reset p-3 flex-grow-1",
@@ -390,44 +390,17 @@ pub fn TournamentHomeContent(
                                                                         }
                                                                     }
                                                                     if viewer_is_to {
-                                                                        div { class: "d-flex gap-1 px-3",
+                                                                        div { class: "d-flex align-items-start gap-1 px-3",
                                                                             Link {
                                                                                 to: Route::SideCompEdit { url: url.clone(), comp_id },
-                                                                                class: "btn btn-sm btn-outline-secondary",
+                                                                                class: "btn btn-sm btn-outline-secondary flex-shrink-0",
+                                                                                style: "min-width: 44px; min-height: 44px;",
                                                                                 title: "Edit",
                                                                                 aria_label: "Edit {row.name}",
                                                                                 i { class: "fas fa-pen", aria_hidden: "true" }
                                                                             }
-                                                                            button {
-                                                                                class: "btn btn-sm btn-outline-danger",
-                                                                                title: "Delete",
-                                                                                aria_label: "Delete {row.name}",
-                                                                                onclick: move |_| {
-                                                                                    let confirmed = web_sys::window()
-                                                                                        .and_then(|w| w
-                                                                                            .confirm_with_message(&format!(
-                                                                                                "Delete '{}'? This cannot be undone.",
-                                                                                                row_name
-                                                                                            ))
-                                                                                            .ok())
-                                                                                        .unwrap_or(false);
-                                                                                    if !confirmed {
-                                                                                        return;
-                                                                                    }
-                                                                                    spawn(async move {
-                                                                                        match api::sidecomp_delete(comp_id).await {
-                                                                                            Ok(_) => {
-                                                                                                sidecomps_for_row.restart();
-                                                                                            }
-                                                                                            Err(e) => {
-                                                                                                web_sys::console::error_1(
-                                                                                                    &format!("sidecomp_delete failed: {}", e).into(),
-                                                                                                );
-                                                                                            }
-                                                                                        }
-                                                                                    });
-                                                                                },
-                                                                                i { class: "fas fa-trash", aria_hidden: "true" }
+                                                                            SideCompDeleteAction { url: url.clone(), comp_id, name: row_name,
+                                                                                on_deleted: move |_| sidecomps_for_row.restart(),
                                                                             }
                                                                         }
                                                                     }
@@ -439,7 +412,7 @@ pub fn TournamentHomeContent(
                                             }
                                         }
                                     }
-                                    Some(Err(error)) => rsx! { p { role: "alert", class: "text-danger", "Could not load side competitions: {error}" } },
+                                    Some(Err(error)) => rsx! { p { role: "alert", class: "text-danger", "Could not load side competitions: {error}" } button { r#type: "button", class: "btn btn-outline-secondary", onclick: move |_| sidecomps.restart(), "Retry loading side competitions" } },
                                     None => rsx! { p { role: "status", "Loading side competitions…" } },
                                 }
 
@@ -576,6 +549,75 @@ pub fn TournamentHomeContent(
             p { class: "text-danger", role: "alert", "{e}" }
         } else {
             p { class: "text-muted", role: "status", "Loading…" }
+        }
+    }
+}
+
+
+/// Shared by the overview and edit page; a failed DELETE is checked before retry.
+#[component]
+pub(super) fn SideCompDeleteAction(
+    url: String, comp_id: i32, name: String, on_deleted: EventHandler<()>,
+    #[props(default = false)] full_label: bool,
+    #[props(default = false)] disabled: bool,
+    #[props(default)] on_blocked: EventHandler<bool>,
+) -> Element {
+    let mut state = use_signal(ActionRecovery::default);
+    let mut confirm_delete = use_signal(|| false);
+    let accessible_name = format!("Delete {name}");
+    let mut action = move |send_delete: bool| {
+        if disabled || state().busy() || (send_delete && state().blocks_write()) { return; }
+        state.set(if send_delete { ActionRecovery::Pending } else { ActionRecovery::Checking });
+        on_blocked.call(true);
+        let url = url.clone();
+        spawn(async move {
+            let result = if send_delete { api::sidecomp_delete(comp_id).await.map(|_| ()) } else { Err("Delete was not confirmed.".into()) };
+            if result.is_ok() { on_deleted.call(()); return; }
+            let message = result.err().unwrap_or_default();
+            state.set(ActionRecovery::Checking);
+            let present = api::sidecomps_list(&url).await.map(|rows| rows.iter().any(|row| row.id == comp_id));
+            let next = ActionRecovery::after_check(present, &message);
+            if next == ActionRecovery::Idle { on_deleted.call(()); }
+            on_blocked.call(next.blocks_write());
+            state.set(next);
+        });
+    };
+    let mut check = action.clone();
+    rsx! {
+        div { class: "d-flex flex-column align-items-start", style: "min-width: 0; max-width: min(18rem, 100%);", aria_busy: state().busy(),
+            button { id: "sidecomp-delete-trigger-{comp_id}", r#type: "button", class: "btn btn-sm btn-outline-danger", disabled: disabled || state().blocks_write(),
+                aria_label: accessible_name, aria_haspopup: "dialog", onclick: move |_| confirm_delete.set(true),
+                if full_label { "Delete this side competition" } else { i { class: "fas fa-trash", aria_hidden: "true" } }
+            }
+            if state().busy() { p { class: "small mb-0", role: "status", "Checking deletion…" } }
+            if let Some(message) = state().message() { p { class: "small text-danger mb-0", role: "alert", "{message}" } }
+            if matches!(state(), ActionRecovery::NeedsCheck(_)) { button { r#type: "button", class: "btn btn-sm btn-outline-secondary", onclick: move |_| check(false), "Check deletion status" } }
+        }
+        if confirm_delete() {
+            Modal {
+                id: format!("sidecomp-delete-confirmation-{comp_id}"),
+                labelled_by: format!("sidecomp-delete-title-{comp_id}"),
+                described_by: Some(format!("sidecomp-delete-description-{comp_id}")),
+                initial_focus_id: Some(format!("sidecomp-delete-cancel-{comp_id}")),
+                return_focus_id: Some(format!("sidecomp-delete-trigger-{comp_id}")),
+                kind: ModalKind::AlertDialog,
+                dismissible: !state().busy(),
+                on_close: move |_| { if !state().busy() { confirm_delete.set(false); } },
+                div { class: "modal-header",
+                    h2 { id: "sidecomp-delete-title-{comp_id}", class: "modal-title h5", "Delete {name}?" }
+                }
+                div { class: "modal-body",
+                    p { id: "sidecomp-delete-description-{comp_id}", "This permanently deletes the side competition, its registrations, and its results. This cannot be undone." }
+                }
+                div { class: "modal-footer",
+                    button { id: "sidecomp-delete-cancel-{comp_id}", r#type: "button", class: "btn btn-secondary", disabled: state().busy(),
+                        onclick: move |_| confirm_delete.set(false), "Cancel"
+                    }
+                    button { r#type: "button", class: "btn btn-danger", disabled: disabled || state().blocks_write(),
+                        onclick: move |_| { confirm_delete.set(false); action(true); }, "Delete side competition"
+                    }
+                }
+            }
         }
     }
 }

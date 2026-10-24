@@ -1,5 +1,6 @@
 use crate::api;
 use crate::components::ToolPageHeader;
+use crate::form_validation::{described_by, field_message, focus_after_render, FieldError};
 use crate::url_slug::{is_valid_url_slug, URL_SLUG_ALLOWED_HINT};
 use crate::Route;
 use dioxus::prelude::*;
@@ -17,13 +18,15 @@ fn get_form_value(id: &str) -> String {
 pub fn NewLeague() -> Element {
     let navigator = use_navigator();
     let mut error = use_signal(|| None::<String>);
+    let mut field_error = use_signal(|| None::<FieldError>);
     let mut busy = use_signal(|| false);
-    let user = use_resource(move || async move { api::me().await });
+    let user = crate::auth::use_account();
+    use_effect(move || { if error().is_some() { focus_after_render("create-error"); } });
 
     if user.read().is_none() {
         return rsx! { div { class: "loading-state", role: "status", "Checking your account…" } };
     }
-    if !matches!(user.read().as_ref(), Some(Ok(_))) {
+    if matches!(user.read().as_ref(), Some(Err(api::AccountError::Unauthenticated))) {
         return rsx! {
             div { class: "row justify-content-center form-page",
                 div { class: "col-12 ordinary-form-rail",
@@ -42,6 +45,10 @@ pub fn NewLeague() -> Element {
         };
     }
 
+    if matches!(user.read().as_ref(), Some(Err(api::AccountError::Unavailable))) {
+        return rsx! {};
+    }
+
     rsx! {
         div { class: "row justify-content-center form-page",
             div { class: "col-12 ordinary-form-rail",
@@ -53,22 +60,30 @@ pub fn NewLeague() -> Element {
                     }
                     div { class: "edit-section-body",
                         if let Some(ref err) = error() {
-                            div { class: "alert alert-danger mb-3", role: "alert", "{err}" }
+                            div { id: "create-error", tabindex: "-1", class: "alert alert-danger mb-3", role: "alert", "{err}" }
                         }
                         p { class: "form-text mb-4", "Next, you’ll go to Settings to set registration, fees, and waivers. Your league stays private until you publish it." }
                         form {
+                            oninput: move |_| { field_error.set(None); error.set(None); },
                             onsubmit: move |ev| {
                                 ev.prevent_default();
                                 if busy() { return; }
                                 error.set(None);
                                 let league_name = get_form_value("league_name").trim().to_string();
                                 let league_url = get_form_value("league_url").trim().to_string();
-                                if league_name.is_empty() || league_url.is_empty() {
-                                    error.set(Some("League name and URL slug are required.".to_string()));
+                                if league_name.is_empty() {
+                                    field_error.set(Some(FieldError::new("league_name", "Enter a name.")));
+                                    focus_after_render("league_name");
+                                    return;
+                                }
+                                if league_url.is_empty() {
+                                    field_error.set(Some(FieldError::new("league_url", "Enter a URL slug.")));
+                                    focus_after_render("league_url");
                                     return;
                                 }
                                 if !is_valid_url_slug(&league_url) {
-                                    error.set(Some(URL_SLUG_ALLOWED_HINT.to_string()));
+                                    field_error.set(Some(FieldError::new("league_url", URL_SLUG_ALLOWED_HINT)));
+                                    focus_after_render("league_url");
                                     return;
                                 }
                                 busy.set(true);
@@ -94,7 +109,10 @@ pub fn NewLeague() -> Element {
                             },
                             div { class: "mb-3",
                                 label { r#for: "league_name", class: "form-label", "League Name" }
-                                input { r#type: "text", class: "form-control", id: "league_name", name: "league_name", required: true }
+                                input { r#type: "text", class: "form-control", id: "league_name", name: "league_name", required: true,
+                                    aria_invalid: field_message(&field_error(), "league_name").is_some(),
+                                    aria_describedby: described_by(&field_error(), "league_name", "") }
+                                if let Some(message) = field_message(&field_error(), "league_name") { p { id: "league_name-error", class: "text-danger small mt-1", "{message}" } }
                                 div { class: "form-text", "For example, NorCal League 2026" }
                             }
                             div { class: "mb-3",
@@ -103,6 +121,8 @@ pub fn NewLeague() -> Element {
                                     r#type: "text",
                                     class: "form-control",
                                     id: "league_url",
+                                    aria_invalid: field_message(&field_error(), "league_url").is_some(),
+                                    aria_describedby: described_by(&field_error(), "league_url", "league_url-help"),
                                     name: "league_url",
                                     autocomplete: "off",
                                     autocapitalize: "none",
@@ -111,7 +131,8 @@ pub fn NewLeague() -> Element {
                                     pattern: r"[A-Za-z0-9._~\-]+",
                                     title: URL_SLUG_ALLOWED_HINT,
                                 }
-                                div { class: "form-text", "Used in the URL, e.g. /leagues/norcal-2026. {URL_SLUG_ALLOWED_HINT}" }
+                                if let Some(message) = field_message(&field_error(), "league_url") { p { id: "league_url-error", class: "text-danger small mt-1", "{message}" } }
+                                div { id: "league_url-help", class: "form-text", "Used in the URL, e.g. /leagues/norcal-2026. {URL_SLUG_ALLOWED_HINT}" }
                             }
                             div { class: "form-actions",
                                 button { r#type: "submit", class: "btn btn-primary", disabled: busy(), if busy() { "Creating league…" } else { "Create league" } }

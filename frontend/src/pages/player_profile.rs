@@ -106,7 +106,7 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
     }));
     let mut injuries_state = use_signal(|| Vec::<EditableInjury>::new());
     let mut injuries_initialized_for = use_signal(|| None::<String>);
-    let me = use_resource(move || async move { api::me().await });
+    let me = crate::auth::use_account();
     let val = data.value();
     let mut injury_error = use_signal(|| None::<String>);
     let mut injury_saving = use_signal(|| false);

@@ -84,10 +84,10 @@ pub fn set_page_banner_hidden(
 
 pub fn page_banner_key(route: &Route) -> Option<String> {
     match route {
-        Route::Index {} => Some("events".into()),
-        Route::LeaguesIndex {} => Some("leagues".into()),
-        Route::PlayersList {} => Some("players".into()),
-        Route::TeamsList {} => Some("teams".into()),
+        Route::Index {} | Route::IndexWithQuery { .. } => Some("events".into()),
+        Route::LeaguesIndex {} | Route::LeaguesIndexWithQuery { .. } => Some("leagues".into()),
+        Route::PlayersList {} | Route::PlayersListWithQuery { .. } => Some("players".into()),
+        Route::TeamsList {} | Route::TeamsListWithQuery { .. } => Some("teams".into()),
         Route::Stones {} => Some("stones".into()),
         _ => None,
     }
@@ -96,7 +96,7 @@ pub fn page_banner_key(route: &Route) -> Option<String> {
 /// Returns a short page name for the tab title: "Page Name | Arctos".
 fn page_title_for_route(route: &Route) -> String {
     match route {
-        Route::Index { .. } => "Events".into(),
+        Route::Index { .. } | Route::IndexWithQuery { .. } => "Events".into(),
         Route::NotFound { .. } => "Page not found".into(),
         Route::Login { .. } => "Login".into(),
         Route::Register { .. } => "Register".into(),
@@ -128,14 +128,14 @@ fn page_title_for_route(route: &Route) -> String {
         Route::EditInjury { .. } => "Edit Injury".into(),
         Route::EditPlayerProfile { .. } => "Edit Profile".into(),
         Route::EditTeamProfile { .. } => "Edit Profile".into(),
-        Route::PlayersList { .. } => "Players".into(),
+        Route::PlayersList { .. } | Route::PlayersListWithQuery { .. } => "Players".into(),
         Route::PlayerProfilePage { id } | Route::PlayerProfilePageWithTab { id, .. } => format!("{id}"),
-        Route::TeamsList { .. } => "Teams".into(),
+        Route::TeamsList { .. } | Route::TeamsListWithQuery { .. } => "Teams".into(),
         Route::TeamProfilePage { id } | Route::TeamProfilePageWithTab { id, .. } => format!("{id}"),
         Route::Stones { .. } => "Stones".into(),
         Route::About { .. } => "About".into(),
         Route::NewTournament { .. } => "Create an Event".into(),
-        Route::LeaguesIndex { .. } => "Leagues".into(),
+        Route::LeaguesIndex { .. } | Route::LeaguesIndexWithQuery { .. } => "Leagues".into(),
         Route::CreateEvent { .. } => "Create event".into(),
         Route::NewLeague { .. } => "Create League".into(),
         Route::LeagueHome { league_url } | Route::LeagueHomeWithTab { league_url, .. } => league_url.clone(),
@@ -178,6 +178,7 @@ pub fn Layout() -> Element {
         let _ = auth_version();
         async move { api::me().await }
     });
+    provide_context(crate::auth::AccountContext(user));
     let mut account_open = use_signal(|| false);
     let mut utility_open = use_signal(|| false);
     let mut appearance_open = use_signal(|| false);
@@ -350,8 +351,14 @@ pub fn Layout() -> Element {
                                     }
                                 }
                             }
-                        } else {
+                        } else if matches!(user.read().as_ref(), Some(Err(api::AccountError::Unauthenticated))) {
                             Link { to: Route::Login {}, class: "btn btn-outline-secondary app-login", "Log in" }
+                        } else {
+                            button { r#type: "button", class: "app-icon-button", disabled: true,
+                                aria_label: if user.finished() { "Account unavailable" } else { "Checking your account" },
+                                title: if user.finished() { "Account unavailable" } else { "Checking your account" },
+                                i { class: "fa-regular fa-user", aria_hidden: "true" }
+                            }
                         }
                         div { class: "account-menu utility-menu",
                             button {
@@ -397,6 +404,7 @@ pub fn Layout() -> Element {
                 }
             }
             main { class: if event_page { "app-main event-full-width" } else { "container-wide app-main" }, id: "page-content", tabindex: "-1",
+                crate::auth::AccountCheckNotice {}
                 if let Some(error) = auth_error() {
                     div { class: "alert alert-danger", role: "alert", "Could not log out. {error}" }
                 }

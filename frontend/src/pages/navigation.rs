@@ -16,6 +16,7 @@ pub(super) fn main_section(route: &Route) -> Option<MainSection> {
     use MainSection::*;
     match route {
         Route::Index { .. }
+        | Route::IndexWithQuery { .. }
         | Route::CreateEvent { .. }
         | Route::NewTournament { .. }
         | Route::TournamentHome { .. }
@@ -44,6 +45,7 @@ pub(super) fn main_section(route: &Route) -> Option<MainSection> {
         | Route::SideCompResults { .. }
         | Route::SideCompManageResults { .. } => Some(Events),
         Route::LeaguesIndex { .. }
+        | Route::LeaguesIndexWithQuery { .. }
         | Route::NewLeague { .. }
         | Route::LeagueHome { .. }
         | Route::LeagueHomeWithTab { .. }
@@ -54,10 +56,12 @@ pub(super) fn main_section(route: &Route) -> Option<MainSection> {
         | Route::LeagueManage { .. }
         | Route::LeagueInvitations { .. } => Some(Leagues),
         Route::TeamsList { .. }
+        | Route::TeamsListWithQuery { .. }
         | Route::TeamProfilePage { .. }
         | Route::TeamProfilePageWithTab { .. }
         | Route::EditTeamProfile { .. } => Some(Teams),
         Route::PlayersList { .. }
+        | Route::PlayersListWithQuery { .. }
         | Route::PlayerProfilePage { .. }
         | Route::PlayerProfilePageWithTab { .. }
         | Route::EditPlayerProfile { .. }
@@ -94,7 +98,12 @@ pub(super) fn main_link_current(
 ) -> Option<&'static str> {
     if main_section(route) != Some(section) {
         None
-    } else if route == destination {
+    } else if route == destination || matches!((route, destination),
+        (Route::IndexWithQuery { .. }, Route::Index {})
+        | (Route::LeaguesIndexWithQuery { .. }, Route::LeaguesIndex {})
+        | (Route::PlayersListWithQuery { .. }, Route::PlayersList {})
+        | (Route::TeamsListWithQuery { .. }, Route::TeamsList {})
+    ) {
         Some("page")
     } else {
         Some("true")
@@ -303,6 +312,19 @@ mod tests {
             main_link_current(&Route::About {}, &destination, MainSection::Events),
             None
         );
+    }
+
+    #[test]
+    fn filtered_directories_keep_current_page_context() {
+        for (route, destination, section) in [
+            (Route::IndexWithQuery { q: "Open".into(), view: "past".into() }, Route::Index {}, MainSection::Events),
+            (Route::LeaguesIndexWithQuery { q: "Coast".into(), view: "past".into() }, Route::LeaguesIndex {}, MainSection::Leagues),
+            (Route::PlayersListWithQuery { q: "Lee".into(), page: "2".into() }, Route::PlayersList {}, MainSection::Players),
+            (Route::TeamsListWithQuery { q: "Otters".into() }, Route::TeamsList {}, MainSection::Teams),
+        ] {
+            assert_eq!(main_section(&route), Some(section));
+            assert_eq!(main_link_current(&route, &destination, section), Some("page"));
+        }
     }
 
     #[test]

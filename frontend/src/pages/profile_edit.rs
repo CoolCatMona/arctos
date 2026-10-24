@@ -1,4 +1,5 @@
 use crate::api;
+use crate::form_validation::{described_by, field_message, FieldError};
 use crate::components::{ChangePasswordCard, ConnectedAppsCard, ImageDraft, Modal, ModalKind, PlayerPompfen, ProfileBio, ProfileImageControls, ProfileImageEditor};
 use crate::Route;
 use dioxus::prelude::*;
@@ -47,42 +48,69 @@ fn focus_field(id: String) {
 
 #[component]
 pub fn ProfileEditPage(account_id: String, team: bool) -> Element {
-    let data = use_resource(use_reactive(&(account_id.clone(), team), move |(id, team)| async move {
-        let user = api::me().await.map_err(|_| "Log in to edit your profile.".to_string())?;
+    let account = crate::auth::use_account();
+    let mut data = use_resource(use_reactive(&(account_id.clone(), team), move |(id, team)| async move {
+        let Some(user) = account.read().as_ref().and_then(|value| value.as_ref().ok()).cloned() else {
+            return Ok(None);
+        };
         if user.id != id || user.user_type != if team { "team" } else { "player" } {
             return Err("You can only edit your own profile.".to_string());
         }
         if team {
             let response = api::team_profile(&id).await?;
             let value = response.team;
-            Ok(ProfileEditData {
+            Ok(Some(ProfileEditData {
                 fields: ProfileFields { name: value.name, location: value.location.unwrap_or_default(),
                     about: value.about.unwrap_or_default(), email: value.email.unwrap_or_default(),
                     website: value.website.unwrap_or_default(), ..Default::default() },
                 photo: value.profile_photo, banner: value.banner_photo,
                 past_count: response.past_event_count, has_password: user.has_password,
-            })
+            }))
         } else {
             let response = api::player_profile(&id).await?;
             let value = response.player;
-            Ok(ProfileEditData {
+            Ok(Some(ProfileEditData {
                 fields: ProfileFields { name: value.name, location: value.location.unwrap_or_default(),
                     about: value.bio.unwrap_or_default(), phone: value.phone.unwrap_or_default(),
                     pronouns: value.pronouns.unwrap_or_default(), pompfen: value.pompfen, ..Default::default() },
                 photo: value.profile_photo, banner: value.banner_photo,
                 past_count: response.past_event_count, has_password: user.has_password,
-            })
+            }))
         }
     }));
+    match account.read().as_ref() {
+        None => return rsx! { p { role: "status", "Checking your account…" } },
+        Some(Err(api::AccountError::Unauthenticated)) => {
+            let path = if team { format!("/teams/{account_id}/edit") } else { format!("/players/{account_id}/edit") };
+            return rsx! {
+                h1 { "Edit profile" }
+                p { "Log in to edit your profile." }
+                a { class: "btn btn-primary", href: format!("/login?next={}", urlencoding::encode(&path)), "Log in" }
+            };
+        },
+        Some(Err(api::AccountError::Unavailable)) => return rsx! { h1 { "Edit profile" } },
+        Some(Ok(user)) if user.id != account_id || user.user_type != if team { "team" } else { "player" } => {
+            let own_profile = if user.user_type == "team" {
+                Route::TeamProfilePage { id: user.id.clone() }
+            } else { Route::PlayerProfilePage { id: user.id.clone() } };
+            return rsx! {
+                h1 { "Edit profile" }
+                p { "You can only edit your own profile." }
+                Link { to: own_profile, class: "btn btn-outline-secondary", "Go to your profile" }
+            };
+        },
+        Some(Ok(_)) => {},
+    }
     let result = data.read();
     match &*result {
-        None => rsx! { p { role: "status", "Loading profile…" } },
+        None | Some(Ok(None)) => rsx! { p { role: "status", "Loading profile…" } },
         Some(Err(message)) => rsx! {
             h1 { "Edit profile" }
             p { role: "alert", "{message}" }
-            Link { to: Route::Login {}, "Log in" }
+            button { r#type: "button", class: "btn btn-outline-secondary", disabled: !data.finished(),
+                onclick: move |_| { if data.finished() { data.restart(); } }, "Retry profile" }
         },
-        Some(Ok(data)) => rsx! { ProfileEditForm { key: "{team}-{account_id}", account_id, team, data: data.clone() } },
+        Some(Ok(Some(data))) => rsx! { ProfileEditForm { key: "{team}-{account_id}", account_id, team, data: data.clone() } },
     }
 }
 
@@ -97,6 +125,7 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
     let busy = use_signal(|| false);
     let mut saving = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
+    let mut field_error = use_signal(|| None::<FieldError>);
     let mut preview_only = use_signal(|| false);
     let mut confirm_discard = use_signal(|| false);
     let changed = fields() != data.fields || photo().changed() || banner().changed();
@@ -109,19 +138,23 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
         event.prevent_default();
         if saving() || busy() { return; }
         if fields().name.trim().is_empty() {
-            error.set(Some("Enter a display name.".into()));
+            let message = if team { "Enter a team name." } else { "Enter a display name." };
+            error.set(Some(message.into()));
+            field_error.set(Some(FieldError::new("profile-edit-name", message)));
             preview_only.set(false);
             focus_field("profile-edit-name".into());
             return;
         }
         if let Some((id, message)) = invalid_field() {
-            error.set(Some(message));
+            error.set(Some(message.clone()));
+            field_error.set(Some(FieldError::new(id.clone(), message)));
             preview_only.set(false);
             focus_field(id);
             return;
         }
         saving.set(true);
         error.set(None);
+        field_error.set(None);
         let draft = fields();
         let photo = photo();
         let banner = banner();
@@ -223,17 +256,17 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
                         }
                     }
                     section { class: "profile-edit-fields", aria_label: "Profile details",
-                        ProfileField { state: fields, field: Field::Name, label: if team { "Team name" } else { "Display name" }, required: true, disabled: saving() }
-                        if !team { ProfileField { state: fields, field: Field::Pronouns, label: "Pronouns", help: "Optional. Shown on your profile.", disabled: saving() } }
-                        ProfileField { state: fields, field: Field::Location, label: "Location", disabled: saving() }
+                        ProfileField { state: fields, field_error, field: Field::Name, label: if team { "Team name" } else { "Display name" }, required: true, disabled: saving() }
+                        if !team { ProfileField { state: fields, field_error, field: Field::Pronouns, label: "Pronouns", help: "Optional. Shown on your profile.", disabled: saving() } }
+                        ProfileField { state: fields, field_error, field: Field::Location, label: "Location", disabled: saving() }
                         if !team { PlayerPompfen { selected: fields().pompfen, disabled: saving(), onchange: move |value| fields.write().pompfen = value } }
-                        ProfileField { state: fields, field: Field::About, label: if team { "About" } else { "Bio" }, multiline: true,
+                        ProfileField { state: fields, field_error, field: Field::About, label: if team { "About" } else { "Bio" }, multiline: true,
                             help: "Markdown supported: **bold**, *italic*, headings, lists, and [links](https://example.com).", disabled: saving() }
                         if team {
-                            ProfileField { state: fields, field: Field::Website, label: "Website", input_type: "url", disabled: saving() }
-                            ProfileField { state: fields, field: Field::Email, label: "Public contact email", input_type: "email", help: "Optional. Anyone can see this address on your team's profile.", disabled: saving() }
+                            ProfileField { state: fields, field_error, field: Field::Website, label: "Website", input_type: "url", disabled: saving() }
+                            ProfileField { state: fields, field_error, field: Field::Email, label: "Public contact email", input_type: "email", help: "Optional. Anyone can see this address on your team's profile.", disabled: saving() }
                         } else {
-                            ProfileField { state: fields, field: Field::Phone, label: "Phone number", input_type: "tel", help: "Only you can see this.", disabled: saving() }
+                            ProfileField { state: fields, field_error, field: Field::Phone, label: "Phone number", input_type: "tel", help: "Only you can see this.", disabled: saving() }
                         }
                     }
                 }
@@ -292,25 +325,35 @@ impl Field {
 }
 
 #[component]
-fn ProfileField(mut state: Signal<ProfileFields>, field: Field, label: String,
+fn ProfileField(mut state: Signal<ProfileFields>, mut field_error: Signal<Option<FieldError>>, field: Field, label: String,
     #[props(default = "text".to_string())] input_type: String,
     #[props(default)] multiline: bool, #[props(default)] required: bool,
     #[props(default)] disabled: bool, #[props(default)] help: String) -> Element {
     let id = field.id();
     let value = field.get(&state()).to_string();
+    let help_id = if help.is_empty() { String::new() } else { format!("{id}-help") };
     rsx! {
         div { class: "profile-edit-field",
             label { class: "form-label", r#for: id, "{label}" }
             if multiline {
                 textarea { id, class: "form-control", rows: "5", value, disabled,
-                    aria_describedby: (!help.is_empty()).then(|| format!("{id}-help")),
-                    oninput: move |event| field.set(&mut state.write(), event.value()) }
+                    aria_describedby: described_by(&field_error(), id, &help_id),
+                    aria_invalid: field_message(&field_error(), id).is_some(),
+                    oninput: move |event| {
+                        field.set(&mut state.write(), event.value());
+                        if field_error().as_ref().is_some_and(|error| error.field_id == id) { field_error.set(None); }
+                    } }
             } else {
                 input { id, class: "form-control", r#type: input_type, value, required, disabled, maxlength: field.limit(),
-                    aria_describedby: (!help.is_empty()).then(|| format!("{id}-help")),
-                    oninput: move |event| field.set(&mut state.write(), event.value()) }
+                    aria_describedby: described_by(&field_error(), id, &help_id),
+                    aria_invalid: field_message(&field_error(), id).is_some(),
+                    oninput: move |event| {
+                        field.set(&mut state.write(), event.value());
+                        if field_error().as_ref().is_some_and(|error| error.field_id == id) { field_error.set(None); }
+                    } }
             }
             if !help.is_empty() { p { id: "{id}-help", class: "form-text", "{help}" } }
+            if let Some(message) = field_message(&field_error(), id) { p { id: "{id}-error", class: "text-danger small mt-1", "{message}" } }
         }
     }
 }

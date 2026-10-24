@@ -179,7 +179,7 @@ Token and revocation errors follow
 [RFC 6749 section 5.2](https://www.rfc-editor.org/rfc/rfc6749#section-5.2):
 a `400` or `401` with `{"error": "...", "error_description": "..."}`.
 API requests with a missing, expired, or revoked access token get `401`;
-tokens without a needed scope get `403` (see [API errors](#errors-1)).
+tokens without a needed scope get `403` (see [API errors](#api-errors)).
 
 ## API reference
 
@@ -231,7 +231,7 @@ browser) must do this, since they can't use client credentials.
 - **CORS**: responses carry `Access-Control-Allow-Origin: *`, so
   browser apps can call the API directly.
 
-### Errors
+### API errors
 
 Errors are JSON with an `error` message and an HTTP status:
 

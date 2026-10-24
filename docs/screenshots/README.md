@@ -92,3 +92,50 @@ local copy. See [`TESTING.md`](../../TESTING.md#mobile-browser-verification) for
 browser checks. Available records, dates, and live timers depend on the database
 and capture time. The editor previews use a fictional account and do not save
 profile changes; the image is selected locally from the snapshot's existing media.
+
+## Recovery, navigation and validation — 2026-10-24
+
+These 26 captures show the implemented recovery and form states from optimized
+frontend bundles. Mobile captures request 390×844 unless noted; the quick-register
+capture requests 320×844 and the desktop directory requests 1280×900. Content-area
+image dimensions may exclude scrollbars. They use the migrated snapshot copy and
+fictional demo records; no data-changing request was forwarded during capture.
+Failure messages are supplied by a loopback test harness. The invitation view uses
+a fictional read-only team-session, roster and capacity response. All screenshots
+are browser captures, not mockups. Earlier captures above retain their own scope.
+
+| File | State and purpose |
+| --- | --- |
+| `account-retry-mobile.png` | Account check unavailable: one retry notice, with public directory content retained. |
+| `events-filter-mobile.png` | Past event search restored from its URL. |
+| `leagues-filter-mobile.png` | Active league search restored from its URL. |
+| `players-search-mobile.png` | Submitted player query and matching results. |
+| `teams-search-mobile.png` | Submitted team query with compact event counts. |
+| `teams-search-desktop.png` | The same team search at a 1280×900 viewport. |
+| `create-event-field-error-mobile.png` | Inline event-name validation and retained URL. |
+| `create-league-field-error-mobile.png` | Equivalent inline league-name validation. |
+| `create-event-save-error-mobile.png` | Creation service failure keeps the name and URL draft. |
+| `app-validation-mobile.png` | Developer application homepage error associated with its field. |
+| `profile-field-error-mobile.png` | Profile validation returns from Preview to the field needing correction. |
+| `invitation-check-status-mobile.png` | Fictional team-session fixture: one uncertain request is guarded while another row remains usable. |
+| `schedule-delete-confirm-mobile.png` | Named destructive confirmation with Cancel initially focused. |
+| `schedule-delete-recovery-mobile.png` | Uncertain schedule deletion retains the editor and offers a read-only status check. |
+| `side-event-delete-confirm-mobile.png` | Side-event deletion explains the affected registrations and results. |
+| `side-event-delete-recovery-mobile.png` | Retained side event, guarded deletion, status check and 44px Edit action. |
+| `side-event-load-error-mobile.png` | Failed side-event read offers retry without an empty editable form. |
+| `side-event-edit-retry-mobile.png` | Save error remains beside the action; the draft is retained. |
+| `side-event-registration-error-mobile.png` | Selected Staff remains available after an intercepted registration failure. |
+| `side-event-results-recovery-mobile.png` | Failed validity change reloads authoritative results and explains finalization prerequisites. |
+| `quick-register-search-retry-320.png` | 320×844 viewport: themed Players/Teams tabs, retained query and search retry. |
+| `help-tasks-mobile.png` | Task-first Help entry with links into the detailed guide. |
+| `help-retry-mobile.png` | Failed Help load offers a local retry. |
+| `registration-help-mobile.png` | Shared native registration-help dialog. |
+| `match-notes-mobile.png` | Shared native read-only match-notes dialog. |
+| `match-review-table-mobile.png` | Result review table with contained horizontal scrolling. |
+
+The checks covered rejected writes, failed/successful reconciliation, retained
+drafts, account-check failure versus HTTP 401, search response ordering, encoded
+query reloads, Back/Forward and pagination, actual rendered Help anchors, inline
+field focus, and native-dialog Escape/return focus. Requested 320×568 layouts and
+a desktop directory were also inspected. These captures do not establish full
+assistive-technology, physical-device, integration or participant testing.

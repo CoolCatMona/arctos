@@ -86,7 +86,7 @@ pub fn LeagueNewTournament(league_url: String) -> Element {
                                     input {
                                         r#type: "text",
                                         class: "form-control",
-                                        id: "url",
+                                        id: "url", aria_describedby: "url-help",
                                         name: "url",
                                     autocomplete: "off",
                                     autocapitalize: "none",
@@ -95,7 +95,7 @@ pub fn LeagueNewTournament(league_url: String) -> Element {
                                         pattern: r"[A-Za-z0-9._~\-]+",
                                         title: URL_SLUG_ALLOWED_HINT,
                                     }
-                                    div { class: "form-text", "This will be used in the URL (e.g., /my-event). {URL_SLUG_ALLOWED_HINT}" }
+                                    div { id: "url-help", class: "form-text", "This will be used in the URL (e.g., /my-event). {URL_SLUG_ALLOWED_HINT}" }
                                 }
                                 div { class: "form-actions",
                                     button { r#type: "submit", class: "btn btn-primary", disabled: busy(), if busy() { "Adding event…" } else { "Add event" } }

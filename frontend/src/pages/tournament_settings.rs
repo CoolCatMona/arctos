@@ -797,8 +797,8 @@ pub fn TournamentSettings(url: String) -> Element {
 
                                 div { class: "mb-3",
                                     label { r#for: "about", class: "form-label", "About" }
-                                    textarea { class: "form-control", id: "about", name: "about", rows: "4", value: draft_values.read().get("about").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("about".into(), event.value()); } }
-                                    div { class: "form-text",
+                                    textarea { class: "form-control", id: "about", aria_describedby: "about-help", name: "about", rows: "4", value: draft_values.read().get("about").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("about".into(), event.value()); } }
+                                    div { id: "about-help", class: "form-text",
                                         "supports "
                                         a { href: "https://www.markdownguide.org/basic-syntax/", "markdown" }
                                         ", including most of the "
@@ -846,7 +846,11 @@ pub fn TournamentSettings(url: String) -> Element {
                                             }
 
                                             div { class: "mb-2",
+                                                label { r#for: "settings-waiver-file", class: "form-label", "Waiver file" }
                                                 input {
+                                                    id: "settings-waiver-file",
+                                                    aria_invalid: waiver_upload_error().is_some(),
+                                                    aria_describedby: if waiver_upload_error().is_some() { "settings-waiver-help settings-waiver-error" } else { "settings-waiver-help" },
                                                     r#type: "file",
                                                     class: "form-control",
                                                     accept: "*/*",
@@ -885,10 +889,10 @@ pub fn TournamentSettings(url: String) -> Element {
                                             }
 
                                             if let Some(ref err) = waiver_upload_error() {
-                                                div { class: "alert alert-danger small py-2", "{err}" }
+                                                div { id: "settings-waiver-error", class: "alert alert-danger small py-2", role: "alert", "{err}" }
                                             }
 
-                                            div { class: "form-text", "Settings and the selected waiver save together when you choose Save settings." }
+                                            div { id: "settings-waiver-help", class: "form-text", "Settings and the selected waiver save together when you choose Save settings." }
                                         } else {
                                             div { class: "form-text text-muted", "Waiver signature will not be required." }
                                         }

@@ -23,6 +23,7 @@ fn get_form_select_value(id: &str) -> String {
 pub fn LeagueRegister(league_url: String) -> Element {
     let navigator = use_navigator();
     let mut error = use_signal(|| None::<String>);
+    use_effect(move || { if error().is_some() { crate::form_validation::focus_after_render("registration-error"); } });
     let mut busy = use_signal(|| false);
     let login_url = format!("/login?next={}", urlencoding::encode(&format!("/leagues/{league_url}/register")));
     let lu = league_url.clone();
@@ -30,7 +31,7 @@ pub fn LeagueRegister(league_url: String) -> Element {
         let u = lu.clone();
         async move { api::league_detail(&u).await.map_err(|e| e.to_string()) }
     });
-    let me = use_resource(move || async move { api::me().await });
+    let me = crate::auth::use_account();
     let mut show_help_modal = use_signal(|| false);
 
     rsx! {
@@ -57,8 +58,8 @@ pub fn LeagueRegister(league_url: String) -> Element {
                             }
                             if let Some(ref err) = error() {
                                 div {
-                                    class: "alert alert-danger mb-3",
-                                    role: "alert",
+                                    id: "registration-error", tabindex: "-1",
+                                    class: "alert alert-danger mb-3", role: "alert",
                                     "{err}"
                                 }
                             }
@@ -139,12 +140,12 @@ pub fn LeagueRegister(league_url: String) -> Element {
                                             input {
                                                 r#type: "text",
                                                 class: "form-control",
-                                                id: "shortname",
+                                                id: "shortname", aria_describedby: "shortname-help",
                                                 name: "shortname",
                                                 maxlength: "8",
                                                 placeholder: "e.g. UWaoW",
                                             }
-                                            div { class: "form-text",
+                                            div { id: "shortname-help", class: "form-text",
                                                 "Used in schedules and brackets. Leave blank to auto-shorten."
                                             }
                                         }
@@ -246,20 +247,17 @@ pub fn LeagueRegister(league_url: String) -> Element {
                                             }
                                         }
                                         div { class: "mb-3",
-                                            label {
-                                                r#for: "team",
-                                                class: "form-label",
-                                                "Team "
-                                                button {
-                                                    r#type: "button",
-                                                    class: "btn btn-link p-0 ms-2 text-decoration-none border-0 align-baseline",
+                                            div { class: "d-flex align-items-center flex-wrap gap-2 mb-2",
+                                                label { r#for: "team", class: "form-label mb-0", "Team" }
+                                                button { id: "registration-team-help", r#type: "button",
+                                                    class: "btn btn-link text-decoration-none",
                                                     onclick: move |_| show_help_modal.set(true),
-                                                    small { "Can’t find your team?" }
+                                                    "Can’t find your team?"
                                                 }
                                             }
                                             select {
                                                 class: "form-select",
-                                                id: "team",
+                                                id: "team", aria_describedby: "team-help",
                                                 name: "team",
                                                 option { value: "", "No team — join as a free merc" }
                                                 for team in d.teams_with_counts.iter() {
@@ -268,7 +266,7 @@ pub fn LeagueRegister(league_url: String) -> Element {
                                                     }
                                                 }
                                             }
-                                            div { class: "form-text",
+                                            div { id: "team-help", class: "form-text",
                                                 "Your team must approve your request before you join its roster. Without a team, you register as a free merc."
                                             }
                                         }
@@ -301,16 +299,16 @@ pub fn LeagueRegister(league_url: String) -> Element {
                                                         }
                                                     }
                                                 }
-                                                p { class: "form-text mb-2",
+                                                p { id: "waiver-privacy", class: "form-text mb-2",
                                                     "Your legal name is shared only with you and event organizers."
                                                 }
-                                                p { class: "form-text mb-2",
+                                                p { id: "waiver-consent", class: "form-text mb-2",
                                                     "By entering your full legal name below, you agree to the terms of the waiver linked above, and affirm that the waiver you viewed matches the SHA-256 hash displayed."
                                                 }
                                                 input {
                                                     r#type: "text",
                                                     class: "form-control",
-                                                    id: "waiver_legal_name_signature",
+                                                    id: "waiver_legal_name_signature", aria_describedby: "waiver-privacy waiver-consent",
                                                     name: "waiver_legal_name_signature",
                                                     autocomplete: "name",
                                                     required: true,
@@ -338,7 +336,7 @@ pub fn LeagueRegister(league_url: String) -> Element {
                                 }
                             } else if me.value().read().is_none() {
                                 p { role: "status", class: "text-muted", "Checking your account…" }
-                            } else {
+                            } else if matches!(me.read().as_ref(), Some(Err(api::AccountError::Unauthenticated))) {
                                 p { class: "text-muted",
                                     a { href: "{login_url}", "Sign in" }
                                     " to register."
@@ -353,6 +351,7 @@ pub fn LeagueRegister(league_url: String) -> Element {
                 }
                 if show_help_modal() {
                     TeamRegistrationHelpModal {
+                    return_focus_id: Some("registration-team-help".into()),
                         context: String::from("league"),
                         on_close: move |_| show_help_modal.set(false),
                     }

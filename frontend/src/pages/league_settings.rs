@@ -299,7 +299,12 @@ pub fn LeagueSettings(league_url: String) -> Element {
                                     }
                                 }
 
+                                label { r#for: "settings-waiver-file", class: "form-label", "Waiver file" }
+
                                 input {
+                                    id: "settings-waiver-file",
+                                    aria_invalid: waiver_upload_error().is_some(),
+                                    aria_describedby: if waiver_upload_error().is_some() { "settings-waiver-help settings-waiver-error" } else { "settings-waiver-help" },
                                     r#type: "file",
                                     class: "form-control",
                                     accept: "*/*",
@@ -337,10 +342,10 @@ pub fn LeagueSettings(league_url: String) -> Element {
                                 }
 
                                 if let Some(ref err) = waiver_upload_error() {
-                                    div { class: "alert alert-danger small py-2 mt-2", "{err}" }
+                                    div { id: "settings-waiver-error", class: "alert alert-danger small py-2 mt-2", role: "alert", "{err}" }
                                 }
 
-                                div { class: "form-text mt-2", "Settings and the selected waiver save together when you choose Save settings." }
+                                div { id: "settings-waiver-help", class: "form-text mt-2", "Settings and the selected waiver save together when you choose Save settings." }
                             } else {
                                 div { class: "form-text text-muted mt-2", "Waiver signature will not be required." }
                             }

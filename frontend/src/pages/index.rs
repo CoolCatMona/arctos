@@ -1,3 +1,4 @@
+use super::directory_state::{use_directory, use_directory_scroll, Directory};
 use crate::api;
 use crate::components::{OrganizeContext, OrganizeMenu, PageIntro, PaymentStatusBadge, RegistrationStatusBadge, WaiverStatusBadge};
 use crate::types::{Tournament, UserRegStatus};
@@ -36,12 +37,19 @@ fn split_upcoming_past(tournaments: &[Tournament]) -> (Vec<Tournament>, Vec<Tour
 }
 
 #[component]
+pub fn IndexWithQuery(q: String, view: String) -> Element {
+    rsx! { Index {} }
+}
+
+#[component]
 pub fn Index() -> Element {
     let mut tournaments =
         use_resource(move || async move { api::tournaments().await.map_err(|e| e.to_string()) });
-    let mut show_past = use_signal(|| false);
-    let mut search = use_signal(String::new);
+    let controls = use_directory(Directory::Events, true);
+    let mut search = controls.search;
+    let show_past = move || (controls.state)().past;
     let val = tournaments.value();
+    use_directory_scroll(controls, val.read().as_ref().is_some_and(Result::is_ok));
     let counts = val.read().as_ref().and_then(|result| result.as_ref().ok()).map(|data| {
         let past = data.tournaments.iter().filter(|event| is_past_in_local_tz(event)).count();
         (data.tournaments.len() - past, past)
@@ -61,7 +69,7 @@ pub fn Index() -> Element {
                             r#type: "button",
                             class: if !show_past() { "arctos-segment is-active" } else { "arctos-segment" },
                             aria_pressed: "{!show_past()}",
-                            onclick: move |_| show_past.set(false),
+                            onclick: move |_| controls.filter(false),
                             "Upcoming "
                             if let Some((upcoming, _)) = counts { span { class: "arctos-count", "{upcoming}" } }
                         }
@@ -69,7 +77,7 @@ pub fn Index() -> Element {
                             r#type: "button",
                             class: if show_past() { "arctos-segment is-active" } else { "arctos-segment" },
                             aria_pressed: "{show_past()}",
-                            onclick: move |_| show_past.set(true),
+                            onclick: move |_| controls.filter(true),
                             "Past "
                             if let Some((_, past)) = counts { span { class: "arctos-count", "{past}" } }
                         }
@@ -83,6 +91,8 @@ pub fn Index() -> Element {
                         id: "event-search", r#type: "search", class: "form-control",
                         placeholder: "Find an event or location…", value: "{search()}",
                         oninput: move |event| search.set(event.value()),
+                        onblur: move |_| controls.flush(),
+                        onkeydown: move |event| { if event.key() == Key::Enter { controls.flush(); } },
                     }
                 }
             }
@@ -104,7 +114,7 @@ pub fn Index() -> Element {
                                 h3 { if !query.is_empty() { "No matching events" } else if show_past() { "No past events yet" } else { "No upcoming events yet" } }
                                 p { if !query.is_empty() { "Try another event name or location." } else if show_past() { "Completed events will appear here after their final day." } else { "Check back for new events, or explore the leagues." } }
                                 if !query.is_empty() {
-                                    button { class: "btn btn-outline-secondary", r#type: "button", onclick: move |_| search.set(String::new()), "Clear search" }
+                                    button { class: "btn btn-outline-secondary", r#type: "button", onclick: move |_| controls.clear(), "Clear search" }
                                 } else if !show_past() {
                                     Link { to: Route::LeaguesIndex {}, class: "btn btn-outline-secondary", "Browse leagues" }
                                 }

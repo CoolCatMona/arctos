@@ -2,8 +2,10 @@
 
 mod api;
 mod appearance;
+mod auth;
 mod components;
 mod display;
+mod form_validation;
 mod pages;
 mod time_format;
 mod url_slug;
@@ -19,6 +21,9 @@ use pages::*;
 #[rustfmt::skip]
 enum Route {
     #[layout(Layout)]
+    #[route("/?:q&:view")]
+    IndexWithQuery { q: String, view: String },
+
     #[route("/")]
     Index {},
 
@@ -39,6 +44,9 @@ enum Route {
 
     #[route("/auth/google/complete-profile")]
     GoogleCompleteProfile {},
+
+    #[route("/leagues?:q&:view")]
+    LeaguesIndexWithQuery { q: String, view: String },
 
     #[route("/leagues")]
     LeaguesIndex {},
@@ -161,6 +169,9 @@ enum Route {
     #[route("/teams/:team_id/edit")]
     EditTeamProfile { team_id: String },
 
+    #[route("/players?:q&:page")]
+    PlayersListWithQuery { q: String, page: String },
+
     #[route("/players")]
     PlayersList {},
 
@@ -169,6 +180,9 @@ enum Route {
 
     #[route("/players/:id")]
     PlayerProfilePage { id: String },
+
+    #[route("/teams?:q")]
+    TeamsListWithQuery { q: String },
 
     #[route("/teams")]
     TeamsList {},
@@ -230,11 +244,18 @@ enum Route {
 /// renders, which drops query parameters the route doesn't declare and
 /// percent-decodes the ones it does.
 static INITIAL_LOCATION: std::sync::OnceLock<(String, String)> = std::sync::OnceLock::new();
+static INITIAL_FRAGMENT: std::sync::OnceLock<(String, String)> = std::sync::OnceLock::new();
 
 /// The query string the app was loaded with, if it was loaded at `path`.
 pub fn initial_query(path: &str) -> Option<String> {
     let (initial_path, query) = INITIAL_LOCATION.get()?;
-    (initial_path == path).then(|| query.clone())
+    (initial_path.trim_end_matches('/') == path.trim_end_matches('/')).then(|| query.clone())
+}
+
+/// The fragment before the router's initial normalization, including `#`.
+pub(crate) fn initial_fragment(path: &str) -> Option<String> {
+    let (initial_path, fragment) = INITIAL_FRAGMENT.get()?;
+    (initial_path.trim_end_matches('/') == path.trim_end_matches('/') && !fragment.is_empty()).then(|| fragment.clone())
 }
 
 fn main() {
@@ -242,6 +263,7 @@ fn main() {
     if let Some(location) = web_sys::window().map(|window| window.location()) {
         let path = location.pathname().unwrap_or_default();
         let query = location.search().unwrap_or_default().trim_start_matches('?').to_string();
+        let _ = INITIAL_FRAGMENT.set((path.clone(), location.hash().unwrap_or_default()));
         let _ = INITIAL_LOCATION.set((path, query));
     }
     dioxus::launch(|| {

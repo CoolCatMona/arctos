@@ -107,19 +107,19 @@ pub fn FinalizeMatch(url: String, match_id: String) -> Element {
                 div { class: "col-lg-9 operator-finalize",
                     div { class: "card",
                         div { class: "card-header",
-                            h5 { class: "mb-0", "Points Summary" }
+                            h2 { id: "finalize-points-heading", class: "h5 mb-0", "Points Summary" }
                         }
                         div { class: "card-body",
-                            div { class: "table-responsive",
+                            div { class: "table-responsive", role: "region", aria_labelledby: "finalize-points-heading", tabindex: "0",
                                 table { class: "table table-sm",
                                     thead {
                                         tr {
-                                            th { class: "table-number", "Set" }
-                                            th { class: "table-number", "Point" }
-                                            th { "Winner" }
-                                            th { class: "table-number", "🪨" }
-                                            th { "Rerun?" }
-                                            th { "Notes" }
+                                            th { scope: "col", class: "table-number", "Set" }
+                                            th { scope: "col", class: "table-number", "Point" }
+                                            th { scope: "col", "Winner" }
+                                            th { scope: "col", class: "table-number", "Stones" }
+                                            th { scope: "col", "Rerun?" }
+                                            th { scope: "col", "Notes" }
                                         }
                                     }
                                     tbody {
@@ -181,7 +181,7 @@ pub fn FinalizeMatch(url: String, match_id: String) -> Element {
 
                     div { class: "card mt-3",
                         div { class: "card-header",
-                            h5 { class: "mb-0", "Score by Set" }
+                            h2 { class: "h5 mb-0", "Score by Set" }
                         }
                         div { class: "card-body",
                             if d.points.is_empty() {
@@ -237,7 +237,7 @@ pub fn FinalizeMatch(url: String, match_id: String) -> Element {
 
                     div { class: "edit-section mt-4",
                         div { class: "edit-section-heading",
-                            h5 { class: "mb-0", "Match Results" }
+                            h2 { class: "h5 mb-0", "Match Results" }
                         }
                         div { class: "edit-section-body",
                             form {

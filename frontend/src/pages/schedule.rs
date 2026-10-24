@@ -2,7 +2,7 @@ use super::TeamSelectionField;
 use super::tournament_home::TournamentHomeContent;
 use crate::Route;
 use crate::api;
-use crate::components::{AssEntry, TeamLabel, TeamLabelStyle, TeamSlot};
+use crate::components::{ActionRecovery, AssEntry, Modal, ModalKind, TeamLabel, TeamLabelStyle, TeamSlot};
 use crate::display::short_or_truncate;
 use crate::types::*;
 use dioxus::html::ModifiersInteraction;
@@ -7188,6 +7188,8 @@ fn EditMatchModal(
 
     let mut error = use_signal(|| None::<String>);
     let mut saving = use_signal(|| false);
+    let mut deleting = use_signal(ActionRecovery::default);
+    let mut confirm_delete = use_signal(|| false);
     let url_sig = use_signal(|| tournament_url.clone());
 
     // Sync field and previous_match_id from match data when modal opens (fixes initial display)
@@ -7247,6 +7249,7 @@ fn EditMatchModal(
     let m_id_save = match_id.clone();
     let data_save = data.clone();
     let do_save_rc: Rc<RefCell<Box<dyn FnMut()>>> = Rc::new(RefCell::new(Box::new(move || {
+        if saving() || deleting().blocks_write() { return; }
         // Validation: BREAK, JOIN, FAST, SAFE require previous match and same field
         let st = schedule_type();
         if st == "BREAK" || st == "JOIN" || st == "FAST" || st == "SAFE" {
@@ -7375,17 +7378,43 @@ fn EditMatchModal(
             }
         }
     };
+    let close_editor = move || {
+        if saving() || deleting().busy() { return; }
+        if matches!(deleting(), ActionRecovery::NeedsCheck(_)) { on_save.call(()); }
+        else { on_close.call(()); }
+    };
     let modal_keydown = move |ev: Event<KeyboardData>| {
         let key = ev.key().to_string();
         if key == "Escape" {
             ev.prevent_default();
-            on_close.call(());
+            close_editor()
         } else if key == "Enter" && ev.modifiers().contains(Modifiers::SHIFT) {
             ev.prevent_default();
             ev.stop_propagation();
             do_save_rc3.borrow_mut()();
         }
     };
+
+    let mut delete_action = {
+        let id = match_id.clone();
+        move |send_delete: bool| {
+            if saving() || deleting().busy() || (send_delete && deleting().blocks_write()) { return; }
+            deleting.set(if send_delete { ActionRecovery::Pending } else { ActionRecovery::Checking });
+            let url = url_sig();
+            let id = id.clone();
+            spawn(async move {
+                let result = if send_delete { api::delete_match(&url, &id).await } else { Err("Delete was not confirmed.".into()) };
+                if result.is_ok() { on_save.call(()); return; }
+                let message = result.err().unwrap_or_default();
+                deleting.set(ActionRecovery::Checking);
+                let present = api::schedule_setup(&url).await.map(|current| current.matches.iter().any(|item| item.uuid == id));
+                let next = ActionRecovery::after_check(present, &message);
+                if next == ActionRecovery::Idle { on_save.call(()); }
+                deleting.set(next);
+            });
+        }
+    };
+    let mut check_delete = delete_action.clone();
 
     rsx! {
         div {
@@ -7401,7 +7430,8 @@ fn EditMatchModal(
                         class: "btn-close",
                         r#type: "button",
                         "aria-label": "Close",
-                        onclick: move |_| on_close.call(()),
+                        disabled: saving() || deleting().busy(),
+                        onclick: move |_| { close_editor() },
                     }
                 }
                         div { class: "edit-section-body",
@@ -7413,7 +7443,13 @@ fn EditMatchModal(
                             }
                         }
                         if let Some(err) = error() {
-                            div { class: "alert alert-danger", "{err}" }
+                            div { class: "alert alert-danger", role: "alert", "{err}" }
+                        }
+                        if deleting().busy() { p { role: "status", "Checking match deletion…" } }
+                        if let Some(message) = deleting().message() { p { class: "text-danger", role: "alert", "{message}" } }
+                        if matches!(deleting(), ActionRecovery::NeedsCheck(_)) {
+                            button { r#type: "button", class: "btn btn-outline-secondary mb-2", onclick: move |_| check_delete(false), "Check deletion status" }
+                            p { class: "small text-muted", "Closing reloads the schedule. It does not undo deletion." }
                         }
                         form {
                             onsubmit: onsubmit,
@@ -7616,22 +7652,11 @@ fn EditMatchModal(
                             }
 
                             div { class: "modal-footer",
-                                button { class: "btn btn-secondary", "type": "button", onclick: move |_| on_close.call(()), "Cancel (Esc)" }
-                                button { class: "btn btn-danger", "type": "button",
-                                    onclick: move |_| {
-                                        // Delete match
-                                        let u = url_sig();
-                                        let mid = match_id.clone();
-                                        let cb = on_save.clone();
-                                        async move {
-                                            if let Ok(_) = api::delete_match(&u, &mid).await {
-                                                cb.call(());
-                                            }
-                                        }
-                                    },
-                                    "Delete"
+                                button { class: "btn btn-secondary", r#type: "button", disabled: saving() || deleting().busy(), onclick: move |_| { close_editor() }, "Cancel (Esc)" }
+                                button { id: "schedule-delete-trigger", class: "btn btn-danger", r#type: "button", disabled: saving() || deleting().blocks_write(),
+                                    aria_haspopup: "dialog", onclick: move |_| confirm_delete.set(true), "Delete"
                                 }
-                                button { class: "btn btn-primary", "type": "submit", disabled: "{saving}",
+                                button { class: "btn btn-primary", "type": "submit", disabled: saving() || deleting().blocks_write(),
                                     if saving() { span { class: "spinner-border spinner-border-sm me-2" } }
                                     "Save (⇧↵)"
                                 }
@@ -7641,6 +7666,32 @@ fn EditMatchModal(
             }
             if skip_condition_help_open() {
                 SkipConditionHelpModal { on_close: move |_| skip_condition_help_open.set(false) }
+            }
+            if confirm_delete() {
+                Modal {
+                    id: "schedule-delete-confirmation",
+                    labelled_by: "schedule-delete-title",
+                    described_by: Some("schedule-delete-description".to_string()),
+                    initial_focus_id: Some("schedule-delete-cancel".to_string()),
+                    return_focus_id: Some("schedule-delete-trigger".to_string()),
+                    kind: ModalKind::AlertDialog,
+                    dismissible: !saving() && !deleting().busy(),
+                    on_close: move |_| { if !saving() && !deleting().busy() { confirm_delete.set(false); } },
+                    div { class: "modal-header",
+                        h2 { id: "schedule-delete-title", class: "modal-title h5", "Delete {name}?" }
+                    }
+                    div { class: "modal-body",
+                        p { id: "schedule-delete-description", "This permanently deletes the match from the schedule. This cannot be undone." }
+                    }
+                    div { class: "modal-footer",
+                        button { id: "schedule-delete-cancel", r#type: "button", class: "btn btn-secondary",
+                            disabled: saving() || deleting().busy(), onclick: move |_| confirm_delete.set(false), "Cancel"
+                        }
+                        button { r#type: "button", class: "btn btn-danger", disabled: saving() || deleting().blocks_write(),
+                            onclick: move |_| { confirm_delete.set(false); delete_action(true); }, "Delete match"
+                        }
+                    }
+                }
             }
         }
     }

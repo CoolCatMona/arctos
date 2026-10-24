@@ -994,9 +994,6 @@ fn match_page_inner(url: String, match_id: Option<String>, match_name: Option<St
         live_points_signal.set(None);
     });
 
-    // User info for permissions
-    let user_info = use_resource(move || async move { api::me().await.ok() });
-
     // Shared client-server time sync (converges to the server clock; the probe
     // loop lives in the module).
     #[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]

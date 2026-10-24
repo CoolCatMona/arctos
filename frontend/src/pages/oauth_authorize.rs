@@ -46,11 +46,17 @@ pub fn OAuthAuthorize() -> Element {
     let mut error = use_signal(|| None::<String>);
     let mut deciding = use_signal(|| false);
 
-    let request = use_resource(move || async move {
-        if api::me().await.is_err() {
-            let next = format!("/oauth/authorize?{}", query());
-            navigate_away(&format!("/login?next={}", urlencoding::encode(&next)));
-            return None;
+    let account = crate::auth::use_account();
+    let mut request = use_resource(move || async move {
+        let state = account.read().clone();
+        match state {
+            Some(Err(api::AccountError::Unauthenticated)) => {
+                let next = format!("/oauth/authorize?{}", query());
+                navigate_away(&format!("/login?next={}", urlencoding::encode(&next)));
+                return None;
+            }
+            Some(Ok(_)) => {},
+            _ => return None,
         }
         Some(api::oauth_authorization_request(&query()).await)
     });
@@ -74,12 +80,18 @@ pub fn OAuthAuthorize() -> Element {
         _ if is_framed() => rsx! {
             div { class: "alert alert-danger mb-0", "For your security, sign-in requests can't be shown inside another page." }
         },
-        None | Some(None) => rsx! { p { "Loading…" } },
+        None | Some(None) => rsx! {
+            if !matches!(account.read().as_ref(), Some(Err(api::AccountError::Unavailable))) {
+                p { role: "status", "Checking sign-in request…" }
+            }
+        },
         Some(Some(Err(message))) => rsx! {
-            div { class: "alert alert-danger mb-0",
+            div { class: "alert alert-danger mb-3", role: "alert",
                 strong { "This sign-in request can't be completed. " }
                 "{message}"
             }
+            button { r#type: "button", class: "btn btn-outline-secondary", disabled: !request.finished(),
+                onclick: move |_| { if request.finished() { request.restart(); } }, "Retry sign-in request" }
         },
         Some(Some(Ok(OAuthAuthorizationRequest::Redirect { redirect }))) => {
             navigate_away(redirect);

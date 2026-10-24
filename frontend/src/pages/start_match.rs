@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::PenaltyDisplay;
+use crate::components::{Modal, PenaltyDisplay};
 use crate::types::StartMatchPlayer;
 use crate::Route;
 use dioxus::prelude::*;
@@ -171,7 +171,7 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                     div { class: "col-md-8 operator-setup",
                         div { class: "edit-section",
                             div { class: "edit-section-heading",
-                                h5 { class: "mb-0", "Match Setup" }
+                                h2 { class: "h5 mb-0", "Match Setup" }
                             }
                             div { class: "edit-section-body",
                                 form {
@@ -256,6 +256,7 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                                                 button {
                                                     r#type: "button",
                                                     class: "btn btn-sm btn-outline-info",
+                                                    aria_label: "View notes for {d.match_info.team1_name}",
                                                     onclick: move |_| {
                                                         notes_modal_show.set(true);
                                                         notes_modal_content.set(None);
@@ -281,8 +282,9 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                                                     "View Notes"
                                                 }
                                             }
-                                            div { class: "mb-3",
-                                                label { class: "form-label",
+                                            fieldset { class: "mb-3",
+                                                legend { class: "form-label fs-6",
+                                                    span { class: "visually-hidden", "{d.match_info.team1_name}: " }
                                                     if let Some(maximum) = max_roster { "Select players · maximum {maximum}" } else { "Select players" }
                                                 }
                                                 div {
@@ -377,6 +379,7 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                                                 button {
                                                     r#type: "button",
                                                     class: "btn btn-sm btn-outline-info",
+                                                    aria_label: "View notes for {d.match_info.team2_name}",
                                                     onclick: move |_| {
                                                         notes_modal_show.set(true);
                                                         notes_modal_content.set(None);
@@ -402,8 +405,9 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                                                     "View Notes"
                                                 }
                                             }
-                                            div { class: "mb-3",
-                                                label { class: "form-label",
+                                            fieldset { class: "mb-3",
+                                                legend { class: "form-label fs-6",
+                                                    span { class: "visually-hidden", "{d.match_info.team2_name}: " }
                                                     if let Some(maximum) = max_roster { "Select players · maximum {maximum}" } else { "Select players" }
                                                 }
                                                 div {
@@ -540,7 +544,7 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                     div { class: "col-md-4",
                         div { class: "card",
                             div { class: "card-header",
-                                h5 { class: "mb-0", "Match Info" }
+                                h2 { class: "h5 mb-0", "Match Info" }
                             }
                             div { class: "card-body",
                                 p {
@@ -565,18 +569,11 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                 }
 
             if notes_modal_show() {
-                div {
-                    class: "modal show",
-                    style: "display: block; background: rgba(0,0,0,0.5);",
-                    role: "dialog",
-                    tabindex: "-1",
-                    onclick: move |_| notes_modal_show.set(false),
-                    div {
-                        class: "modal-dialog",
-                        onclick: move |ev| { ev.stop_propagation(); },
-                        div { class: "modal-content",
+                Modal {
+                    id: "start-notes-dialog", labelled_by: "start-notes-title",
+                    on_close: move |_| notes_modal_show.set(false),
                             div { class: "modal-header",
-                                h5 { class: "modal-title", "Relevant Notes" }
+                                h2 { id: "start-notes-title", class: "modal-title h5", tabindex: "-1", "Relevant Notes" }
                                 button {
                                     r#type: "button",
                                     class: "btn-close",
@@ -586,8 +583,8 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                             }
                             div { class: "modal-body",
                                 match notes_modal_content().as_ref() {
-                                    None => rsx! { div { class: "text-muted", "Loading…" } },
-                                    Some(Err(e)) => rsx! { div { class: "text-danger", "{e}" } },
+                                    None => rsx! { div { class: "text-muted", role: "status", "Loading…" } },
+                                    Some(Err(e)) => rsx! { div { class: "text-danger", role: "alert", "{e}" } },
                                     Some(Ok(notes)) => {
                                         if notes.is_empty() {
                                             rsx! {
@@ -642,25 +639,20 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                                     "Close"
                                 }
                             }
-                        }
-                    }
                 }
                     if penalty_desc_modal().is_some() {
-                        div { class: "modal show", style: "display: block;",
-                            div { class: "modal-dialog modal-dialog-centered",
-                                div { class: "modal-content",
+                        Modal {
+                            id: "start-penalty-description-dialog", labelled_by: "start-penalty-description-title",
+                            on_close: move |_| penalty_desc_modal.set(None),
                                     div { class: "modal-header",
-                                        h5 { class: "modal-title", "Penalty description" }
-                                        button { r#type: "button", class: "btn-close", onclick: move |_| penalty_desc_modal.set(None) }
+                                        h2 { id: "start-penalty-description-title", class: "modal-title h5", tabindex: "-1", "Penalty description" }
+                                        button { r#type: "button", class: "btn-close", aria_label: "Close penalty description", onclick: move |_| penalty_desc_modal.set(None) }
                                     }
                                     div { class: "modal-body", "{penalty_desc_modal().as_ref().unwrap_or(&String::new())}" }
                                     div { class: "modal-footer",
                                         button { r#type: "button", class: "btn btn-secondary", onclick: move |_| penalty_desc_modal.set(None), "Close" }
                                     }
-                                }
-                            }
                         }
-                        div { class: "modal-backdrop show" }
                     }
             } else {
                 div { }
