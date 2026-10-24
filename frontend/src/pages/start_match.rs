@@ -22,6 +22,22 @@ fn selected_roster_label(selected: usize, limit: Option<usize>) -> String {
     }
 }
 
+fn start_blocking_reasons(
+    teams: [(&str, usize, bool); 2],
+    limit: Option<usize>,
+) -> Vec<String> {
+    let mut reasons = Vec::new();
+    for (name, selected, has_unpaid) in teams {
+        if let Some(maximum) = limit.filter(|maximum| selected > *maximum) {
+            reasons.push(format!("{name}: select no more than {maximum} players ({selected} selected)."));
+        }
+        if has_unpaid {
+            reasons.push(format!("{name}: resolve payment for selected unpaid players."));
+        }
+    }
+    reasons
+}
+
 #[component]
 pub fn StartMatch(url: String, match_id: String) -> Element {
     let match_id_for_data = match_id.clone();
@@ -108,7 +124,12 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
             let route_match_id_for_submit = match_id.clone();
             let all_players_team1 = d.all_players.clone();
             let all_players_team2 = d.all_players.clone();
+            let start_reasons = start_blocking_reasons([
+                (&d.match_info.team1_name, team1_selected().len(), team1_has_unpaid),
+                (&d.match_info.team2_name, team2_selected().len(), team2_has_unpaid),
+            ], max_roster);
             rsx! {
+                style { {include_str!("live_match_actions.css")} }
                 div { class: "row",
                     div { class: "col-12",
                         h1 { "Start match" }
@@ -220,6 +241,7 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                                             submitting.set(false);
                                         });
                                     },
+                                    fieldset { class: "live-match-fields", disabled: submitting(),
                                     input {
                                         r#type: "hidden",
                                         name: "match_id",
@@ -488,16 +510,28 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                                         div { class: "alert alert-danger", role: "alert", "{error}" }
                                     }
                                     p { class: "form-text", "Starting locks in the match roster. Check the selected players before continuing." }
-                                    div { class: "d-grid",
+                                    if !start_reasons.is_empty() {
+                                        ul { id: "start-match-prerequisites", class: "live-match-prerequisites", role: "status",
+                                            for reason in start_reasons { li { "{reason}" } }
+                                        }
+                                    } else {
+                                        p { id: "start-match-prerequisites", class: "small text-muted", "Review both selected rosters, then start the match." }
+                                    }
+                                    div { class: "live-match-actions",
                                         button {
                                             r#type: "submit",
-                                            class: "btn btn-success btn-lg",
+                                            class: "btn btn-primary btn-lg",
+                                            aria_describedby: "start-match-prerequisites",
                                             disabled: submitting() || exceeds_roster_limit(team1_selected().len(), max_roster)
                                                 || exceeds_roster_limit(team2_selected().len(), max_roster)
                                                 || team1_has_unpaid
                                                 || team2_has_unpaid,
                                             if submitting() { "Starting match…" } else { "Start match" }
                                         }
+                                        if !submitting() {
+                                            Link { to: Route::MatchPageById { url: url.clone(), match_id: match_id.clone() }, class: "btn btn-outline-secondary", "Back to match" }
+                                        }
+                                    }
                                     }
                                 }
                             }
@@ -784,5 +818,16 @@ mod tests {
             assert!(exceeds_roster_limit(maximum as usize + 1, limit));
             assert_eq!(selected_roster_label(maximum as usize, limit), format!("{maximum}/{maximum} players selected"));
         }
+    }
+
+    #[test]
+    fn start_prerequisites_identify_affected_team_without_blocking_empty_rosters() {
+        let reasons = start_blocking_reasons([("Cedar", 6, false), ("River", 5, true)], Some(5));
+        assert_eq!(reasons, [
+            "Cedar: select no more than 5 players (6 selected).",
+            "River: resolve payment for selected unpaid players.",
+        ]);
+        assert!(start_blocking_reasons([("Cedar", 0, false), ("River", 8, false)], None).is_empty());
+        assert!(start_blocking_reasons([("Cedar", 5, false), ("River", 5, false)], Some(5)).is_empty());
     }
 }

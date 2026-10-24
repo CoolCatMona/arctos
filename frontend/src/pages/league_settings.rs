@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::{BannerAccountKind, BannerUpload, EventBannerPhoto, LeaguePenaltyTypesTable, ToolPageHeader};
+use crate::components::{BannerAccountKind, BannerUpload, EventBannerPhoto, LeaguePenaltyTypesTable, SettingsSaveActions, SettingsSaveJump, ToolPageHeader};
 use crate::types::ToEntry;
 use crate::Route;
 use dioxus::prelude::*;
@@ -163,12 +163,9 @@ pub fn LeagueSettings(league_url: String) -> Element {
     rsx! {
         style { {include_str!("../components/organizer_tools.css")} }
         if let Some(Ok(d)) = data.value().read().as_ref() {
-            ToolPageHeader { title: "Settings" }
+            ToolPageHeader { title: "Settings", actions: rsx! { SettingsSaveJump {} } }
             if save_success() {
                 div { class: "alert alert-success ordinary-form-rail", role: "status", "Settings saved." }
-            }
-            if let Some(ref err) = save_error() {
-                div { class: "alert alert-danger ordinary-form-rail", role: "alert", "{err}" }
             }
             div { class: "row organizer-settings",
                 div { class: "col-12",
@@ -420,8 +417,12 @@ pub fn LeagueSettings(league_url: String) -> Element {
                                 label { r#for: "published", class: "form-check-label", "Published (visible in Leagues)" }
                             }
                         }
-                        div { class: "form-actions",
-                            button { r#type: "submit", class: "btn btn-primary", disabled: saving() || penalty_pending() || banner_busy() || waiver_reading(), if saving() { "Saving…" } else { "Save settings" } }
+                        SettingsSaveActions {
+                            saving: saving(), error: save_error(),
+                            blocked_reason: if waiver_reading() { Some("Reading the waiver file. Save will be available when it is ready.".into()) }
+                                else if banner_busy() { Some("Finish or cancel the banner change before saving settings.".into()) }
+                                else if penalty_pending() { Some("Wait for the penalty change to finish before saving settings.".into()) }
+                                else { None },
                         }
                     }
                 }

@@ -1,9 +1,11 @@
 //! Shared registration buttons for league context (league home or league-event tournament).
-//! Shows "Manage Roster" and "Edit Registration" when registered, or "Register" when not.
+//! Shows roster/edit actions when registered, or "Register" when not.
 
 use crate::types::User;
 use crate::Route;
 use dioxus::prelude::*;
+
+const REGISTRATION_ACTIONS_CSS: &str = include_str!("registration_actions.css");
 
 #[component]
 pub fn LeagueRegistrationButtons(
@@ -27,7 +29,7 @@ pub fn LeagueRegistrationButtons(
         .as_ref()
         .and_then(|user| user.as_ref().ok())
         .is_none();
-    let (_is_registered, user_type) = current_user
+    let (is_registered, user_type) = current_user
         .as_ref()
         .and_then(|r| r.as_ref().ok())
         .map(|u| {
@@ -41,6 +43,7 @@ pub fn LeagueRegistrationButtons(
     let player_open = player_registration_open.unwrap_or(registration_open);
 
     rsx! {
+        style { {REGISTRATION_ACTIONS_CSS} }
         if current_user.is_none() {
             span { class: "text-muted", role: "status", "Loading registration…" }
         } else if show_register_only && (team_open || player_open) {
@@ -57,20 +60,23 @@ pub fn LeagueRegistrationButtons(
                     Link {
                         to: Route::LeagueInvitations { league_url: league_url.clone() },
                         class: "btn btn-outline-secondary",
-                        "Manage Roster"
+                        "Manage roster"
                     }
                     if use_edit_modal {
                         button {
                             r#type: "button",
                             class: "btn btn-outline-secondary",
+                            aria_haspopup: "dialog",
+                            aria_describedby: show_edit_warning.then_some("registration-waiver-warning"),
                             onclick: move |_| on_edit_registration.call(()),
-                            if show_edit_warning { "Edit Registration ⚠️"} else { "Edit Registration" }
+                            "Edit registration"
                         }
                     } else {
                         Link {
                             to: Route::LeagueRegister { league_url: league_url.clone() },
                             class: "btn btn-outline-secondary",
-                            if show_edit_warning { "Edit Registration ⚠️" } else { "Edit Registration" }
+                            aria_describedby: show_edit_warning.then_some("registration-waiver-warning"),
+                            "Edit registration"
                         }
                     }
                 } else if team_open {
@@ -93,14 +99,17 @@ pub fn LeagueRegistrationButtons(
                         button {
                             r#type: "button",
                             class: "btn btn-outline-secondary",
+                            aria_haspopup: "dialog",
+                            aria_describedby: show_edit_warning.then_some("registration-waiver-warning"),
                             onclick: move |_| on_edit_registration.call(()),
-                            if show_edit_warning { "Edit Registration ⚠️" } else { "Edit Registration" }
+                            "Edit registration"
                         }
                     } else {
                         Link {
                             to: Route::LeagueRegister { league_url: league_url.clone() },
                             class: "btn btn-outline-secondary",
-                            if show_edit_warning { "Edit Registration ⚠️" } else { "Edit Registration" }
+                            aria_describedby: show_edit_warning.then_some("registration-waiver-warning"),
+                            "Edit registration"
                         }
                     }
                 } else if player_open {
@@ -131,6 +140,12 @@ pub fn LeagueRegistrationButtons(
                         disabled: true,
                         "Registration closed"
                     }
+                }
+            }
+            if is_registered && show_edit_warning {
+                p { id: "registration-waiver-warning", class: "registration-waiver-warning",
+                    i { class: "fas fa-file-signature", aria_hidden: "true" }
+                    "Your waiver needs signing."
                 }
             }
         }

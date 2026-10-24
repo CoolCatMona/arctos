@@ -6,6 +6,8 @@ use crate::components::{Modal, ModalKind};
 use crate::types::{UpdatePlayerRegistrationRequest, UpdateTeamRegistrationRequest};
 use dioxus::prelude::*;
 
+const REGISTRATION_ACTIONS_CSS: &str = include_str!("registration_actions.css");
+
 /// Context for the edit registration modal: league or tournament.
 #[derive(Clone, PartialEq)]
 pub enum EditRegistrationContext {
@@ -37,12 +39,14 @@ pub fn EditRegistrationModal(
     let mut show_deregister_confirm = use_signal(|| false);
     let load = use_signal(|| RegistrationLoad::Loading);
     let mutation = use_signal(|| RegistrationMutation::Idle);
+    let save_error = use_signal(|| None::<String>);
     let is_team = user_type == "team";
     let pending = mutation() != RegistrationMutation::Idle;
     let actions_disabled =
         pending || load() != RegistrationLoad::Ready || show_deregister_confirm();
 
     rsx! {
+        style { {REGISTRATION_ACTIONS_CSS} }
         Modal {
             id: "edit-registration-dialog",
             labelled_by: "edit-registration-title",
@@ -51,7 +55,7 @@ pub fn EditRegistrationModal(
             on_close: move |_| { if mutation() == RegistrationMutation::Idle { on_close.call(()); } },
             div { class: "modal-header",
                 h5 { class: "modal-title", id: "edit-registration-title", tabindex: "-1",
-                    if is_team { "Edit Team Registration" } else { "Edit Player Registration" }
+                    if is_team { "Edit team registration" } else { "Edit player registration" }
                 }
                 button {
                     r#type: "button",
@@ -63,9 +67,26 @@ pub fn EditRegistrationModal(
             }
             div { class: "modal-body",
                 if is_team {
-                    EditTeamRegistrationContent { context: context.clone(), load, mutation, on_close, on_success }
+                    EditTeamRegistrationContent { context: context.clone(), load, mutation, save_error, on_close, on_success }
                 } else {
-                    EditPlayerRegistrationContent { context: context.clone(), load, mutation, on_close, on_success }
+                    EditPlayerRegistrationContent { context: context.clone(), load, mutation, save_error, on_close, on_success }
+                }
+                if load() == RegistrationLoad::Ready {
+                    div { class: "registration-withdraw-section",
+                        button {
+                            r#type: "button",
+                            id: "edit-registration-withdraw",
+                            class: "btn btn-outline-danger",
+                            disabled: actions_disabled,
+                            aria_haspopup: "dialog",
+                            onclick: move |_| {
+                                if mutation() == RegistrationMutation::Idle && load() == RegistrationLoad::Ready {
+                                    show_deregister_confirm.set(true);
+                                }
+                            },
+                            if is_team { "Withdraw team" } else { "Withdraw registration" }
+                        }
+                    }
                 }
                 if show_deregister_confirm() {
                     DeregisterConfirmOverlay {
@@ -74,25 +95,30 @@ pub fn EditRegistrationModal(
                     }
                 }
             }
-            div { class: "modal-footer",
-                button {
-                    r#type: "button",
-                    id: "edit-registration-withdraw",
-                    class: "btn btn-outline-danger",
-                    disabled: actions_disabled,
-                    onclick: move |_| {
-                        if mutation() == RegistrationMutation::Idle && load() == RegistrationLoad::Ready {
-                            show_deregister_confirm.set(true);
-                        }
-                    },
-                    if is_team { "Deregister Team" } else { "Deregister Player" }
+            div { class: "modal-footer registration-dialog-footer",
+                if let Some(message) = save_error() {
+                    p { class: "registration-dialog-feedback text-danger", role: "alert", tabindex: "0", "{message}" }
+                }
+                if mutation() == RegistrationMutation::Saving {
+                    span { class: "visually-hidden", role: "status", "Saving registration…" }
                 }
                 button {
-                    r#type: "submit",
-                    form: if is_team { "edit-team-registration-form" } else { "edit-player-registration-form" },
-                    class: "btn btn-primary",
-                    disabled: actions_disabled,
-                    if mutation() == RegistrationMutation::Saving { "Saving…" } else { "Save changes" }
+                    r#type: "button",
+                    id: "edit-registration-cancel",
+                    class: "btn btn-outline-secondary",
+                    disabled: pending,
+                    onclick: move |_| { if mutation() == RegistrationMutation::Idle { on_close.call(()); } },
+                    "Cancel"
+                }
+                if load() == RegistrationLoad::Ready {
+                    button {
+                        r#type: "submit",
+                        id: "edit-registration-save",
+                        form: if is_team { "edit-team-registration-form" } else { "edit-player-registration-form" },
+                        class: "btn btn-primary",
+                        disabled: actions_disabled,
+                        if mutation() == RegistrationMutation::Saving { "Saving…" } else { "Save changes" }
+                    }
                 }
             }
         }
@@ -138,8 +164,8 @@ fn DeregisterConfirmOverlay(
                     div { class: "alert alert-danger small py-2 mb-0", role: "alert", "{err}" }
                 }
             }
-            div { class: "modal-footer",
-                button { id: "keep-registration", r#type: "button", class: "btn btn-secondary", disabled: pending, onclick: move |_| { if mutation() == RegistrationMutation::Idle { on_cancel.call(()); } }, "Keep registration" }
+            div { class: "modal-footer registration-confirm-footer",
+                button { id: "keep-registration", r#type: "button", class: "btn btn-outline-secondary", disabled: pending, onclick: move |_| { if mutation() == RegistrationMutation::Idle { on_cancel.call(()); } }, "Keep registration" }
                 button {
                     r#type: "button",
                     class: "btn btn-danger",
@@ -176,6 +202,7 @@ fn EditPlayerRegistrationContent(
     context: EditRegistrationContext,
     mut load: Signal<RegistrationLoad>,
     mut mutation: Signal<RegistrationMutation>,
+    mut save_error: Signal<Option<String>>,
     on_close: EventHandler<()>,
     on_success: EventHandler<()>,
 ) -> Element {
@@ -267,7 +294,7 @@ fn EditPlayerRegistrationContent(
                 return;
             }
             mutation.set(RegistrationMutation::Saving);
-            error.set(None);
+            save_error.set(None);
             let t_val = team();
             let team_opt = if t_val.is_empty() { None } else { Some(t_val) };
             let req = UpdatePlayerRegistrationRequest {
@@ -295,7 +322,7 @@ fn EditPlayerRegistrationContent(
                     on_success.call(());
                 }
                 Err(e) => {
-                    error.set(Some(e));
+                    save_error.set(Some(e));
                 }
             }
         }
@@ -419,6 +446,7 @@ fn EditTeamRegistrationContent(
     context: EditRegistrationContext,
     mut load: Signal<RegistrationLoad>,
     mut mutation: Signal<RegistrationMutation>,
+    mut save_error: Signal<Option<String>>,
     on_close: EventHandler<()>,
     on_success: EventHandler<()>,
 ) -> Element {
@@ -465,7 +493,7 @@ fn EditTeamRegistrationContent(
                 return;
             }
             mutation.set(RegistrationMutation::Saving);
-            error.set(None);
+            save_error.set(None);
             let trimmed_short = shortname().trim().to_string();
             let req = UpdateTeamRegistrationRequest {
                 pseudonym: Some(pseudonym()),
@@ -486,7 +514,7 @@ fn EditTeamRegistrationContent(
                     on_success.call(());
                 }
                 Err(e) => {
-                    error.set(Some(e));
+                    save_error.set(Some(e));
                 }
             }
         }

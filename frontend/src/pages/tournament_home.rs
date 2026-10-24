@@ -164,9 +164,11 @@ pub fn TournamentHomeContent(
                                 if d.is_current_team_registered {
                                     Link { to: Route::Invitations { url: url.clone() }, class: "btn btn-outline-secondary", "Manage roster" }
                                     button {
+                                        r#type: "button",
                                         class: "btn btn-outline-secondary",
+                                        aria_haspopup: "dialog",
                                         onclick: move |_| show_edit_team_modal.set(true),
-                                        "Edit Registration"
+                                        "Edit registration"
                                     }
                                 } else if d.tournament.team_registration_open {
                                     Link { to: Route::TournamentRegister { url: url.clone() }, class: "btn btn-primary event-registration-action", "Register" }
@@ -181,9 +183,11 @@ pub fn TournamentHomeContent(
                             } else if current_user.user_type == "player" {
                                 if d.is_current_player_registered {
                                     button {
+                                        r#type: "button",
                                         class: "btn btn-outline-secondary",
+                                        aria_haspopup: "dialog",
                                         onclick: move |_| show_edit_player_modal.set(true),
-                                        "Edit Registration"
+                                        "Edit registration"
                                     }
                                 } else if d.tournament.player_registration_open {
                                     Link { to: Route::TournamentRegister { url: url.clone() }, class: "btn btn-primary event-registration-action", "Register" }

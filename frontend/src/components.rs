@@ -70,3 +70,6 @@ pub use record_timestamp::RecordTimestamp;
 
 mod tool_page_header;
 pub use tool_page_header::ToolPageHeader;
+
+mod settings_save_actions;
+pub use settings_save_actions::{SettingsSaveActions, SettingsSaveJump};

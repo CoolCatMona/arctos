@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::{BannerAccountKind, BannerUpload, EventBannerPhoto, ToolPageHeader};
+use crate::components::{BannerAccountKind, BannerUpload, EventBannerPhoto, SettingsSaveActions, SettingsSaveJump, ToolPageHeader};
 use crate::Route;
 use dioxus::prelude::*;
 use std::collections::HashMap;
@@ -641,7 +641,7 @@ pub fn TournamentSettings(url: String) -> Element {
         style { {include_str!("../components/organizer_tools.css")} }
         if let Some(Ok(d)) = val.read().as_ref() {
             div { class: "penalty-settings-wrap organizer-settings",
-                ToolPageHeader { title: "Settings" }
+                ToolPageHeader { title: "Settings", actions: rsx! { SettingsSaveJump {} } }
 
             div { class: "row",
                 div { class: "col-12",
@@ -959,9 +959,12 @@ pub fn TournamentSettings(url: String) -> Element {
                                     }
                                 }
 
-                                if let Some(message) = save_error() { p { class: "text-danger", role: "alert", "{message}" } }
-                                div { class: "form-actions",
-                                    button { r#type: "submit", class: "btn btn-primary", disabled: saving() || mutation_pending() || banner_busy() || waiver_reading(), if saving() { "Saving…" } else { "Save settings" } }
+                                SettingsSaveActions {
+                                    saving: saving(), error: save_error(),
+                                    blocked_reason: if waiver_reading() { Some("Reading the waiver file. Save will be available when it is ready.".into()) }
+                                        else if banner_busy() { Some("Finish or cancel the banner change before saving settings.".into()) }
+                                        else if mutation_pending() { Some("Wait for the penalty change to finish before saving settings.".into()) }
+                                        else { None },
                                 }
                             }
                         }

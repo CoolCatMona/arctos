@@ -132,6 +132,9 @@ fn ImageUpload(kind: BannerAccountKind, account_id: String, mut photo: Signal<Op
                 if avatar { "Choose a square crop for your profile photo." }
                 else { "Choose a wide crop for your banner." }
             }
+            if matches!(kind, BannerAccountKind::Tournament | BannerAccountKind::League) {
+                p { class: "form-text", "Banner changes save separately from settings. Save banner and Remove banner take effect immediately." }
+            }
             if let Some(path) = photo() {
                 img { class: if avatar { "photo-upload-preview" } else { "banner-upload-preview" }, src: "{api::base_url()}/static/{path}", alt: "Current {noun}" }
             }

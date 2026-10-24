@@ -44,9 +44,14 @@ struct StoneSave {
     error: Signal<Option<String>>,
     retry: Signal<Option<Value>>,
     draft: Signal<bool>,
+    editing: Signal<bool>,
 }
 
 impl StoneSave {
+    fn blocks_point_actions(self) -> bool {
+        (self.pending)() || (self.retry)().is_some() || (self.editing)()
+    }
+
     async fn commit(
         mut self,
         url: String,
@@ -80,6 +85,7 @@ impl StoneSave {
                 self.retry.set(None);
                 if body.get("correction").is_some() {
                     self.draft.set(false);
+                    self.editing.set(false);
                 }
             }
             Err(message) => {
@@ -88,6 +94,31 @@ impl StoneSave {
             }
         }
         self.pending.set(false);
+    }
+}
+
+fn point_action_block_reason(
+    finalized: bool,
+    point_pending: bool,
+    stone_pending: bool,
+    stone_uncertain: bool,
+    editing_count: bool,
+    needs_count: bool,
+) -> Option<&'static str> {
+    if finalized {
+        Some("This match is finalized.")
+    } else if point_pending {
+        Some("Saving the point change…")
+    } else if stone_pending {
+        Some("Saving the stone count…")
+    } else if stone_uncertain {
+        Some("Retry the stone correction or check the current count before continuing.")
+    } else if editing_count {
+        Some("Save or cancel the stone correction before continuing.")
+    } else if needs_count {
+        Some("Set the stone count before starting a point.")
+    } else {
+        None
     }
 }
 
@@ -447,9 +478,9 @@ fn SetNumberControls(
                 class: "set-step-btn",
                 r#type: "button",
                 aria_label: "Increase set number",
-                disabled: point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some(),
+                disabled: point_pending() || stone_save.blocks_point_actions(),
                 onclick: move |_| {
-                    if point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some() { return; }
+                    if point_pending() || stone_save.blocks_point_actions() { return; }
                     let prev = state_signal().clone();
                     let current = shown();
                     let new_set = current.saturating_add(1).max(1);
@@ -486,9 +517,9 @@ fn SetNumberControls(
                 class: "set-step-btn",
                 r#type: "button",
                 aria_label: "Decrease set number",
-                disabled: point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some(),
+                disabled: point_pending() || stone_save.blocks_point_actions(),
                 onclick: move |_| {
-                    if point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some() { return; }
+                    if point_pending() || stone_save.blocks_point_actions() { return; }
                     let prev = state_signal().clone();
                     let current = shown();
                     let new_set = current.saturating_sub(1).max(1);
@@ -672,7 +703,7 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
         });
     });
 
-    // In-progress point: when Some, button shows "End Point" and we tick stones.
+    // In-progress point: when Some, button shows "End point" and we tick stones.
     let mut current_point = use_signal(|| None as Option<String>);
     // Sync current_point from state: if latest point has no end_stamp, we're in End Point mode.
     let state_for_sync = state_signal();
@@ -836,8 +867,21 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
         error: use_signal(|| None),
         retry: use_signal(|| None),
         draft: use_signal(|| false),
+        editing: use_signal(|| false),
     };
     let mut point_pending = use_signal(|| false);
+    let mut correction_was_open = use_signal(|| false);
+    use_effect(move || {
+        let open = (stone_save.editing)();
+        if open == *correction_was_open.peek() { return; }
+        correction_was_open.set(open);
+        #[cfg(target_arch = "wasm32")]
+        if let Some(input) = web_sys::window().and_then(|window| window.document())
+            .and_then(|document| document.get_element_by_id(if open { "stones-remaining" } else { "correct-stones" }))
+            .and_then(|element| element.dyn_into::<web_sys::HtmlElement>().ok()) {
+            let _ = input.focus();
+        }
+    });
     // Previous live stone count, for detecting a tick-down to the 15-stone warning threshold.
     #[cfg(target_arch = "wasm32")]
     let mut prev_stones_for_beep = use_signal(|| None as Option<u32>);
@@ -1038,7 +1082,7 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                         prev_stones_for_beep.set(None);
                     }
                 }
-                let stones_input_value = if stones_input_focused() || (stone_save.draft)() {
+                let stones_input_value = if (stone_save.editing)() || (stone_save.draft)() {
                     stones_edit_value().clone()
                 } else {
                     display_stones.map(|n| n.to_string()).unwrap_or_default()
@@ -1048,12 +1092,15 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                     let u = url.clone();
                     let id = match_id.clone();
                     move || {
-                        if (stone_save.pending)() || point_pending() {
+                        if (stone_save.pending)() || point_pending() || (stone_save.retry)().is_some() {
                             return;
                         }
                         if stones_edit_value() == stones_original() {
                             if (stone_save.retry)().is_none() {
                                 stone_save.draft.set(false);
+                                stone_save.error.set(None);
+                                stone_save.editing.set(false);
+                                stones_input_focused.set(false);
                             }
                             return;
                         }
@@ -1088,7 +1135,7 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                 let mut stones_remaining = stones_remaining;
                 let mut state_signal_start = state_signal;
                 let on_start_end_point = EventHandler::<MouseEvent>::new(move |_| {
-                    if point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some() {
+                    if point_pending() || stone_save.blocks_point_actions() {
                         return;
                     }
                     point_pending.set(true);
@@ -1277,22 +1324,33 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
 
                 let has_in_progress = current_point().is_some();
                 let point_button_text = if has_in_progress {
-                    "End Point"
+                    "End point"
                 } else {
-                    "Start Point"
+                    "Start point"
                 };
                 let point_button_class = if has_in_progress {
-                    "btn btn-danger btn-lg w-100 mobile-sticky-button"
+                    "btn btn-primary btn-lg w-100 mobile-sticky-button"
                 } else {
-                    "btn btn-success btn-lg w-100 mobile-sticky-button"
+                    "btn btn-primary btn-lg w-100 mobile-sticky-button"
                 };
                 // Block starting a point until the stone count is known (can't record stones_at_start otherwise).
                 let needs_stone_count = set_type_stones && !stones_known && !has_in_progress;
-                let point_button_disabled = finalized
-                    || needs_stone_count
-                    || point_pending()
-                    || (stone_save.pending)()
-                    || (stone_save.retry)().is_some();
+                let action_block_reason = point_action_block_reason(finalized, point_pending(),
+                    (stone_save.pending)(), (stone_save.retry)().is_some(),
+                    (stone_save.editing)(), needs_stone_count);
+                let point_button_disabled = action_block_reason.is_some();
+                let review_block_reason = if let Some(reason) = point_action_block_reason(false, point_pending(), (stone_save.pending)(), (stone_save.retry)().is_some(), (stone_save.editing)(), false) {
+                    Some(reason)
+                } else if has_in_progress {
+                    Some("End the current point before reviewing the result.")
+                } else {
+                    None
+                };
+                let point_context = if has_in_progress {
+                    format!("Point {} in progress", points.len())
+                } else {
+                    format!("Ready for point {}", points.len() + 1)
+                };
                 let point_button_text = if needs_stone_count {
                     "Set stone count to start"
                 } else {
@@ -1406,16 +1464,16 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                     "{elapsed}"
                                 }
                                 td { class: "point-winner",
-                                    span { class: "point-mobile-label", aria_hidden: "true", "Winner" }
+                                    span { class: "point-mobile-label", aria_hidden: "true", "Winner of point {point_index}" }
                                     div { class: "winner-cell",
                                         div { class: "winner-options-group",
                                         button {
                                             class: format!("winner-option{}", if winner_val == "TEAM1" { " active" } else { "" }),
                                             r#type: "button",
                                             aria_label: "{team1} wins point {point_index}",
-                                            aria_pressed: "{winner_is_t1}", disabled: point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some(),
+                                            aria_pressed: "{winner_is_t1}", disabled: point_pending() || stone_save.blocks_point_actions(),
                                             onclick: move |_| {
-                                                if point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some() { return; }
+                                                if point_pending() || stone_save.blocks_point_actions() { return; }
                                                 point_pending.set(true);
                                                 let val = if winner_is_t1 { "none" } else { "TEAM1" };
                                                 let prev = state_signal().clone();
@@ -1453,9 +1511,9 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                             class: format!("winner-option{}", if winner_val == "TEAM2" { " active" } else { "" }),
                                             r#type: "button",
                                             aria_label: "{team2} wins point {point_index}",
-                                            aria_pressed: "{winner_is_t2}", disabled: point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some(),
+                                            aria_pressed: "{winner_is_t2}", disabled: point_pending() || stone_save.blocks_point_actions(),
                                             onclick: move |_| {
-                                                if point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some() { return; }
+                                                if point_pending() || stone_save.blocks_point_actions() { return; }
                                                 point_pending.set(true);
                                                 let val = if winner_is_t2 { "none" } else { "TEAM2" };
                                                 let prev = state_signal().clone();
@@ -1498,9 +1556,9 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                             class: "form-check-input",
                                             r#type: "checkbox",
                                             checked: rerolled,
-                                            aria_label: "Rerun this point", disabled: point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some(),
+                                            aria_label: "Rerun this point", disabled: point_pending() || stone_save.blocks_point_actions(),
                                             onchange: move |ev| {
-                                                if point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some() { return; }
+                                                if point_pending() || stone_save.blocks_point_actions() { return; }
                                                 point_pending.set(true);
                                                 let checked = ev.checked();
                                                 let prev = state_signal().clone();
@@ -1573,7 +1631,7 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                                     class: "btn btn-sm btn-outline-secondary",
                                                     title: "Point Note",
                                                     id: "point-note-{pid_notes}",
-                                                    aria_label: "Edit point note",
+                                                    aria_label: "Edit note for point {point_index}",
                                                     onclick: move |_| {
                                                         notes_error.set(None);
                                                         notes_generation += 1;
@@ -1613,7 +1671,7 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                                     class: "btn btn-sm btn-outline-danger",
                                                     title: "Penalties",
                                                     id: "point-penalties-{pid_penalties}",
-                                                    aria_label: "Manage point penalties",
+                                                    aria_label: "Manage penalties for point {point_index}",
                                                     onclick: move |_| {
                                                         penalty_error.set(None);
                                                         penalty_uncertain.set(None);
@@ -1656,9 +1714,9 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                     button {
                                         class: "delete-point-btn",
                                         title: "Delete",
-                                        aria_label: "Delete point", disabled: point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some(),
+                                        aria_label: "Delete point {point_index}", disabled: point_pending() || stone_save.blocks_point_actions(),
                                         onclick: move |_| {
-                                            if point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some() { return; }
+                                            if point_pending() || stone_save.blocks_point_actions() { return; }
                                             #[cfg(target_arch = "wasm32")]
                                             {
                                                 let confirmed = web_sys::window()
@@ -1848,6 +1906,7 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                 rsx! {
                     div { class: "container mt-4 run-match-page",
                         style { "{run_match_css}" }
+                        style { {include_str!("live_match_actions.css")} }
                         if quick_timer_dragging {
                             div { id: "quick-timer-scrim",
                                 div { class: "qt-scrim-text",
@@ -1910,13 +1969,13 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                             div { class: "col-md-6 mb-4 mb-md-0",
                                                 div { id: "score-by-set",
                                                     div { class: "d-flex align-items-center mb-1 gap-2",
-                                                        div { class: "flex-grow-1 text-center text-truncate",
+                                                        div { class: "flex-grow-1 text-center live-match-team",
                                                             small { class: "text-muted", "{team1}" }
                                                         }
                                                         div { class: "flex-shrink-0 text-nowrap text-center",
                                                             span { id: "time-elapsed", "{time_elapsed_str}" }
                                                         }
-                                                        div { class: "flex-grow-1 text-center text-truncate",
+                                                        div { class: "flex-grow-1 text-center live-match-team",
                                                             small { class: "text-muted", "{team2}" }
                                                         }
                                                     }
@@ -1941,35 +2000,62 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                             }
                                             div { class: "col-md-6",
                                                 if set_type_stones {
-                                                    div { class: "d-flex align-items-center justify-content-center gap-3",
-                                                        div { class: "text-start",
-                                                            h4 { class: "mb-0", "Stone Count" }
-                                                            p { class: "small text-muted mb-0", "(click to edit)" }
+                                                    div { class: "live-stone-summary",
+                                                        div {
+                                                            span { class: "live-match-label", "Stones remaining" }
+                                                            output { id: "stones-remaining-display", class: "live-stone-count", aria_label: "Stones remaining",
+                                                                "{display_stones.map(|count| count.to_string()).unwrap_or_else(|| \"—\".into())}"
+                                                            }
                                                         }
-                                                        input {
-                                                            r#type: "number",
-                                                            class: "form-control-plaintext text-center display-4 m-0 p-0",
-                                                            id: "stones-remaining",
-                                                            aria_label: "Stones remaining",
-                                                            min: "0",
-                                                            inputmode: "numeric",
-                                                            style: "width: 6ch; line-height: 1; font-size: 3rem; height: 64px; min-width: 6ch;",
-                                                            value: "{stones_input_value}",
-                                                            disabled: point_pending() || (stone_save.pending)(),
-                                                            onfocus: move |_| {
-                                                                stones_input_focused.set(true);
-                                                                if !(stone_save.draft)() && (stone_save.retry)().is_none() {
-                                                                    let value = display_stones.map(|n| n.to_string()).unwrap_or_default();
-                                                                    stones_edit_value.set(value.clone()); stones_original.set(value);
+                                                        if !(stone_save.editing)() {
+                                                            button { r#type: "button", id: "correct-stones", class: "btn btn-outline-secondary",
+                                                                disabled: point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some(),
+                                                                onclick: move |_| {
+                                                                    if point_pending() || stone_save.blocks_point_actions() { return; }
+                                                                    let value = display_stones.map(|count| count.to_string()).unwrap_or_default();
+                                                                    stones_original.set(value.clone()); stones_edit_value.set(value);
+                                                                    stone_save.draft.set(false); stone_save.error.set(None); stone_save.editing.set(true);
+                                                                }, "Correct count"
+                                                            }
+                                                        }
+                                                    }
+                                                    if (stone_save.editing)() {
+                                                        div { class: "live-stone-editor", id: "stone-correction-editor",
+                                                            label { r#for: "stones-remaining", class: "form-label", "Correct stone count" }
+                                                            p { id: "stone-correction-help", class: "small text-muted",
+                                                                "Save applies this count immediately."
+                                                                if has_in_progress { " The active point keeps counting while you edit." }
+                                                            }
+                                                            input {
+                                                                r#type: "number", class: "form-control", id: "stones-remaining",
+                                                                aria_describedby: "stone-correction-help", min: "0", inputmode: "numeric",
+                                                                value: "{stones_input_value}",
+                                                                disabled: point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some(),
+                                                                onfocus: move |_| stones_input_focused.set(true),
+                                                                onblur: move |_| stones_input_focused.set(false),
+                                                                onkeydown: { let mut submit = submit_stones.clone(); move |event| {
+                                                                    if event.key() == Key::Enter { event.prevent_default(); submit(); }
+                                                                    if event.key() == Key::Escape && !(stone_save.pending)() && (stone_save.retry)().is_none() {
+                                                                        event.prevent_default(); stone_save.draft.set(false); stone_save.editing.set(false); stone_save.error.set(None); stones_input_focused.set(false);
+                                                                    }
+                                                                } },
+                                                                oninput: move |event| { stones_edit_value.set(event.value()); stone_save.draft.set(true); },
+                                                            }
+                                                            div { class: "live-match-actions mt-2",
+                                                                button { r#type: "button", id: "save-stone-correction", class: "btn btn-primary",
+                                                                    disabled: point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some(),
+                                                                    onclick: { let mut submit = submit_stones.clone(); move |_| submit() },
+                                                                    if (stone_save.pending)() { "Saving…" } else { "Save correction" }
                                                                 }
-                                                            },
-                                                            onblur: { let mut submit = submit_stones.clone(); move |_| { submit(); stones_input_focused.set(false); } },
-                                                            onkeydown: { let mut submit = submit_stones.clone(); move |event| {
-                                                                if event.key() == Key::Enter { event.prevent_default(); submit(); }
-                                                                if event.key() == Key::Escape { event.prevent_default(); stones_edit_value.set(stones_original()); stones_input_focused.set(false); if (stone_save.retry)().is_none() { stone_save.draft.set(false); stone_save.error.set(None); } }
-                                                            } },
-                                                            oninput: move |event| { stones_edit_value.set(event.value()); stone_save.draft.set(true); },
-
+                                                                button { r#type: "button", class: "btn btn-outline-secondary",
+                                                                    disabled: (stone_save.pending)() || (stone_save.retry)().is_some(),
+                                                                    onclick: move |_| {
+                                                                        if (stone_save.pending)() || (stone_save.retry)().is_some() { return; }
+                                                                        // Cancel only discards the local draft; never restore an old server count.
+                                                                        stone_save.draft.set(false); stone_save.editing.set(false); stone_save.error.set(None); stones_input_focused.set(false);
+                                                                    }, "Cancel"
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -1994,7 +2080,7 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                                                             Ok(current) => {
                                                                                 state_signal.set(Some(Ok(current)));
                                                                                 match api::match_detail(&u, Some(&id), None).await {
-                                                                                    Ok(detail) => { stones_remaining.set(detail.match_data.stones_remaining.or(detail.match_data.stones_per_set)); stone_save.retry.set(None); stone_save.error.set(None); stone_save.draft.set(false); stones_input_focused.set(false); }
+                                                                                    Ok(detail) => { stones_remaining.set(detail.match_data.stones_remaining.or(detail.match_data.stones_per_set)); stone_save.retry.set(None); stone_save.error.set(None); stone_save.draft.set(false); stone_save.editing.set(false); stones_input_focused.set(false); }
                                                                                     Err(message) => stone_save.error.set(Some(message)),
                                                                                 }
                                                                             }
@@ -2007,11 +2093,18 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                                         }
                                                     }
                                                 }
+                                                p { class: if (stone_save.editing)() { "live-point-context mt-3 mb-1" } else { "live-point-context mt-3 mb-1 d-none d-md-block" }, "{point_context}" }
+                                                p { id: "point-action-help", class: "small text-muted mb-2",
+                                                    if let Some(reason) = action_block_reason { "{reason}" }
+                                                    else if has_in_progress { "End this point when play stops, then record the winner below." }
+                                                    else { "Start the next point when both teams and referees are ready." }
+                                                }
                                                 div { class: "row mt-3",
                                                     div { class: "col-12 d-flex align-items-stretch gap-2",
-                                                        div { class: "flex-grow-1",
+                                                        div { class: "flex-grow-1 d-none d-md-block",
                                                             button {
                                                                 id: "point-button",
+                                                                aria_describedby: "point-action-help",
                                                                 class: "{point_button_class}",
                                                                 onclick: on_start_end_point,
                                                                 disabled: point_button_disabled,
@@ -2064,46 +2157,43 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                             }
                         }
 
-                        div { class: "row mt-4",
-                            div { class: "col-12",
-                                button {
-                                    id: "finalize-match-btn",
-                                    class: "btn btn-warning btn-lg w-100",
+                        div { class: "live-match-review mt-4",
+                            p { id: "review-result-help", class: "small text-muted mb-2",
+                                if let Some(reason) = review_block_reason { "{reason}" }
+                                else { "Review the final score and collect both captains’ signatures when the match is finished." }
+                            }
+                            div { class: "live-match-actions",
+                                button { r#type: "button", id: "finalize-match-btn", class: "btn btn-outline-primary d-none d-md-inline-flex",
+                                    aria_describedby: "review-result-help", disabled: review_block_reason.is_some(),
                                     onclick: move |_| {
-                                        navigator.push(Route::FinalizeMatch {
-                                            url: url_finalize_btn.clone(),
-                                            match_id: id_finalize_btn.clone(),
-                                        });
-                                    },
-                                    disabled: has_in_progress || point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some(),
-                                    if has_in_progress {
-                                        "Finalize Match (Point in Progress)"
-                                    } else {
-                                        "Finalize Match"
+                                        if point_pending() || stone_save.blocks_point_actions() || current_point().is_some() { return; }
+                                        navigator.push(Route::FinalizeMatch { url: url_finalize_btn.clone(), match_id: id_finalize_btn.clone() });
+                                    }, "Review result"
+                                }
+                                if point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some() {
+                                    button { r#type: "button", class: "btn btn-outline-secondary", disabled: true,
+                                        aria_describedby: "point-action-help", "Back to match"
                                     }
+                                } else {
+                                    Link { to: Route::MatchPageById { url: url.clone(), match_id: match_id.clone() }, class: "btn btn-outline-secondary", "Back to match" }
                                 }
                             }
                         }
                     }
 
-                    div { class: "mobile-button-wrapper operator-match-controls d-md-none",
-                        if !has_in_progress {
-                            button {
-                                class: "btn btn-warning btn-lg",
-                                disabled: point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some(),
-                                onclick: move |_| {
-                                    navigator.push(Route::FinalizeMatch {
-                                        url: url_finalize_mobile.clone(),
-                                        match_id: id_finalize_mobile.clone(),
-                                    });
-                                },
-                                "Finalize Match"
-                            }
+                    div { class: if (stone_save.editing)() { "mobile-button-wrapper operator-match-controls live-match-action-bar live-correction-open d-md-none" } else { "mobile-button-wrapper operator-match-controls live-match-action-bar d-md-none" },
+                        p { class: "live-action-status", role: "status",
+                            if let Some(reason) = action_block_reason { "{reason}" } else { "{point_context}" }
                         }
-                        button {
-                            class: "{point_button_class}",
-                            onclick: on_start_end_point_mobile,
-                            disabled: point_button_disabled,
+                        button { r#type: "button", class: "btn btn-outline-primary", aria_describedby: "review-result-help",
+                            disabled: review_block_reason.is_some(),
+                            onclick: move |_| {
+                                if point_pending() || stone_save.blocks_point_actions() || current_point().is_some() { return; }
+                                navigator.push(Route::FinalizeMatch { url: url_finalize_mobile.clone(), match_id: id_finalize_mobile.clone() });
+                            }, "Review result"
+                        }
+                        button { r#type: "button", class: "{point_button_class}", aria_describedby: "point-action-help",
+                            onclick: on_start_end_point_mobile, disabled: point_button_disabled,
                             "{point_button_text}"
                         }
                     }
@@ -2702,8 +2792,18 @@ mod quick_timer_tests {
 
 #[cfg(test)]
 mod recovery_tests {
-    use super::{stone_correction_body, PenaltyAttempt};
+    use super::{point_action_block_reason, stone_correction_body, PenaltyAttempt};
     use serde_json::json;
+    #[test]
+    fn point_actions_explain_each_persistence_barrier() {
+        assert!(point_action_block_reason(false, false, false, false, false, false).is_none());
+        assert_eq!(point_action_block_reason(false, true, false, false, false, false), Some("Saving the point change…"));
+        assert_eq!(point_action_block_reason(false, false, true, false, true, false), Some("Saving the stone count…"));
+        assert_eq!(point_action_block_reason(false, false, false, true, true, false), Some("Retry the stone correction or check the current count before continuing."));
+        assert_eq!(point_action_block_reason(false, false, false, false, true, false), Some("Save or cancel the stone correction before continuing."));
+        assert_eq!(point_action_block_reason(false, false, false, false, false, true), Some("Set the stone count before starting a point."));
+        assert_eq!(point_action_block_reason(true, false, false, false, false, false), Some("This match is finalized."));
+    }
     #[test]
     fn penalty_reconciliation_ignores_old_and_unrelated_notes() {
         let attempt = PenaltyAttempt {

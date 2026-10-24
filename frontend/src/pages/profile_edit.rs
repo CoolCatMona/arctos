@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::{ChangePasswordCard, ConnectedAppsCard, ImageDraft, PlayerPompfen, ProfileBio, ProfileImageControls, ProfileImageEditor};
+use crate::components::{ChangePasswordCard, ConnectedAppsCard, ImageDraft, Modal, ModalKind, PlayerPompfen, ProfileBio, ProfileImageControls, ProfileImageEditor};
 use crate::Route;
 use dioxus::prelude::*;
 
@@ -98,9 +98,11 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
     let mut saving = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let mut preview_only = use_signal(|| false);
+    let mut confirm_discard = use_signal(|| false);
     let changed = fields() != data.fields || photo().changed() || banner().changed();
     let profile_route = if team { Route::TeamProfilePage { id: account_id.clone() } }
         else { Route::PlayerProfilePage { id: account_id.clone() } };
+    let discard_route = profile_route.clone();
     let save_route = profile_route.clone();
     let save_id = account_id.clone();
     let onsubmit = move |event: Event<FormData>| {
@@ -141,7 +143,11 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
             }.await;
             match result {
                 Ok(()) => { auth_version += 1; nav.push(route); }
-                Err(message) => { error.set(Some(message)); saving.set(false); }
+                Err(message) => {
+                    error.set(Some(format!("Could not save profile. Your changes are kept. {message}")));
+                    saving.set(false);
+                    focus_field("profile-save-feedback".into());
+                }
             }
         });
     };
@@ -152,13 +158,26 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
             form { id: "profile-edit-form", novalidate: true, onsubmit,
                 oninput: move |_| { if !saving() { error.set(None); } },
                 header { class: "profile-editor-toolbar",
-                    button { r#type: "button", class: "btn btn-outline-secondary", disabled: saving() || busy(),
-                        onclick: move |_| { nav.push(profile_route.clone()); }, "Cancel" }
+                    button { id: "profile-edit-cancel", r#type: "button", class: "btn btn-outline-secondary", disabled: saving() || busy(),
+                        onclick: move |_| {
+                            if saving() || busy() { return; }
+                            if changed { confirm_discard.set(true); }
+                            else { nav.push(profile_route.clone()); }
+                        }, "Cancel" }
                     h1 { "Edit profile" }
                     button { r#type: "submit", class: "btn btn-primary", disabled: saving() || busy() || !changed,
+                        aria_describedby: "profile-save-feedback",
                         if saving() { "Saving…" } else { "Save" } }
+                    p { id: "profile-save-feedback", tabindex: "-1",
+                        class: if error().is_some() { "profile-editor-feedback is-error" } else { "profile-editor-feedback" },
+                        role: if error().is_some() { "alert" } else { "status" },
+                        if let Some(message) = error() { "{message}" }
+                        else if saving() { "Saving profile…" }
+                        else if busy() { "Preparing image. Save will be available when it’s ready." }
+                        else if !changed { "No changes to save." }
+                        else { "Unsaved changes." }
+                    }
                 }
-                if let Some(message) = error() { p { class: "alert alert-danger profile-edit-error", role: "alert", "{message}" } }
                 div { class: "profile-editor-mobile-view",
                     button { r#type: "button", class: "btn btn-outline-secondary", aria_pressed: preview_only(),
                         onclick: move |_| preview_only.toggle(),
@@ -216,6 +235,29 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
                         } else {
                             ProfileField { state: fields, field: Field::Phone, label: "Phone number", input_type: "tel", help: "Only you can see this.", disabled: saving() }
                         }
+                    }
+                }
+            }
+            if confirm_discard() {
+                Modal {
+                    id: "profile-discard-dialog",
+                    labelled_by: "profile-discard-title",
+                    described_by: Some("profile-discard-description".into()),
+                    initial_focus_id: Some("profile-discard-keep".into()),
+                    return_focus_id: Some("profile-edit-cancel".into()),
+                    kind: ModalKind::AlertDialog,
+                    on_close: move |_| confirm_discard.set(false),
+                    div { class: "modal-header",
+                        h2 { id: "profile-discard-title", class: "modal-title h5", tabindex: "-1", "Discard profile changes?" }
+                    }
+                    div { class: "modal-body",
+                        p { id: "profile-discard-description", "Your unsaved profile text and image changes will be discarded." }
+                    }
+                    div { class: "modal-footer",
+                        button { id: "profile-discard-keep", r#type: "button", class: "btn btn-secondary",
+                            onclick: move |_| confirm_discard.set(false), "Keep editing" }
+                        button { r#type: "button", class: "btn btn-danger",
+                            onclick: move |_| { confirm_discard.set(false); nav.push(discard_route.clone()); }, "Discard changes" }
                     }
                 }
             }

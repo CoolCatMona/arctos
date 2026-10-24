@@ -51,6 +51,9 @@
 .arctos-app .tool-page-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .arctos-app .ordinary-form-rail .form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-top: 1.5rem; }
 .arctos-app .ordinary-form-rail .form-actions > :is(.btn, button, a) { min-height: 44px; margin: 0; }
+.arctos-app .settings-save-actions { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--ui-border); }
+.arctos-app .settings-save-actions .form-actions { margin-top: 0; }
+.arctos-app .settings-save-actions:focus { outline: 3px solid var(--ui-link); outline-offset: 6px; }
 @media (max-width: 575.98px) {
   .arctos-app .ordinary-form-rail .form-actions { align-items: stretch; flex-direction: column; }
   .arctos-app .ordinary-form-rail .form-actions > :is(.btn, button, a) { width: 100%; }

@@ -8,6 +8,20 @@ use std::rc::Rc;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast as _;
 
+fn finalization_prerequisites(
+    winner_selected: bool,
+    team1_signed: bool,
+    team2_signed: bool,
+    team1: &str,
+    team2: &str,
+) -> Vec<String> {
+    let mut requirements = Vec::new();
+    if !winner_selected { requirements.push("Select the match winner.".into()); }
+    if !team1_signed { requirements.push(format!("Collect the {team1} captain’s signature.")); }
+    if !team2_signed { requirements.push(format!("Collect the {team2} captain’s signature.")); }
+    requirements
+}
+
 #[component]
 pub fn FinalizeMatch(url: String, match_id: String) -> Element {
     let match_id_for_data = match_id.clone();
@@ -26,6 +40,8 @@ pub fn FinalizeMatch(url: String, match_id: String) -> Element {
     let mut final_notes = use_signal(String::new);
     let mut submit_error = use_signal(|| None::<String>);
     let mut submitting = use_signal(|| false);
+    let mut team1_signed = use_signal(|| false);
+    let mut team2_signed = use_signal(|| false);
     let team1_canvas_id = "team1_signature_canvas";
     let team2_canvas_id = "team2_signature_canvas";
     let navigator = use_navigator();
@@ -45,7 +61,11 @@ pub fn FinalizeMatch(url: String, match_id: String) -> Element {
     });
 
     match data_snapshot {
-        Some(Ok(d)) => rsx! {
+        Some(Ok(d)) => {
+            let prerequisites = finalization_prerequisites(match_winner().is_some(), team1_signed(), team2_signed(), &d.match_info.team1_name, &d.match_info.team2_name);
+            let can_submit = prerequisites.is_empty();
+            rsx! {
+            style { {include_str!("live_match_actions.css")} }
             div { class: "row",
                 div { class: "col-12",
                     h1 { "Finalize match" }
@@ -263,84 +283,83 @@ pub fn FinalizeMatch(url: String, match_id: String) -> Element {
                                         submitting.set(false);
                                     });
                                 },
+                                fieldset { class: "live-match-fields", disabled: submitting(),
                                 div { class: "mb-4",
-                                    h6 { class: "form-label", "Match Winner" }
-                                    div { class: "row",
-                                        div { class: "col-md-6",
-                                            div { class: "form-check form-check-inline",
+                                    h6 { class: "form-label", id: "match-winner-label", "Match winner" }
+                                    div { class: "live-winner-options", role: "radiogroup", aria_labelledby: "match-winner-label",
+                                            label { class: "live-winner-choice", r#for: "winner-team1",
                                                 input {
                                                     class: "form-check-input",
                                                     r#type: "radio",
                                                     name: "match_winner",
                                                     id: "winner-team1",
                                                     value: "TEAM1",
+                                                    checked: match_winner().as_deref() == Some("TEAM1"),
                                                     onchange: move |_| match_winner.set(Some("TEAM1".to_string())),
                                                 }
-                                                label {
-                                                    class: "form-check-label",
-                                                    r#for: "winner-team1",
-                                                    strong { "{d.match_info.team1_name}" }
-                                                }
+                                                strong { "{d.match_info.team1_name}" }
                                             }
-                                        }
-                                        div { class: "col-md-6",
-                                            div { class: "form-check form-check-inline",
+                                            label { class: "live-winner-choice", r#for: "winner-team2",
                                                 input {
                                                     class: "form-check-input",
                                                     r#type: "radio",
                                                     name: "match_winner",
                                                     id: "winner-team2",
                                                     value: "TEAM2",
+                                                    checked: match_winner().as_deref() == Some("TEAM2"),
                                                     onchange: move |_| match_winner.set(Some("TEAM2".to_string())),
                                                 }
-                                                label {
-                                                    class: "form-check-label",
-                                                    r#for: "winner-team2",
-                                                    strong { "{d.match_info.team2_name}" }
-                                                }
+                                                strong { "{d.match_info.team2_name}" }
                                             }
-                                        }
                                     }
                                 }
 
                                 div { class: "row mb-4",
-                                    div { class: "col-md-6",
+                                    div { class: "col-md-6 live-signature-block",
                                         h6 { "{d.match_info.team1_name} Captain Signature" }
                                         div {
                                             class: "operator-signature-pad border p-3",
                                             style: "height: 170px;",
                                             canvas {
                                                 id: "{team1_canvas_id}",
+                                                "data-disabled": "{submitting()}",
                                                 style: "width: 100%; height: 100%; touch-action: none;",
-                                                aria_label: "Captain signature: draw with your finger or pointer",
+                                                aria_label: "{d.match_info.team1_name} captain signature: draw with your finger or pointer",
+                                                onpointerup: move |_| team1_signed.set(canvas_signed(team1_canvas_id)),
+                                                onpointerleave: move |_| team1_signed.set(canvas_signed(team1_canvas_id)),
                                             }
                                         }
                                         div { class: "mt-2",
                                             button {
                                                 r#type: "button",
                                                 class: "btn btn-sm btn-outline-secondary",
-                                                onclick: move |_| clear_canvas_by_id(team1_canvas_id),
-                                                "Clear"
+                                                aria_label: "Clear {d.match_info.team1_name} captain signature",
+                                                onclick: move |_| { clear_canvas_by_id(team1_canvas_id); team1_signed.set(false); },
+                                                "Clear signature"
                                             }
                                         }
                                     }
-                                    div { class: "col-md-6",
+                                    div { class: "col-md-6 live-signature-block",
                                         h6 { "{d.match_info.team2_name} Captain Signature" }
                                         div {
                                             class: "operator-signature-pad border p-3",
                                             style: "height: 170px;",
                                             canvas {
                                                 id: "{team2_canvas_id}",
+                                                "data-disabled": "{submitting()}",
                                                 style: "width: 100%; height: 100%; touch-action: none;",
-                                                aria_label: "Captain signature: draw with your finger or pointer",
+                                                aria_label: "{d.match_info.team2_name} captain signature: draw with your finger or pointer",
+                                                onpointerup: move |_| team2_signed.set(canvas_signed(team2_canvas_id)),
+                                                onpointerleave: move |_| team2_signed.set(canvas_signed(team2_canvas_id)),
                                             }
                                         }
                                         div { class: "mt-2",
                                             button {
                                                 r#type: "button",
                                                 class: "btn btn-sm btn-outline-secondary",
-                                                onclick: move |_| clear_canvas_by_id(team2_canvas_id),
-                                                "Clear"
+                                                aria_label: "Clear {d.match_info.team2_name} captain signature",
+                                                onclick: move |_| { clear_canvas_by_id(team2_canvas_id); team2_signed.set(false); },
+                                                "Clear signature"
                                             }
                                         }
                                     }
@@ -365,19 +384,32 @@ pub fn FinalizeMatch(url: String, match_id: String) -> Element {
                                 if let Some(ref err) = submit_error() {
                                     div { class: "alert alert-danger mb-3", role: "alert", "{err}" }
                                 }
-                                div { class: "d-grid",
+                                if !can_submit {
+                                    ul { id: "finalize-prerequisites", class: "live-match-prerequisites", role: "status",
+                                        for requirement in prerequisites { li { "{requirement}" } }
+                                    }
+                                } else {
+                                    p { id: "finalize-prerequisites", class: "small text-muted", "Both captains have signed. Confirm to save the final match result." }
+                                }
+                                div { class: "live-match-actions",
                                     button {
                                         r#type: "submit",
                                         class: "btn btn-primary",
-                                        disabled: submitting(),
+                                        aria_describedby: "finalize-prerequisites",
+                                        disabled: submitting() || !can_submit,
                                         if submitting() { "Finalizing match…" } else { "Confirm and finalize match" }
                                     }
+                                    if !submitting() {
+                                        Link { to: Route::RunMatch { url: url.clone(), match_id: match_id.clone() }, class: "btn btn-outline-secondary", "Back to scoring" }
+                                    }
+                                }
                                 }
                             }
                         }
                     }
                 }
             }
+        }
         },
         Some(Err(e)) => rsx! {
             p { class: "text-danger", "{e}" }
@@ -430,6 +462,10 @@ fn setup_signature_canvas_by_id(canvas_id: &str) {
     let ctx_move = ctx.clone();
     let canvas_move = canvas.clone();
     let on_mousedown = Closure::<dyn FnMut(_)>::new(move |e: web_sys::MouseEvent| {
+        if canvas_move.get_attribute("data-disabled").as_deref() == Some("true") {
+            *drawing_move.borrow_mut() = false;
+            return;
+        }
         *drawing_move.borrow_mut() = true;
         let _ = canvas_move.set_attribute("data-signed", "true");
         let rect = canvas_move.get_bounding_client_rect();
@@ -448,6 +484,10 @@ fn setup_signature_canvas_by_id(canvas_id: &str) {
     let ctx_move = ctx.clone();
     let canvas_move = canvas.clone();
     let on_mousemove = Closure::<dyn FnMut(_)>::new(move |e: web_sys::MouseEvent| {
+        if canvas_move.get_attribute("data-disabled").as_deref() == Some("true") {
+            *drawing_move.borrow_mut() = false;
+            return;
+        }
         if !*drawing_move.borrow() {
             return;
         }
@@ -479,6 +519,10 @@ fn setup_signature_canvas_by_id(canvas_id: &str) {
     let ctx_move = ctx.clone();
     let canvas_move = canvas.clone();
     let on_touchstart = Closure::<dyn FnMut(_)>::new(move |e: web_sys::TouchEvent| {
+        if canvas_move.get_attribute("data-disabled").as_deref() == Some("true") {
+            *drawing_move.borrow_mut() = false;
+            return;
+        }
         e.prevent_default();
         if let Some(touch) = e.touches().get(0) {
             *drawing_move.borrow_mut() = true;
@@ -500,6 +544,10 @@ fn setup_signature_canvas_by_id(canvas_id: &str) {
     let ctx_move = ctx.clone();
     let canvas_move = canvas.clone();
     let on_touchmove = Closure::<dyn FnMut(_)>::new(move |e: web_sys::TouchEvent| {
+        if canvas_move.get_attribute("data-disabled").as_deref() == Some("true") {
+            *drawing_move.borrow_mut() = false;
+            return;
+        }
         e.prevent_default();
         if !*drawing_move.borrow() {
             return;
@@ -567,17 +615,35 @@ fn canvas_data_url(canvas_id: &str) -> Option<String> {
     canvas.to_data_url().ok()
 }
 
-fn both_canvases_signed(team1_id: &str, team2_id: &str) -> bool {
+fn canvas_signed(id: &str) -> bool {
     let doc = match web_sys::window().and_then(|w| w.document()) {
         Some(d) => d,
         None => return false,
     };
-    let signed = |id: &str| -> bool {
-        doc.get_element_by_id(id)
-            .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok())
-            .and_then(|el| el.get_attribute("data-signed"))
-            .as_deref()
-            == Some("true")
-    };
-    signed(team1_id) && signed(team2_id)
+    doc.get_element_by_id(id)
+        .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok())
+        .and_then(|el| el.get_attribute("data-signed"))
+        .as_deref()
+        == Some("true")
+}
+
+fn both_canvases_signed(team1_id: &str, team2_id: &str) -> bool {
+    canvas_signed(team1_id) && canvas_signed(team2_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::finalization_prerequisites;
+
+    #[test]
+    fn result_requires_winner_and_each_named_captain() {
+        assert_eq!(finalization_prerequisites(false, false, false, "Cedar", "River"), [
+            "Select the match winner.",
+            "Collect the Cedar captain’s signature.",
+            "Collect the River captain’s signature.",
+        ]);
+        assert_eq!(finalization_prerequisites(true, true, false, "Cedar", "River"), ["Collect the River captain’s signature."]);
+        assert!(finalization_prerequisites(true, true, true, "Cedar", "River").is_empty());
+        assert_eq!(finalization_prerequisites(true, false, true, "Cedar", "River"), ["Collect the Cedar captain’s signature."]);
+    }
 }

@@ -487,7 +487,7 @@ pub fn ProfileImageControls(
                 button { r#type: "button", class: "btn btn-outline-secondary", disabled: locked,
                     onclick: move |_| { active.set(None); crate::appearance::focus_control(if avatar { "profile-photo-options-trigger" } else { "profile-banner-options-trigger" }); }, "Done" }
             }
-            span { class: "visually-hidden", aria_live: "polite", "Editing {noun}. Changes are saved with your profile." }
+            p { class: "form-text mb-0", "Choose Save at the top to save image changes with your profile." }
         }
     }
 }
