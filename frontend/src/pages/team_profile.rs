@@ -1,5 +1,6 @@
 use crate::api;
 use crate::components::{EventTab, EventTabs, ProfileHeader, ProfileBio};
+use crate::components::{PaymentStatusBadge, RecordTimestamp, RegistrationStatusBadge};
 use crate::types::{TeamRegItem, TournamentPlayerItem};
 use crate::Route;
 use dioxus::prelude::*;
@@ -47,28 +48,22 @@ fn RegistrationRow(
             td { class: "table-copy", "data-label": "Team name", strong { "{registration.pseudonym.as_deref().unwrap_or(\"-\")}" } }
             td { class: "table-nowrap", "data-label": "Date",
                 if let Some(date) = &registration.start_date {
-                    "{date.split('T').next().unwrap_or(date)}"
+                    {crate::time_format::format_calendar_date(date)}
                 } else {
-                    "TBA"
+                    "Date not set"
                 }
             }
             td { class: "table-nowrap", "data-label": "Status",
-                span {
-                    class: format!(
-                        "badge {}",
-                        if registration.status == "CONFIRMED" { "bg-success" } else { "bg-warning" }
-                    ),
-                    "{registration.status}"
-                }
+                RegistrationStatusBadge { status: registration.status.clone() }
             }
             td { class: "table-nowrap", "data-label": "Payment",
                 if registration.paid {
-                    span { class: "badge bg-success", "Paid" }
+                    PaymentStatusBadge { paid: true }
                     if registration.amount_paid > 0.0 {
                         { let amt = format!("${:.2}", registration.amount_paid); rsx! { small { class: "text-muted ms-1", "{amt}" } } }
                     }
                 } else {
-                    span { class: "badge bg-warning", "Unpaid" }
+                    PaymentStatusBadge { paid: false }
                 }
             }
             td { class: "profile-record-actions table-nowrap", "data-label": "Actions",
@@ -325,6 +320,7 @@ pub fn TeamProfile(id: Signal<String>, tab: String) -> Element {
                             }
                             div { class: "profile-section-body",
                                 if d.team_notes.is_empty() { p { class: "text-muted", "No notes recorded." } }
+                                if !d.team_notes.is_empty() { p { class: "small text-muted", "Times shown in your local timezone." } }
                                 div { class: "profile-table-scroll", role: "region", tabindex: "0",
                                     aria_label: "Notes received, scroll to see all columns",
                                     table { class: "table table-sm", aria_label: "Notes received",
@@ -339,7 +335,7 @@ pub fn TeamProfile(id: Signal<String>, tab: String) -> Element {
                                         tbody {
                                             for note in d.team_notes.iter() {
                                                 tr { key: "{note.created_at.as_deref().unwrap_or(\"-\")}-{note.point_index}",
-                                                    td { class: "table-nowrap", "{note.created_at.as_deref().unwrap_or(\"-\")}" }
+                                                    td { class: "table-nowrap", RecordTimestamp { value: note.created_at.clone() } }
                                                     td { class: "table-copy", "{note.text}" }
                                                     td { class: "table-number", "{note.point_index}" }
                                                     td { class: "table-copy",

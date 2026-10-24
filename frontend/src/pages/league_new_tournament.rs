@@ -1,4 +1,5 @@
 use crate::api;
+use crate::components::ToolPageHeader;
 use crate::url_slug::{is_valid_url_slug, URL_SLUG_ALLOWED_HINT};
 use crate::Route;
 use dioxus::prelude::*;
@@ -25,13 +26,14 @@ pub fn LeagueNewTournament(league_url: String) -> Element {
     let lu_for_cancel = league_url.clone();
 
     rsx! {
-        div { class: "row justify-content-center form-page",
-            div { class: "col-12 form-column",
+        div { class: "row",
+            div { class: "col-12 ordinary-form-rail",
                 if let Some(Ok(d)) = league_data.value().read().as_ref() {
                     div { class: "edit-section",
-                        div { class: "edit-section-heading",
-                            h2 { class: "mb-2", "Add an event" }
-                            p { class: "text-muted mb-0", "Part of {d.league.name}" }
+                        ToolPageHeader {
+                            title: "Add an event",
+                            back: Some((Route::LeagueHome { league_url: lu_for_cancel.clone() }, "Back to league".into())),
+                            description: format!("Part of {}", d.league.name),
                         }
                         div { class: "edit-section-body",
                             if let Some(ref err) = error() {
@@ -95,9 +97,9 @@ pub fn LeagueNewTournament(league_url: String) -> Element {
                                     }
                                     div { class: "form-text", "This will be used in the URL (e.g., /my-event). {URL_SLUG_ALLOWED_HINT}" }
                                 }
-                                div { class: "d-flex gap-2",
-                                    Link { to: Route::LeagueHome { league_url: lu_for_cancel.clone() }, class: "btn btn-outline-secondary", "Cancel" }
+                                div { class: "form-actions",
                                     button { r#type: "submit", class: "btn btn-primary", disabled: busy(), if busy() { "Adding event…" } else { "Add event" } }
+                                    Link { to: Route::LeagueHome { league_url: lu_for_cancel.clone() }, class: "btn btn-outline-secondary", "Cancel" }
                                 }
                             }
                         }

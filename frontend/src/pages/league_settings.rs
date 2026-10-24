@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::{BannerAccountKind, BannerUpload, EventBannerPhoto, LeaguePenaltyTypesTable};
+use crate::components::{BannerAccountKind, BannerUpload, EventBannerPhoto, LeaguePenaltyTypesTable, ToolPageHeader};
 use crate::types::ToEntry;
 use crate::Route;
 use dioxus::prelude::*;
@@ -163,28 +163,17 @@ pub fn LeagueSettings(league_url: String) -> Element {
     rsx! {
         style { {include_str!("../components/organizer_tools.css")} }
         if let Some(Ok(d)) = data.value().read().as_ref() {
-            div { class: "row",
-                div { class: "col-12",
-                    h2 { "Settings" }
-                    nav { aria_label: "breadcrumb",
-                        ol { class: "breadcrumb",
-                            li { class: "breadcrumb-item",
-                                Link { to: Route::LeagueHome { league_url: league_url.clone() }, "{d.league.name}" }
-                            }
-                            li { class: "breadcrumb-item active", "Settings" }
-                        }
-                    }
-                }
-            }
+            ToolPageHeader { title: "Settings" }
             if save_success() {
-                div { class: "alert alert-success", "Settings saved." }
+                div { class: "alert alert-success ordinary-form-rail", role: "status", "Settings saved." }
             }
             if let Some(ref err) = save_error() {
-                div { class: "alert alert-danger", role: "alert", "{err}" }
+                div { class: "alert alert-danger ordinary-form-rail", role: "alert", "{err}" }
             }
             div { class: "row organizer-settings",
                 div { class: "col-12",
             form {
+                class: "ordinary-form-rail",
                 onsubmit: move |ev| {
                     ev.prevent_default();
                     if saving() || penalty_pending() || banner_busy() || waiver_reading() { return; }
@@ -234,7 +223,7 @@ pub fn LeagueSettings(league_url: String) -> Element {
                 },
                 fieldset { disabled: saving(), class: "border-0 p-0 m-0",
                 div { class: "edit-section mb-3",
-                    div { class: "edit-section-heading", h5 { class: "mb-0", "League settings" } }
+                    div { class: "edit-section-heading", h3 { class: "h5 mb-0", "League information" } }
                     div { class: "edit-section-body",
                         BannerUpload { kind: BannerAccountKind::League, account_id: league_url.clone(), photo: banner_photo, busy: banner_busy }
                         div { class: "mb-3",
@@ -275,7 +264,7 @@ pub fn LeagueSettings(league_url: String) -> Element {
                             }
                         }
                         div { class: "mb-3",
-                            h5 { class: "mb-2", "Waiver Upload" }
+                            h3 { class: "h5 mb-2", "Waiver" }
                             div { class: "form-check mb-2",
                                 input {
                                     class: "form-check-input",
@@ -431,7 +420,9 @@ pub fn LeagueSettings(league_url: String) -> Element {
                                 label { r#for: "published", class: "form-check-label", "Published (visible in Leagues)" }
                             }
                         }
-                        button { r#type: "submit", class: "btn btn-primary", disabled: saving() || penalty_pending() || banner_busy() || waiver_reading(), if saving() { "Saving…" } else { "Save settings" } }
+                        div { class: "form-actions",
+                            button { r#type: "submit", class: "btn btn-primary", disabled: saving() || penalty_pending() || banner_busy() || waiver_reading(), if saving() { "Saving…" } else { "Save settings" } }
+                        }
                     }
                 }
             }
@@ -448,7 +439,7 @@ pub fn LeagueSettings(league_url: String) -> Element {
             }
 
             details { class: "edit-section section-disclosure mb-3", open: true,
-                summary { class: "edit-section-heading", h2 { class: "h5 mb-0", "League Organizers ({d.to_entries.len()})" } }
+                summary { class: "edit-section-heading", h3 { class: "h5 mb-0", "League organizers ({d.to_entries.len()})" } }
                 div { class: "edit-section-body",
                     ul { class: "list-group list-group-flush mb-3",
                         for to_entry in &d.to_entries {
@@ -461,7 +452,7 @@ pub fn LeagueSettings(league_url: String) -> Element {
                         }
                     }
                     if let Some(ref e) = to_error() {
-                        div { class: "alert alert-danger mb-3", "{e}" }
+                        div { class: "alert alert-danger mb-3", role: "alert", "{e}" }
                     }
                     form {
                         onsubmit: move |ev| {

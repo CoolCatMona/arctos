@@ -15,20 +15,8 @@ fn is_current_user_to(me: Option<&Result<User, String>>, to_entries: &[ToEntry])
     })
 }
 
-fn format_date(iso: &str) -> String {
-    let date = iso.split('T').next().unwrap_or(iso);
-    chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
-        .map(|date| date.format("%b %-d, %Y").to_string())
-        .unwrap_or_else(|_| date.to_string())
-}
-
 fn format_date_display(start: &str, end: Option<&String>) -> String {
-    let start_fmt = format_date(start);
-    match end {
-        None => start_fmt,
-        Some(e) if format_date(e) == start_fmt => start_fmt,
-        Some(e) => format!("{} – {}", start_fmt, format_date(e)),
-    }
+    crate::time_format::format_calendar_range(start, end.map(String::as_str))
 }
 
 #[component]

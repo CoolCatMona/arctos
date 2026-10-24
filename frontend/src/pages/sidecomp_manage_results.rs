@@ -1,12 +1,8 @@
 use crate::api;
-use crate::components::PompfenIcon;
+use crate::components::{PompfenIcon, RecordTimestamp};
 use crate::types::SideCompManageResultRow;
 use crate::Route;
 use dioxus::prelude::*;
-
-fn format_stamp(stamp: &Option<String>) -> String {
-    stamp.clone().unwrap_or_else(|| "—".to_string())
-}
 
 fn player_label(row: &SideCompManageResultRow) -> String {
     let entry = row
@@ -85,6 +81,7 @@ pub fn SideCompManageResults(url: String, comp_id: i32) -> Element {
                             if results.is_empty() {
                                 p { class: "text-muted", "No points logged yet." }
                             } else {
+                                p { class: "small text-muted", "Times shown in your local timezone." }
                                 div { class: "table-responsive", role: "region", "aria-label": "Side event result management", tabindex: "0",
                                     table { class: "table table-sm align-middle sidecomp-management-table",
                                         thead {
@@ -114,7 +111,6 @@ pub fn SideCompManageResults(url: String, comp_id: i32) -> Element {
                                                         ""
                                                     };
                                                     let label = player_label(&row);
-                                                    let stamp = format_stamp(&row.stamp);
                                                     let points_label = if row.points > 0 {
                                                         format!("+{}", row.points)
                                                     } else {
@@ -132,7 +128,7 @@ pub fn SideCompManageResults(url: String, comp_id: i32) -> Element {
                                                             class: "{row_class}",
                                                             style: "{row_style}",
                                                             title: "{row_title}",
-                                                            td { class: "table-nowrap small", "{stamp}" }
+                                                            td { class: "table-nowrap small", RecordTimestamp { value: row.stamp.clone(), include_seconds: true } }
                                                             td { class: "table-copy", "{label}" }
                                                             td { class: "table-nowrap",
                                                                 if !row.registered {

@@ -1,5 +1,6 @@
 use crate::api;
 use crate::components::{EventTab, EventTabs, PenaltyDisplay, ProfileHeader, ProfileBio};
+use crate::components::{PaymentStatusBadge, RecordTimestamp, RegistrationStatusBadge, WaiverStatusBadge};
 use crate::types::{NoteMatchInfo, PlayerInjury, PlayerNoteItem};
 use crate::Route;
 use dioxus::prelude::*;
@@ -48,7 +49,7 @@ fn penalty_display_parts(note: &PlayerNoteItem) -> (String, String) {
 }
 
 struct PenaltyRow {
-    date_display: String,
+    created_at: Option<String>,
     border_color: String,
     display_text: String,
     display_desc: Option<String>,
@@ -142,12 +143,10 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
             (d.injuries.len(), d.injuries.iter().filter(|injury| injury.active).count())
         };
         let penalty_rows: Vec<PenaltyRow> = d.player_notes.iter().map(|note| {
-            let date_str = stamp_to_date(&note.created_at);
-            let date_display = if date_str.is_empty() { "-".to_string() } else { date_str };
             let (border_color, display_text) = penalty_display_parts(note);
             PenaltyRow {
-                key: format!("{}-{}", date_display, note.point_index),
-                date_display: date_display.clone(),
+                key: format!("{}-{}", note.created_at.as_deref().unwrap_or("-"), note.point_index),
+                created_at: note.created_at.clone(),
                 border_color,
                 display_text,
                 display_desc: note.penalty_type_desc.clone().filter(|s| !s.is_empty()),
@@ -178,7 +177,7 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
             .into_iter()
             .map(|row| {
                 let key = row.key.clone();
-                let date_display = row.date_display.clone();
+                let created_at = row.created_at.clone();
                 let border_color = row.border_color.clone();
                 let display_text = row.display_text.clone();
                 let display_desc = row.display_desc.clone();
@@ -186,7 +185,7 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                 let match_info = row.match_info.clone();
                 rsx! {
                     tr { key: "{key}",
-                        td { class: "table-nowrap", "{date_display}" }
+                        td { class: "table-nowrap", RecordTimestamp { value: created_at } }
                         td { class: "table-copy",
                             PenaltyDisplay {
                                 border_color,
@@ -294,30 +293,13 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                                         }
                                                     }
                                                     td { class: "table-nowrap", "data-label": "Status",
-                                                        span { class: if r.status == "CONFIRMED" { "badge bg-success" } else { "badge bg-warning" },
-                                                            "{r.status}"
-                                                        }
+                                                        RegistrationStatusBadge { status: r.status.clone() }
                                                     }
                                                     td { class: "table-nowrap", "data-label": "Payment",
-                                                        span { class: if r.paid { "badge bg-success" } else { "badge bg-warning text-dark" },
-                                                            if r.paid { "Paid" } else { "Unpaid" }
-                                                        }
+                                                        PaymentStatusBadge { paid: r.paid }
                                                     }
                                                     td { class: "table-nowrap", "data-label": "Waiver",
-                                                        if r.waiver_required {
-                                                            {
-                                                                let ws = r.waiver_status.as_deref().unwrap_or("NOT_SIGNED");
-                                                                let (cls, label) = match ws {
-                                                                    "VALID" => ("bg-success", "Waiver valid"),
-                                                                    "OUT_OF_DATE" => ("bg-warning text-dark", "Waiver out of date"),
-                                                                    "NOT_SIGNED" => ("bg-danger", "Waiver not signed"),
-                                                                    _ => ("bg-secondary", "Waiver status unknown"),
-                                                                };
-                                                                rsx! { span { class: "badge {cls}", "{label}" } }
-                                                            }
-                                                        } else {
-                                                            span { class: "text-muted", "-" }
-                                                        }
+                                                        WaiverStatusBadge { required: r.waiver_required, status: r.waiver_status.clone(), show_not_required: true }
                                                     }
                                                 }
                                                     }
@@ -391,7 +373,7 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                                             } else if inj.date.is_empty() {
                                                                 "-"
                                                             } else {
-                                                                "{inj.date}"
+                                                                {crate::time_format::format_calendar_date(&inj.date)}
                                                             }
                                                         }
                                                         td { "data-label": "Description", class: "profile-record-wide table-copy",
@@ -580,7 +562,7 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                             } else {
                                                 for inj in d.injuries.iter() {
                                                     tr { key: "{inj.id}",
-                                                        td { class: "profile-record-wide table-nowrap", "data-label": "Date", "{inj.stamp.as_deref().unwrap_or(\"-\")}" }
+                                                        td { class: "profile-record-wide table-nowrap", "data-label": "Date", {crate::time_format::format_calendar_date(inj.stamp.as_deref().unwrap_or("—"))} }
                                                         td { class: "profile-record-wide table-copy", "data-label": "Description", "{inj.message}" }
                                                         td { class: "table-nowrap", "data-label": "Status",
                                                             if inj.active {
@@ -640,6 +622,7 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                             }
                             div { class: "profile-section-body",
                                 if penalty_rows_empty { p { class: "text-muted", "No infractions recorded." } }
+                                if !penalty_rows_empty { p { class: "small text-muted", "Times shown in your local timezone." } }
                                 div { class: "profile-table-scroll", role: "region", tabindex: "0",
                                     aria_label: "Infractions, scroll to see all columns",
                                     table { class: "table table-sm", aria_label: "Infractions",

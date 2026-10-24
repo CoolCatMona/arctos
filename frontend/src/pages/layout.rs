@@ -3,6 +3,7 @@ use crate::appearance::{focus_control, use_appearance};
 use crate::components::AppearanceMenu;
 use crate::Route;
 use dioxus::prelude::*;
+use super::navigation::{main_link_current, main_section, use_client_navigation, MainSection};
 
 // These ordinary event tools share their event's identity and navigation.
 // Public schedule/results/bracket pages already supply this shell themselves;
@@ -188,7 +189,7 @@ pub fn Layout() -> Element {
     let navigator = use_navigator();
     let route = use_route::<Route>();
     let page_title = format!("{} | Arctos", page_title_for_route(&route));
-    let path = route.to_string();
+    let current_section = main_section(&route);
     let event_shell = event_tool_shell(&route);
     let event_page = event_shell.is_some() || matches!(route, Route::TournamentHome { .. } | Route::TournamentHomeWithTab { .. }
         | Route::Schedule { .. } | Route::Results { .. } | Route::Bracket { .. }
@@ -265,17 +266,22 @@ pub fn Layout() -> Element {
                         span { "Arctos" }
                     }
                     nav { class: "app-nav", aria_label: "Main navigation",
-                        for (to, label, icon, active) in [
-                            (Route::Index {}, "Events", "fa-calendar-days", path == "/"),
-                            (Route::LeaguesIndex {}, "Leagues", "fa-trophy", path.starts_with("/leagues")),
-                            (Route::TeamsList {}, "Teams", "fa-users", path.starts_with("/teams")),
-                            (Route::PlayersList {}, "Players", "fa-user-group", path.starts_with("/players")),
-                            (Route::Stones {}, "Stones", "fa-stopwatch", path == "/stones"),
+                        for (to, label, icon, section) in [
+                            (Route::Index {}, "Events", "fa-calendar-days", MainSection::Events),
+                            (Route::LeaguesIndex {}, "Leagues", "fa-trophy", MainSection::Leagues),
+                            (Route::TeamsList {}, "Teams", "fa-users", MainSection::Teams),
+                            (Route::PlayersList {}, "Players", "fa-user-group", MainSection::Players),
+                            (Route::Stones {}, "Stones", "fa-stopwatch", MainSection::Stones),
                         ] {
-                            Link {
-                                to,
-                                class: if active { "app-nav-link active" } else { "app-nav-link" },
-                                aria_current: if active { "page" } else { "false" },
+                            a {
+                                href: to.to_string(),
+                                class: if current_section == Some(section) { "app-nav-link active" } else { "app-nav-link" },
+                                aria_current: main_link_current(&route, &to, section),
+                                onclick: move |event: MouseEvent| {
+                                    if !use_client_navigation(event.trigger_button(), event.modifiers()) { return; }
+                                    event.prevent_default();
+                                    navigator.push(to.clone());
+                                },
                                 i { class: "fa-solid {icon}", aria_hidden: "true" }
                                 span { "{label}" }
                             }

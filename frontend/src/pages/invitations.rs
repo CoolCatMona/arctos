@@ -1,4 +1,5 @@
 use crate::api;
+use crate::components::{PaymentStatusBadge, RegistrationStatusBadge};
 use crate::Route;
 use dioxus::prelude::*;
 
@@ -178,17 +179,11 @@ pub fn Invitations(url: String) -> Element {
                                                     td { class: "table-copy", "data-label": "Jersey name", "{roster_item.registration.jersey_name.as_deref().unwrap_or(\"N/A\")}" }
                                                     td { class: "table-number", "data-label": "Jersey number", "{roster_item.registration.jersey_number.as_deref().unwrap_or(\"N/A\")}" }
                                                     td { class: "roster-wide", "data-label": "Status",
-                                                        match roster_item.registration.status.as_str() {
-                                                            "CONFIRMED" => rsx! { span { class: "badge table-nowrap bg-success", "Confirmed" } },
-                                                            "PENDING_TEAM_APPROVAL" => rsx! { span { class: "badge table-nowrap bg-warning", "Pending Approval" } },
-                                                            "REJECTED" => rsx! { span { class: "badge table-nowrap bg-danger", "Rejected" } },
-                                                            "CANCELLED" => rsx! { span { class: "badge table-nowrap bg-secondary", "Cancelled" } },
-                                                            _ => rsx! { span { class: "badge table-nowrap bg-secondary", "{roster_item.registration.status}" } },
-                                                        }
+                                                        RegistrationStatusBadge { status: roster_item.registration.status.clone() }
                                                     }
                                                     td { "data-label": "Payment",
                                                         if roster_item.registration.paid {
-                                                            span { class: "badge table-nowrap bg-success", "Paid" }
+                                                            PaymentStatusBadge { paid: true }
                                                             if roster_item.registration.amount_paid > 0.0 {
                                                                 {
                                                                     let paid_amount = format!("${:.2}", roster_item.registration.amount_paid);
@@ -196,7 +191,7 @@ pub fn Invitations(url: String) -> Element {
                                                                 }
                                                             }
                                                         } else {
-                                                            span { class: "badge table-nowrap bg-warning", "Unpaid" }
+                                                            PaymentStatusBadge { paid: false }
                                                         }
                                                     }
                                                 }

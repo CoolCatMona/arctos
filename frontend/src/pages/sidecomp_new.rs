@@ -1,6 +1,6 @@
 use crate::Route;
 use crate::api;
-use crate::components::{AllowedWeaponsCheckboxes, default_allowed_weapons};
+use crate::components::{AllowedWeaponsCheckboxes, ToolPageHeader, default_allowed_weapons};
 use dioxus::prelude::*;
 
 #[component]
@@ -20,17 +20,10 @@ pub fn SideCompNew(url: String) -> Element {
     rsx! {
         style { {include_str!("../components/organizer_tools.css")} }
         div { class: "row",
-            div { class: "col-12 sidecomp-form",
-                h2 { "Create side competition" }
-                div { class: "mb-3",
-                    Link {
-                        to: Route::TournamentHomeWithTab {
-                            url: url_for_back.clone(),
-                            tab: "sidecomps".to_string(),
-                        },
-                        class: "btn btn-link",
-                        "<- Back"
-                    }
+            div { class: "col-12 ordinary-form-rail",
+                ToolPageHeader {
+                    title: "Create side competition",
+                    back: Some((Route::TournamentHomeWithTab { url: url_for_back.clone(), tab: "sidecomps".into() }, "Back to Side events".into())),
                 }
                 form {
                     onsubmit: move |evt| {
@@ -139,11 +132,13 @@ pub fn SideCompNew(url: String) -> Element {
                     if let Some(err) = error() {
                         div { class: "alert alert-danger", role: "alert", "{err}" }
                     }
-                    button {
-                        class: "btn btn-primary",
-                        r#type: "submit",
-                        disabled: submitting(),
-                        if submitting() { "Creating…" } else { "Create side competition" }
+                    div { class: "form-actions",
+                        button {
+                            class: "btn btn-primary",
+                            r#type: "submit",
+                            disabled: submitting(),
+                            if submitting() { "Creating…" } else { "Create side competition" }
+                        }
                     }
                 }
             }

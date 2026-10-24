@@ -1,4 +1,6 @@
 use crate::api;
+use crate::components::ToolPageHeader;
+use crate::components::{PaymentStatusBadge, RegistrationStatusBadge, WaiverStatusBadge};
 use crate::types::{
     PlayerListItem, RegisterPlayerAsToResponse, RegisterTeamAsToResponse, TeamListItem,
 };
@@ -132,17 +134,7 @@ pub fn Manage(url: String) -> Element {
 
     rsx! {
         if let Some(Ok(d)) = val.read().as_ref() {
-            div { class: "row",
-                div { class: "col-12",
-                    h2 { "Registration management" }
-                    nav { aria_label: "breadcrumb",
-                        ol { class: "breadcrumb",
-                            li { class: "breadcrumb-item", Link { to: Route::TournamentHome { url: url.clone() }, "{d.tournament.name}" } }
-                            li { class: "breadcrumb-item active", "Registration Management" }
-                        }
-                    }
-                }
-            }
+            ToolPageHeader { title: "Registration management" }
 
             // Top-level tabs
             ul { class: "nav nav-tabs mb-3",
@@ -215,7 +207,7 @@ pub fn Manage(url: String) -> Element {
                 div { class: "row",
                     div { class: "col-12",
                         div { class: "edit-section data-section",
-                            div { class: "edit-section-heading", h5 { class: "mb-0", "Team Registrations" } }
+                            div { class: "edit-section-heading", h3 { class: "h5 mb-0", "Team Registrations" } }
                             div { class: "edit-section-body",
                                 div { class: "table-responsive management-table-wrap",
                                     table { class: "table table-striped management-table",
@@ -236,22 +228,8 @@ pub fn Manage(url: String) -> Element {
                                                         }
                                                     }
                                                     td { "data-label": "Status",
-                                                        span {
-                                                            class: format!(
-                                                                "badge table-nowrap {}",
-                                                                match team_data.registration.status.as_str() {
-                                                                    "CONFIRMED" => "bg-success",
-                                                                    "CANCELLED" => "bg-danger",
-                                                                    _ => "bg-warning",
-                                                                }
-                                                            ),
-                                                            "{team_data.registration.status}"
-                                                        }
-                                                        if team_data.registration.paid {
-                                                            span { class: "badge table-nowrap bg-primary ms-1", "Paid" }
-                                                        } else {
-                                                            span { class: "badge table-nowrap bg-secondary ms-1", "Unpaid" }
-                                                        }
+                                                        RegistrationStatusBadge { status: team_data.registration.status.clone() }
+                                                        PaymentStatusBadge { paid: team_data.registration.paid, class: "ms-1" }
                                                     }
                                                     td { class: "table-nowrap", "data-label": "Registered", {crate::time_format::format_registration_timestamp(team_data.registration.registered_at.as_deref().unwrap_or("—"))} }
                                                     td { "data-label": "Actions", class: "management-actions",
@@ -370,7 +348,7 @@ pub fn Manage(url: String) -> Element {
                 div { class: "row mt-4",
                     div { class: "col-12",
                         div { class: "edit-section data-section",
-                            div { class: "edit-section-heading", h5 { class: "mb-0", "Player Registrations" } }
+                            div { class: "edit-section-heading", h3 { class: "h5 mb-0", "Player Registrations" } }
                             div { class: "edit-section-body",
                                 div { class: "table-responsive management-table-wrap",
                                     table { class: "table table-striped management-table",
@@ -426,40 +404,12 @@ pub fn Manage(url: String) -> Element {
                                                             }
                                                         }
                                                         td { "data-label": "Waiver",
-                                                            if player_data.registration.waiver_required {
-                                                                {
-                                                                    let ws = player_data.registration.waiver_status.as_deref().unwrap_or("NOT_SIGNED");
-                                                                    let (cls, label) = match ws {
-                                                                        "VALID" => ("bg-success", "Waiver valid"),
-                                                                        "OUT_OF_DATE" => ("bg-warning text-dark", "Waiver out of date"),
-                                                                        "NOT_SIGNED" => ("bg-danger", "Waiver not signed"),
-                                                                        _ => ("bg-secondary", "Waiver status unknown"),
-                                                                    };
-                                                                    rsx! { span { class: "badge table-nowrap {cls}", "{label}" } }
-                                                                }
-                                                            } else {
-                                                                span { class: "text-muted", "-" }
-                                                            }
+                                                            WaiverStatusBadge { required: player_data.registration.waiver_required, status: player_data.registration.waiver_status.clone(), show_not_required: true }
                                                         }
                                                     }
                                                     td { "data-label": "Status",
-                                                        span {
-                                                            class: format!(
-                                                                "badge table-nowrap {}",
-                                                                match player_data.registration.status.as_str() {
-                                                                    "CONFIRMED" => "bg-success",
-                                                                    "CANCELLED" => "bg-danger",
-                                                                    "PENDING_TEAM_APPROVAL" => "bg-warning",
-                                                                    _ => "bg-secondary",
-                                                                }
-                                                            ),
-                                                            "{player_data.registration.status}"
-                                                        }
-                                                        if player_data.registration.paid {
-                                                            span { class: "badge table-nowrap bg-primary ms-1", "Paid" }
-                                                        } else {
-                                                            span { class: "badge table-nowrap bg-secondary ms-1", "Unpaid" }
-                                                        }
+                                                        RegistrationStatusBadge { status: player_data.registration.status.clone() }
+                                                        PaymentStatusBadge { paid: player_data.registration.paid, class: "ms-1" }
                                                     }
                                                     td { class: "table-nowrap", "data-label": "Registered", {crate::time_format::format_registration_timestamp(player_data.registration.registered_at.as_deref().unwrap_or("—"))} }
                                                     td { "data-label": "Actions", class: "management-actions",
@@ -619,7 +569,7 @@ pub fn Manage(url: String) -> Element {
 
                             // Player search section
                             div { class: "edit-section mb-3",
-                                div { class: "edit-section-heading", h5 { class: "mb-0", "Find Player" } }
+                                div { class: "edit-section-heading", h3 { class: "h5 mb-0", "Find Player" } }
                                 div { class: "edit-section-body",
                                     input {
                                         r#type: "text",
@@ -667,7 +617,7 @@ pub fn Manage(url: String) -> Element {
                                     rsx! {
                                         div { class: "edit-section mb-3",
                                             div { class: "edit-section-heading d-flex justify-content-between align-items-center",
-                                                h5 { class: "mb-0", "Registering: {player.name}" }
+                                                h3 { class: "h5 mb-0", "Registering: {player.name}" }
                                                 button {
                                                     class: "btn btn-sm btn-outline-secondary",
                                                     r#type: "button",
@@ -839,7 +789,7 @@ pub fn Manage(url: String) -> Element {
 
                             // Team search section
                             div { class: "edit-section mb-3",
-                                div { class: "edit-section-heading", h5 { class: "mb-0", "Find Team" } }
+                                div { class: "edit-section-heading", h3 { class: "h5 mb-0", "Find Team" } }
                                 div { class: "edit-section-body",
                                     input {
                                         r#type: "text",
@@ -886,7 +836,7 @@ pub fn Manage(url: String) -> Element {
                                     rsx! {
                                         div { class: "edit-section mb-3",
                                             div { class: "edit-section-heading d-flex justify-content-between align-items-center",
-                                                h5 { class: "mb-0", "Registering: {team.name}" }
+                                                h3 { class: "h5 mb-0", "Registering: {team.name}" }
                                                 button {
                                                     class: "btn btn-sm btn-outline-secondary",
                                                     r#type: "button",
@@ -992,7 +942,7 @@ pub fn Manage(url: String) -> Element {
                         // Session log for this tab session
                         if !session_log().is_empty() {
                             details { id: "session-registration-history", class: "card data-section section-disclosure mb-3", open: true,
-                                summary { class: "card-header", h2 { class: "h5 mb-0", "Registered this session ({session_log().len()})" } }
+                                summary { class: "card-header", h3 { class: "h5 mb-0", "Registered this session ({session_log().len()})" } }
                                 ul { class: "list-group list-group-flush",
                                     for entry in session_log().iter() {
                                         match entry {

@@ -1,6 +1,6 @@
 use crate::api;
+use crate::components::ToolPageHeader;
 use crate::types::FootageCameraRow;
-use crate::Route;
 use dioxus::prelude::*;
 
 /// Prefer a full YouTube watch URL; tolerate legacy bare video IDs.
@@ -40,18 +40,10 @@ pub fn ManageFootage(url: String) -> Element {
     let val = data.value();
 
     rsx! {
-        if let Some(Ok((tournament_name, cameras))) = val.read().as_ref() {
-            div { class: "row",
-                div { class: "col-12",
-                    h2 { "Match footage" }
-                    p { class: "text-muted", "Review recordings for {tournament_name}. Open footage to check it before removing an entry." }
-                    nav { aria_label: "breadcrumb",
-                        ol { class: "breadcrumb",
-                            li { class: "breadcrumb-item", Link { to: Route::TournamentHome { url: url.clone() }, "{tournament_name}" } }
-                            li { class: "breadcrumb-item active", "Manage Footage" }
-                        }
-                    }
-                }
+        if let Some(Ok((_tournament_name, cameras))) = val.read().as_ref() {
+            ToolPageHeader {
+                title: "Match footage",
+                description: "Open footage to review a recording before removing an entry.",
             }
 
             div { class: "row mb-3",

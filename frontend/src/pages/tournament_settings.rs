@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::{BannerAccountKind, BannerUpload, EventBannerPhoto};
+use crate::components::{BannerAccountKind, BannerUpload, EventBannerPhoto, ToolPageHeader};
 use crate::Route;
 use dioxus::prelude::*;
 use std::collections::HashMap;
@@ -641,23 +641,13 @@ pub fn TournamentSettings(url: String) -> Element {
         style { {include_str!("../components/organizer_tools.css")} }
         if let Some(Ok(d)) = val.read().as_ref() {
             div { class: "penalty-settings-wrap organizer-settings",
-                div { class: "row",
-                div { class: "col-12",
-                    h2 { "Settings" }
-                    nav { aria_label: "breadcrumb",
-                        ol { class: "breadcrumb",
-                            li { class: "breadcrumb-item", Link { to: Route::TournamentHome { url: url.clone() }, "{d.tournament.name}" } }
-                            li { class: "breadcrumb-item active", "Settings" }
-                        }
-                    }
-                }
-            }
+                ToolPageHeader { title: "Settings" }
 
             div { class: "row",
                 div { class: "col-12",
-                    div { class: "edit-section",
+                    div { class: "edit-section ordinary-form-rail",
                         div { class: "edit-section-heading",
-                            h5 { class: "mb-0", "Tournament Information" }
+                            h3 { class: "h5 mb-0", "Tournament information" }
                         }
                         div { class: "edit-section-body",
                             BannerUpload { kind: BannerAccountKind::Tournament, account_id: url.clone(), photo: banner_photo, busy: banner_busy }
@@ -823,7 +813,7 @@ pub fn TournamentSettings(url: String) -> Element {
 
                                 if d.tournament.league.is_none() {
                                     div { class: "mb-3",
-                                        h5 { class: "mb-2", "Waiver Upload" }
+                                        h3 { class: "h5 mb-2", "Waiver" }
                                         div { class: "form-check mb-2",
                                             input {
                                                 class: "form-check-input",
@@ -941,7 +931,7 @@ pub fn TournamentSettings(url: String) -> Element {
                                 }
                                 }
 
-                                h3 { "Publication and registration" }
+                                h3 { class: "h5", "Publication and registration" }
                                 div { class: "mb-3",
                                     div { class: "form-check",
                                         input { class: "form-check-input", r#type: "checkbox", id: "published", name: "published", checked: draft_checks.read().get("published").copied().unwrap_or(false), onchange: move |event| { draft_checks.write().insert("published".into(), event.checked()); } }
@@ -969,9 +959,9 @@ pub fn TournamentSettings(url: String) -> Element {
                                     }
                                 }
 
-                                div { class: "d-grid",
-                                    if let Some(message) = save_error() { p { class: "text-danger", role: "alert", "{message}" } }
-                                    button { r#type: "submit", class: "btn btn-primary", disabled: saving() || mutation_pending() || banner_busy() || waiver_reading(), if saving() { "Saving…" } else { "Save Settings" } }
+                                if let Some(message) = save_error() { p { class: "text-danger", role: "alert", "{message}" } }
+                                div { class: "form-actions",
+                                    button { r#type: "submit", class: "btn btn-primary", disabled: saving() || mutation_pending() || banner_busy() || waiver_reading(), if saving() { "Saving…" } else { "Save settings" } }
                                 }
                             }
                         }
@@ -983,7 +973,7 @@ pub fn TournamentSettings(url: String) -> Element {
                     if d.tournament.league.is_none() {
                     section { class: "edit-section penalty-types-section",
                         div { class: "edit-section-heading penalty-types-heading",
-                            h2 { class: "h5 mb-0",
+                            h3 { class: "h5 mb-0",
                                 button { id: "penalty-types-toggle", class: "penalty-types-toggle", r#type: "button",
                                     aria_expanded: "{penalties_open()}", aria_controls: "penalty-types-content",
                                     onclick: move |_| penalties_open.set(!penalties_open()),
@@ -1048,7 +1038,7 @@ pub fn TournamentSettings(url: String) -> Element {
                     if d.tournament.league.is_none() {
                     details { class: "edit-section section-disclosure mt-4", open: true,
                         summary { class: "edit-section-heading",
-                            h2 { class: "h5 mb-0", "Tournament Organizers ({d.to_entries.len()})" }
+                            h3 { class: "h5 mb-0", "Tournament organizers ({d.to_entries.len()})" }
                         }
                         div { class: "edit-section-body",
                             if !d.to_entries.is_empty() {
@@ -1063,12 +1053,12 @@ pub fn TournamentSettings(url: String) -> Element {
                                     }
                                 }
                             } else {
-                                p { class: "text-muted", "No TOs found" }
+                                p { class: "text-muted", "No organizers found" }
                             }
                             hr {}
-                            h6 { class: "mb-3", "Add New TO" }
+                            h4 { class: "h6 mb-3", "Add organizer" }
                             if let Some(ref e) = to_error() {
-                                div { class: "alert alert-danger mb-3", "{e}" }
+                                div { class: "alert alert-danger mb-3", role: "alert", "{e}" }
                             }
                             form {
                                 class: "row g-2 align-items-end",
@@ -1118,7 +1108,7 @@ pub fn TournamentSettings(url: String) -> Element {
                                     }
                                 }
                                 div { class: "col-auto",
-                                    button { r#type: "submit", class: "btn btn-primary btn-sm", "Add TO" }
+                                    button { r#type: "submit", class: "btn btn-primary btn-sm", "Add organizer" }
                                 }
                             }
                         }

@@ -462,7 +462,7 @@ pub fn LeaguePenaltyTypesTable(
     rsx! {
         section { class: "edit-section penalty-types-section mb-3",
             div { class: "edit-section-heading penalty-types-heading",
-                h2 { class: "h5 mb-0",
+                h3 { class: "h5 mb-0",
                     button { id: "penalty-types-toggle", class: "penalty-types-toggle", r#type: "button",
                         disabled: settings_saving() || mutation_pending(),
                         aria_expanded: "{penalties_open()}", aria_controls: "penalty-types-content",

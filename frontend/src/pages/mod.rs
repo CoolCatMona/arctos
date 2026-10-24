@@ -31,6 +31,7 @@ mod league_invitations;
 mod leagues_index;
 mod new_league;
 mod new_tournament;
+mod navigation;
 mod oauth_authorize;
 mod player_profile;
 mod players_list;

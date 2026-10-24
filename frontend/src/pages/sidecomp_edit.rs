@@ -1,6 +1,6 @@
-use crate::Route;
 use crate::api;
-use crate::components::{AllowedWeaponsCheckboxes, default_allowed_weapons};
+use crate::components::{default_allowed_weapons, AllowedWeaponsCheckboxes, ToolPageHeader};
+use crate::Route;
 use dioxus::prelude::*;
 
 #[component]
@@ -73,14 +73,10 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
     rsx! {
         style { {include_str!("../components/organizer_tools.css")} }
         div { class: "row",
-            div { class: "col-12 sidecomp-form",
-                h2 { "Edit side competition" }
-                div { class: "mb-3",
-                    Link {
-                        to: Route::SideCompDetail { url: url_for_back, comp_id },
-                        class: "btn btn-link",
-                        "<- Back"
-                    }
+            div { class: "col-12 ordinary-form-rail",
+                ToolPageHeader {
+                    title: "Edit side competition",
+                    back: Some((Route::SideCompDetail { url: url_for_back.clone(), comp_id }, "Back to side competition".into())),
                 }
                 form {
                     onsubmit: move |evt| {
@@ -289,7 +285,9 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                     if let Some(err) = error() {
                         div { class: "alert alert-danger", role: "alert", "{err}" }
                     }
-                    button { class: "btn btn-primary", r#type: "submit", disabled: submitting(), if submitting() { "Saving…" } else { "Save" } }
+                    div { class: "form-actions",
+                        button { class: "btn btn-primary", r#type: "submit", disabled: submitting(), if submitting() { "Saving…" } else { "Save" } }
+                    }
                 }
                 hr {}
                 button {

@@ -1,4 +1,5 @@
 use crate::api;
+use crate::components::ToolPageHeader;
 use crate::url_slug::{is_valid_url_slug, URL_SLUG_ALLOWED_HINT};
 use crate::Route;
 use dioxus::prelude::*;
@@ -25,10 +26,13 @@ pub fn NewLeague() -> Element {
     if !matches!(user.read().as_ref(), Some(Ok(_))) {
         return rsx! {
             div { class: "row justify-content-center form-page",
-                div { class: "col-12 form-column",
+                div { class: "col-12 ordinary-form-rail",
                     div { class: "edit-section",
                         div { class: "edit-section-body",
-                            h1 { "Create a league" }
+                            ToolPageHeader {
+                                title: "Create a league", standalone: true,
+                                back: Some((Route::LeaguesIndex {}, "Back to Leagues".into())),
+                            }
                             p { "Log in to create and manage your league. Both player and team accounts can organize events." }
                             a { class: "btn btn-primary", href: "/login?next=/leagues/new", "Log in to continue" }
                         }
@@ -40,11 +44,12 @@ pub fn NewLeague() -> Element {
 
     rsx! {
         div { class: "row justify-content-center form-page",
-            div { class: "col-12 form-column",
+            div { class: "col-12 ordinary-form-rail",
                 div { class: "edit-section",
-                    div { class: "edit-section-heading",
-                        h1 { class: "mb-2", "Create a league" }
-                        p { class: "text-muted mb-0", "Start a private draft for a season of events, with shared registration and rosters." }
+                    ToolPageHeader {
+                        title: "Create a league", standalone: true,
+                        back: Some((Route::LeaguesIndex {}, "Back to Leagues".into())),
+                        description: "Start a private draft for a season of events, with shared registration and rosters.",
                     }
                     div { class: "edit-section-body",
                         if let Some(ref err) = error() {
@@ -108,7 +113,7 @@ pub fn NewLeague() -> Element {
                                 }
                                 div { class: "form-text", "Used in the URL, e.g. /leagues/norcal-2026. {URL_SLUG_ALLOWED_HINT}" }
                             }
-                            div { class: "d-grid",
+                            div { class: "form-actions",
                                 button { r#type: "submit", class: "btn btn-primary", disabled: busy(), if busy() { "Creating league…" } else { "Create league" } }
                             }
                         }

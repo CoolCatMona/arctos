@@ -1,4 +1,5 @@
 use crate::api;
+use crate::components::ToolPageHeader;
 use crate::url_slug::{is_valid_url_slug, URL_SLUG_ALLOWED_HINT};
 use crate::Route;
 use dioxus::prelude::*;
@@ -25,10 +26,13 @@ pub fn NewTournament() -> Element {
     if !matches!(user.read().as_ref(), Some(Ok(_))) {
         return rsx! {
             div { class: "row justify-content-center form-page",
-                div { class: "col-12 form-column",
+                div { class: "col-12 ordinary-form-rail",
                     div { class: "edit-section",
                         div { class: "edit-section-body",
-                            h1 { "Create an Event" }
+                            ToolPageHeader {
+                                title: "Create an Event", standalone: true,
+                                back: Some((Route::Index {}, "Back to Events".into())),
+                            }
                             p { "Log in to create and manage your event. Both player and team accounts can organize events." }
                             a { class: "btn btn-primary", href: "/login?next=/new-tournament", "Log in to continue" }
                         }
@@ -40,11 +44,12 @@ pub fn NewTournament() -> Element {
 
     rsx! {
         div { class: "row justify-content-center form-page",
-            div { class: "col-12 form-column",
+            div { class: "col-12 ordinary-form-rail",
                 div { class: "edit-section",
-                    div { class: "edit-section-heading",
-                        h1 { class: "mb-2", "Create an Event" }
-                        p { class: "text-muted mb-0", "Start with a name and link. Your event is a private draft until you publish it." }
+                    ToolPageHeader {
+                        title: "Create an Event", standalone: true,
+                        back: Some((Route::Index {}, "Back to Events".into())),
+                        description: "Start with a name and link. Your event is a private draft until you publish it.",
                     }
                     div { class: "edit-section-body",
                         if let Some(ref err) = error() {
@@ -107,7 +112,7 @@ pub fn NewTournament() -> Element {
                                 }
                                 div { class: "form-text", "Choose a unique, shareable link, such as /summer-cup. {URL_SLUG_ALLOWED_HINT}" }
                             }
-                            div { class: "d-grid",
+                            div { class: "form-actions",
                                 button { r#type: "submit", class: "btn btn-primary", disabled: busy(), if busy() { "Creating event…" } else { "Create an Event" } }
                             }
                         }

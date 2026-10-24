@@ -1,4 +1,6 @@
 use crate::api;
+use crate::components::ToolPageHeader;
+use crate::components::{PaymentStatusBadge, RegistrationStatusBadge, WaiverStatusBadge};
 use crate::Route;
 use dioxus::prelude::*;
 use wasm_bindgen::JsCast;
@@ -30,17 +32,7 @@ pub fn LeagueManage(league_url: String) -> Element {
     let val = data.value();
     rsx! {
         if let Some(Ok(d)) = val.read().as_ref() {
-            div { class: "row",
-                div { class: "col-12",
-                    h2 { "Registration management" }
-                    nav { aria_label: "breadcrumb",
-                        ol { class: "breadcrumb",
-                            li { class: "breadcrumb-item", Link { to: Route::LeagueHome { league_url: league_url.clone() }, "{d.tournament.name}" } }
-                            li { class: "breadcrumb-item active", "Registration Management" }
-                        }
-                    }
-                }
-            }
+            ToolPageHeader { title: "Registration management" }
 
             div { class: "row mb-3",
                 div { class: "col-12",
@@ -92,7 +84,7 @@ pub fn LeagueManage(league_url: String) -> Element {
             div { class: "row",
                 div { class: "col-12",
                     div { class: "edit-section data-section",
-                        div { class: "edit-section-heading", h5 { class: "mb-0", "Team Registrations" } }
+                        div { class: "edit-section-heading", h3 { class: "h5 mb-0", "Team Registrations" } }
                         div { class: "edit-section-body",
                             div { class: "table-responsive management-table-wrap",
                                 table { class: "table table-striped management-table",
@@ -113,22 +105,8 @@ pub fn LeagueManage(league_url: String) -> Element {
                                                     }
                                                 }
                                                 td { "data-label": "Status",
-                                                    span {
-                                                        class: format!(
-                                                            "badge table-nowrap {}",
-                                                            match team_data.registration.status.as_str() {
-                                                                "CONFIRMED" => "bg-success",
-                                                                "CANCELLED" => "bg-danger",
-                                                                _ => "bg-warning",
-                                                            }
-                                                        ),
-                                                        "{team_data.registration.status}"
-                                                    }
-                                                    if team_data.registration.paid {
-                                                        span { class: "badge table-nowrap bg-primary ms-1", "Paid" }
-                                                    } else {
-                                                        span { class: "badge table-nowrap bg-secondary ms-1", "Unpaid" }
-                                                    }
+                                                    RegistrationStatusBadge { status: team_data.registration.status.clone() }
+                                                    PaymentStatusBadge { paid: team_data.registration.paid, class: "ms-1" }
                                                 }
                                                 td { class: "table-nowrap", "data-label": "Registered", {crate::time_format::format_registration_timestamp(team_data.registration.registered_at.as_deref().unwrap_or("—"))} }
                                                 td { "data-label": "Actions", class: "management-actions",
@@ -247,7 +225,7 @@ pub fn LeagueManage(league_url: String) -> Element {
             div { class: "row mt-4",
                 div { class: "col-12",
                     div { class: "edit-section data-section",
-                        div { class: "edit-section-heading", h5 { class: "mb-0", "Player Registrations" } }
+                        div { class: "edit-section-heading", h3 { class: "h5 mb-0", "Player Registrations" } }
                         div { class: "edit-section-body",
                             div { class: "table-responsive management-table-wrap",
                                 table { class: "table table-striped management-table",
@@ -303,40 +281,12 @@ pub fn LeagueManage(league_url: String) -> Element {
                                                         }
                                                     }
                                                     td { "data-label": "Waiver",
-                                                        if player_data.registration.waiver_required {
-                                                            {
-                                                                let ws = player_data.registration.waiver_status.as_deref().unwrap_or("NOT_SIGNED");
-                                                                let (cls, label) = match ws {
-                                                                    "VALID" => ("bg-success", "Waiver valid"),
-                                                                    "OUT_OF_DATE" => ("bg-warning text-dark", "Waiver out of date"),
-                                                                    "NOT_SIGNED" => ("bg-danger", "Waiver not signed"),
-                                                                    _ => ("bg-secondary", "Waiver status unknown"),
-                                                                };
-                                                                rsx! { span { class: "badge table-nowrap {cls}", "{label}" } }
-                                                            }
-                                                        } else {
-                                                            span { class: "text-muted", "-" }
-                                                        }
+                                                        WaiverStatusBadge { required: player_data.registration.waiver_required, status: player_data.registration.waiver_status.clone(), show_not_required: true }
                                                     }
                                                 }
                                                 td { "data-label": "Status",
-                                                    span {
-                                                        class: format!(
-                                                            "badge table-nowrap {}",
-                                                            match player_data.registration.status.as_str() {
-                                                                "CONFIRMED" => "bg-success",
-                                                                "CANCELLED" => "bg-danger",
-                                                                "PENDING_TEAM_APPROVAL" => "bg-warning",
-                                                                _ => "bg-secondary",
-                                                            }
-                                                        ),
-                                                        "{player_data.registration.status}"
-                                                    }
-                                                    if player_data.registration.paid {
-                                                        span { class: "badge table-nowrap bg-primary ms-1", "Paid" }
-                                                    } else {
-                                                        span { class: "badge table-nowrap bg-secondary ms-1", "Unpaid" }
-                                                    }
+                                                    RegistrationStatusBadge { status: player_data.registration.status.clone() }
+                                                    PaymentStatusBadge { paid: player_data.registration.paid, class: "ms-1" }
                                                 }
                                                 td { class: "table-nowrap", "data-label": "Registered", {crate::time_format::format_registration_timestamp(player_data.registration.registered_at.as_deref().unwrap_or("—"))} }
                                                 td { "data-label": "Actions", class: "management-actions",

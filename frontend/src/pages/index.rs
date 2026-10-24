@@ -1,25 +1,12 @@
 use crate::api;
-use crate::components::{OrganizeContext, OrganizeMenu, PageIntro};
+use crate::components::{OrganizeContext, OrganizeMenu, PageIntro, PaymentStatusBadge, RegistrationStatusBadge, WaiverStatusBadge};
 use crate::types::{Tournament, UserRegStatus};
 use crate::Route;
 use chrono::{Local, NaiveDate};
 use dioxus::prelude::*;
 
-fn format_date(iso: &str) -> String {
-    let date = iso.split('T').next().unwrap_or(iso);
-    NaiveDate::parse_from_str(date, "%Y-%m-%d")
-        .map(|date| date.format("%b %-d, %Y").to_string())
-        .unwrap_or_else(|_| date.to_string())
-}
-
 pub(super) fn format_date_display(start: &str, end: Option<&String>) -> String {
-    let start_fmt = format_date(start);
-    match end {
-        Some(end) if format_date(end) != start_fmt => {
-            format!("{} – {}", start_fmt, format_date(end))
-        }
-        _ => start_fmt,
-    }
+    crate::time_format::format_calendar_range(start, end.map(String::as_str))
 }
 
 /// An event stays upcoming until its final day has passed in the user's timezone.
@@ -221,54 +208,9 @@ fn TournamentCard(
 
 #[component]
 pub(super) fn UserRegBadges(urs: UserRegStatus) -> Element {
-    let (status_class, status_icon, status_label) = match urs.status.as_str() {
-        "CONFIRMED" => ("arctos-badge-success", "fas fa-circle-check", "Confirmed"),
-        "PENDING_TEAM_APPROVAL" => (
-            "arctos-badge-warning",
-            "fas fa-clock",
-            "Awaiting Team Approval",
-        ),
-        "REJECTED" => ("arctos-badge-danger", "fas fa-circle-xmark", "Declined"),
-        "CANCELLED" => ("arctos-badge-neutral", "fas fa-circle-minus", "Cancelled"),
-        _ => (
-            "arctos-badge-neutral",
-            "fas fa-circle-question",
-            "Status unavailable",
-        ),
-    };
-    let (waiver_class, waiver_icon, waiver_label) =
-        match urs.waiver_status.as_deref().unwrap_or("NOT_SIGNED") {
-            "VALID" => ("arctos-badge-success", "fas fa-check", "Waiver valid"),
-            "OUT_OF_DATE" => (
-                "arctos-badge-warning",
-                "fas fa-file-signature",
-                "Waiver needs re-signing",
-            ),
-            "NOT_SIGNED" => (
-                "arctos-badge-danger",
-                "fas fa-file-signature",
-                "Waiver not signed",
-            ),
-            _ => (
-                "arctos-badge-neutral",
-                "fas fa-circle-question",
-                "Waiver status unknown",
-            ),
-        };
     rsx! {
-        span { class: "badge arctos-registration-badge {status_class}",
-            i { class: "{status_icon}", aria_hidden: "true" }
-            span { "{status_label}" }
-        }
-        span { class: if urs.paid { "badge arctos-registration-badge arctos-badge-success" } else { "badge arctos-registration-badge arctos-badge-danger" },
-            i { class: if urs.paid { "fas fa-check" } else { "fas fa-receipt" }, aria_hidden: "true" }
-            span { if urs.paid { "Paid" } else { "Unpaid" } }
-        }
-        if urs.waiver_required {
-            span { class: "badge arctos-registration-badge {waiver_class}",
-                i { class: "{waiver_icon}", aria_hidden: "true" }
-                span { "{waiver_label}" }
-            }
-        }
+        RegistrationStatusBadge { status: urs.status, show_icon: true }
+        PaymentStatusBadge { paid: urs.paid, show_icon: true }
+        WaiverStatusBadge { required: urs.waiver_required, status: urs.waiver_status, show_icon: true }
     }
 }
