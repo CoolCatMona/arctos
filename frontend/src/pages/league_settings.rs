@@ -112,6 +112,7 @@ pub fn LeagueSettings(league_url: String) -> Element {
     let banner_busy = use_signal(|| false);
     let mut banner_initialized = use_signal(|| false);
     let mut saving = use_signal(|| false);
+    let penalty_pending = use_signal(|| false);
     let mut save_error = use_signal(|| None::<String>);
     let mut save_success = use_signal(|| false);
     let mut to_error = use_signal(|| None as Option<String>);
@@ -179,20 +180,20 @@ pub fn LeagueSettings(league_url: String) -> Element {
                 div { class: "alert alert-success", "Settings saved." }
             }
             if let Some(ref err) = save_error() {
-                div { class: "alert alert-danger", "{err}" }
+                div { class: "alert alert-danger", role: "alert", "{err}" }
             }
             div { class: "row organizer-settings",
                 div { class: "col-12",
             form {
                 onsubmit: move |ev| {
                     ev.prevent_default();
-                    if saving() || banner_busy() || waiver_reading() { return; }
+                    if saving() || penalty_pending() || banner_busy() || waiver_reading() { return; }
                     saving.set(true);
                     save_error.set(None);
                     save_success.set(false);
                     let about = get_form_textarea("about");
-                    let team_reg_fee: f64 = get_form_value("team_reg_fee").parse().unwrap_or(0.0);
-                    let player_reg_fee: f64 = get_form_value("player_reg_fee").parse().unwrap_or(0.0);
+                    let team_reg_fee = get_form_value("team_reg_fee");
+                    let player_reg_fee = get_form_value("player_reg_fee");
                     let team_registration_open = get_form_check("team_registration_open");
                     let player_registration_open = get_form_check("player_registration_open");
                     let published = get_form_check("published");
@@ -211,29 +212,17 @@ pub fn LeagueSettings(league_url: String) -> Element {
                     let n_max_teams = get_form_value("n_max_teams");
                     let max_roster = get_form_value("max_team_size_roster");
                     let max_field = get_form_value("max_team_size_field");
-                    params.insert("n_max_teams".to_string(), serde_json::json!(if n_max_teams.trim().is_empty() { serde_json::Value::Null } else { serde_json::json!(n_max_teams.parse::<u32>().unwrap_or(0)) }));
-                    params.insert("max_team_size_roster".to_string(), serde_json::json!(if max_roster.trim().is_empty() { serde_json::Value::Null } else { serde_json::json!(max_roster.parse::<u32>().unwrap_or(0)) }));
-                    params.insert("max_team_size_field".to_string(), serde_json::json!(if max_field.trim().is_empty() { serde_json::Value::Null } else { serde_json::json!(max_field.parse::<u32>().unwrap_or(0)) }));
+                    params.insert("n_max_teams".to_string(), serde_json::json!(if n_max_teams.trim().is_empty() { serde_json::Value::Null } else { serde_json::json!(n_max_teams) }));
+                    params.insert("max_team_size_roster".to_string(), serde_json::json!(if max_roster.trim().is_empty() { serde_json::Value::Null } else { serde_json::json!(max_roster) }));
+                    params.insert("max_team_size_field".to_string(), serde_json::json!(if max_field.trim().is_empty() { serde_json::Value::Null } else { serde_json::json!(max_field) }));
                     let lu = lu_form1_submit.clone();
                     let nav = navigator.clone();
                     let league_url_for_nav = lu.clone();
                     let waiver_bytes_for_save = waiver_file_bytes();
                     let waiver_name_for_save = waiver_file_name();
                     spawn(async move {
-                        match api::league_update_settings(&lu, &params).await {
+                        match api::save_league_settings(&lu, &params, waiver_bytes_for_save, waiver_name_for_save).await {
                                     Ok(res) if res.success => {
-                                        if let Some(bytes) = waiver_bytes_for_save {
-                                            let filename =
-                                                waiver_name_for_save.as_deref().unwrap_or("waiver");
-                                            match api::league_upload_waiver(&lu, bytes.to_vec(), filename).await {
-                                                Ok(_) => {}
-                                                Err(e) => {
-                                                    save_error.set(Some(e));
-                                                    saving.set(false);
-                                                    return;
-                                                }
-                                            }
-                                        }
                                         save_success.set(true);
                                         let _ = nav.push(Route::LeagueHome { league_url: league_url_for_nav.clone() });
                                     }
@@ -243,6 +232,7 @@ pub fn LeagueSettings(league_url: String) -> Element {
                         saving.set(false);
                     });
                 },
+                fieldset { disabled: saving(), class: "border-0 p-0 m-0",
                 div { class: "edit-section mb-3",
                     div { class: "edit-section-heading", h5 { class: "mb-0", "League settings" } }
                     div { class: "edit-section-body",
@@ -291,6 +281,7 @@ pub fn LeagueSettings(league_url: String) -> Element {
                                     class: "form-check-input",
                                     r#type: "checkbox",
                                     id: "require_waiver_signature",
+                                    disabled: waiver_reading(),
                                     checked: require_waiver_signature_ui(),
                                     onchange: move |ev| {
                                         let checked = ev.checked();
@@ -326,7 +317,7 @@ pub fn LeagueSettings(league_url: String) -> Element {
                                     r#type: "file",
                                     class: "form-control",
                                     accept: "*/*",
-                                    disabled: waiver_reading(),
+                                    disabled: waiver_reading() || saving(),
                                     onchange: move |evt| {
                                         #[cfg(target_arch = "wasm32")]
                                         {
@@ -355,15 +346,15 @@ pub fn LeagueSettings(league_url: String) -> Element {
                                     }
                                 }
 
-                                if waiver_file_bytes().is_some() {
-                                    p { class: "text-muted small mt-2 mb-2", "Ready to upload the selected waiver file." }
+                                if let Some(filename) = waiver_file_name() {
+                                    p { class: "text-muted small mt-2 mb-2", "Selected waiver: {filename}" }
                                 }
 
                                 if let Some(ref err) = waiver_upload_error() {
                                     div { class: "alert alert-danger small py-2 mt-2", "{err}" }
                                 }
 
-                                div { class: "form-text mt-2", "Selected waiver uploads when you click Save Settings." }
+                                div { class: "form-text mt-2", "Settings and the selected waiver save together when you choose Save settings." }
                             } else {
                                 div { class: "form-text text-muted mt-2", "Waiver signature will not be required." }
                             }
@@ -440,10 +431,11 @@ pub fn LeagueSettings(league_url: String) -> Element {
                                 label { r#for: "published", class: "form-check-label", "Published (visible in Leagues)" }
                             }
                         }
-                        button { r#type: "submit", class: "btn btn-primary", disabled: saving() || banner_busy() || waiver_reading(), if saving() { "Saving…" } else { "Save settings" } }
+                        button { r#type: "submit", class: "btn btn-primary", disabled: saving() || penalty_pending() || banner_busy() || waiver_reading(), if saving() { "Saving…" } else { "Save settings" } }
                     }
                 }
             }
+                }
 
                 }
                 div { class: "col-12",
@@ -451,6 +443,8 @@ pub fn LeagueSettings(league_url: String) -> Element {
                 penalty_types: d.penalty_types.clone(),
                 league_url: league_url.clone(),
                 on_refresh: trigger_refresh,
+                mutation_pending: penalty_pending,
+                settings_saving: saving,
             }
 
             details { class: "edit-section section-disclosure mb-3", open: true,

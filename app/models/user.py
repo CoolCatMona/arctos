@@ -101,7 +101,7 @@ class Team(UserMixin, db.Model):
         pw_hash: Werkzeug password hash; ``None`` for OAuth-only accounts.
         google_id: Google OAuth subject identifier.
         phone: Optional contact phone number.
-        email: Contact email address (may come from Google OAuth).
+        email: Public contact email address, provided by the team owner.
             Never used to authenticate the team — login is by ``id`` +
             password or by ``google_id``. Not unique: multiple teams in
             the same club may share an inbox.

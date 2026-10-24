@@ -593,6 +593,25 @@ const BASE_SLOT_HEIGHT_REM: f64 = 7.0;
 const MIN_VERTICAL_SCALE: f64 = 0.55;
 const MAX_VERTICAL_SCALE: f64 = 2.5;
 
+/// Change the time-axis scale without moving the currently viewed midpoint.
+fn change_time_scale(
+    mut vertical_scale: Signal<f64>,
+    mut pending_scroll_top: Signal<Option<i32>>,
+    scroll_el_id: &str,
+    requested: f64,
+) {
+    let old = vertical_scale();
+    let next = requested.clamp(MIN_VERTICAL_SCALE, MAX_VERTICAL_SCALE);
+    if !next.is_finite() || (next - old).abs() < 1e-6 {
+        return;
+    }
+    if let Some(top) = scroll_top_after_centered_zoom(scroll_el_id, next / old) {
+        pending_scroll_top.set(Some(top));
+    }
+    vertical_scale.set(next);
+    ls_set(VERTICAL_SCALE_KEY, &format!("{next:.3}"));
+}
+
 /// Full-timestamp local formatter so debug-mode tables show the full timestamp.
 fn format_datetime_local(iso: &str, tz_offset_minutes: i64) -> String {
     let utc_dt = if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(iso) {
@@ -1037,6 +1056,26 @@ fn SchedulePage(
             let url_for_export = url.clone();
             let url_for_export_key = url_for_export.clone();
             let handle_keydown = move |ev: Event<KeyboardData>| {
+                if ev.modifiers().ctrl() || ev.modifiers().meta() || ev.modifiers().alt() {
+                    return;
+                }
+                #[cfg(target_arch = "wasm32")]
+                if ev
+                    .data
+                    .downcast::<web_sys::KeyboardEvent>()
+                    .and_then(|event| event.target())
+                    .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+                    .and_then(|target| {
+                        target
+                            .closest("input, textarea, select, [contenteditable='true']")
+                            .ok()
+                            .flatten()
+                    })
+                    .is_some()
+                    && ev.key() != Key::Escape
+                {
+                    return;
+                }
                 let key_str = ev.key().to_string();
                 let modal_open = active_modal() != "none";
                 if modal_open {
@@ -1168,7 +1207,7 @@ fn SchedulePage(
                     tabindex: 0,
                     onkeydown: handle_keydown,
                     onmounted: move |_| focus_schedule_root(),
-                    role: "application",
+                    role: "region",
                     aria_label: "Schedule",
                     if !embedded {
                         div { class: "row mb-3",
@@ -1240,7 +1279,10 @@ fn SchedulePage(
                             div { class: "d-flex flex-wrap justify-content-between align-items-center gap-2",
                                 div { class: "d-flex flex-wrap align-items-center gap-2",
                                     if view_mode() != "team" {
+                                        div { class: "schedule-filter",
+                                        label { r#for: "schedule-field", "Field" }
                                         select {
+                                            id: "schedule-field",
                                             class: "form-select form-select-sm d-inline-block w-auto",
                                             value: "{selected_field}",
                                             onchange: move |e| selected_field.set(e.value()),
@@ -1257,20 +1299,28 @@ fn SchedulePage(
                                                 }
                                             }
                                         }
+                                        }
+                                        div { class: "schedule-filter",
+                                        label { r#for: "schedule-highlight-team", "Highlight team" }
                                         input {
+                                            id: "schedule-highlight-team",
                                             class: "form-control form-control-sm d-inline-block",
                                             style: "width: 10rem;",
-                                            placeholder: "Highlight Team...",
+                                            placeholder: "Team name",
                                             value: "{highlight_team}",
                                             oninput: move |e| highlight_team.set(e.value()),
                                             onkeydown: move |ev: Event<KeyboardData>| ev.stop_propagation(),
+                                        }
                                         }
                                     } else {
                                         {
                                             let selected = focus_team_id();
                                             let selected_in_options = data.team_options.iter().any(|t| t.id == selected);
                                             rsx! {
+                                                div { class: "schedule-filter",
+                                                label { r#for: "schedule-team", "Your team" }
                                                 select {
+                                                    id: "schedule-team",
                                                     class: "form-select form-select-sm d-inline-block w-auto",
                                                     // Controlled value + per-option selected so default team shows correctly.
                                                     value: "{selected}",
@@ -1309,18 +1359,21 @@ fn SchedulePage(
                                                         }
                                                     }
                                                 }
+                                                }
                                             }
                                         }
                                     }
-                                    div { class: "btn-group btn-group-sm",
+                                    div { class: "btn-group btn-group-sm", role: "group", aria_label: "Schedule view",
                                         if !editor {
                                             button {
                                                 class: if view_mode() == "team" { "btn btn-primary" } else { "btn btn-outline-primary" },
+                                                aria_pressed: view_mode() == "team",
                                                 onclick: move |_| view_mode.set("team".to_string()),
                                                 "By team"
                                             }
                                             button {
                                                 class: if view_mode() == "field" { "btn btn-primary" } else { "btn btn-outline-primary" },
+                                                aria_pressed: view_mode() == "field",
                                                 onclick: move |_| view_mode.set("field".to_string()),
                                                 "By field"
                                             }
@@ -1328,11 +1381,13 @@ fn SchedulePage(
                                         if editor {
                                             button {
                                                 class: if view_mode() == "timeline" { "btn btn-primary" } else { "btn btn-outline-primary" },
+                                                aria_pressed: view_mode() == "timeline",
                                                 onclick: move |_| view_mode.set("timeline".to_string()),
                                                 "All fields"
                                             }
                                             button {
                                                 class: if view_mode() == "table" { "btn btn-primary" } else { "btn btn-outline-primary" },
+                                                aria_pressed: view_mode() == "table",
                                                 onclick: move |_| view_mode.set("table".to_string()),
                                                 "Table"
                                             }
@@ -1341,6 +1396,18 @@ fn SchedulePage(
                                 }
                                 if editor {
                                     div { class: "d-flex flex-wrap align-items-center gap-1",
+                                            button {
+                                                r#type: "button",
+                                                class: "btn btn-sm btn-outline-secondary",
+                                                disabled: data.fields.is_empty() || active_modal() != "none" || bulk_mode(),
+                                                onclick: move |_| {
+                                                    create_prefill.set(None);
+                                                    create_prefill_nonce.set(create_prefill_nonce().wrapping_add(1));
+                                                    team_field_focus.set(None);
+                                                    active_modal.set("match_create".to_string());
+                                                },
+                                                "Add match"
+                                            }
                                             button { class: "btn btn-sm btn-outline-secondary", onclick: move |_| active_modal.set("tags".to_string()), "Tags" }
                                             button { class: "btn btn-sm btn-outline-secondary", onclick: move |_| active_modal.set("scripting".to_string()), "Scripting" }
                                             button { class: "btn btn-sm btn-outline-secondary", onclick: move |_| active_modal.set("fields".to_string()), "Fields" }
@@ -3127,7 +3194,7 @@ fn BreakGroupModal(
             tabindex: -1,
             onkeydown: modal_keydown,
             div { class: "edit-section-heading d-flex justify-content-between align-items-center",
-                h5 { class: "mb-0", "Edit {type_label}: {group_name}" }
+                h5 { class: "mb-0", tabindex: "-1", onmounted: move |event| async move { let _ = event.data.set_focus(true).await; }, "Edit {type_label}: {group_name}" }
                 button {
                     class: "btn-close",
                     r#type: "button",
@@ -4238,7 +4305,7 @@ fn TableView(
                         rsx! {
                             tr { key: "{m.uuid}", class: "{tr_row_class}",
                                 td {
-                                    if edit_mode {
+                                    if edit_mode || structural {
                                         "{m.name}"
                                     } else {
                                         Link { to: Route::MatchPageById { url: tournament_url.clone(), match_id: m.uuid.clone() }, class: "text-decoration-none", "{m.name}" }
@@ -4304,9 +4371,11 @@ fn TableView(
                                         // Started/completed rows stay editable too: the edit card
                                         // surfaces the lock and the server rejects disallowed changes.
                                         button {
+                                            r#type: "button",
                                             class: "btn btn-sm btn-link",
+                                            aria_label: "Edit {m.name}",
                                             onclick: move |_| on_edit_match.call(match_id.clone()),
-                                            "✎"
+                                            "Edit"
                                         }
                                     }
                                 }
@@ -4404,6 +4473,8 @@ fn TimelineEventCard(
     /// Selected by the bulk-length tool.
     #[props(default = false)]
     selected: bool,
+    #[props(default = false)]
+    selection_active: bool,
     /// Alt-hover dependency highlight class (source / chain / team / ref).
     #[props(default)]
     dep_class: Option<String>,
@@ -4442,6 +4513,34 @@ fn TimelineEventCard(
         format!("{} - {} vs {}", event.name, event.team1, event.team2)
     };
     let url_clone = tournament_url.clone();
+    let title_action = rsx! {
+        span { class: "schedule-timeline-event-name",
+            onpointerdown: move |event: Event<PointerData>| event.stop_propagation(),
+            onclick: move |event: Event<MouseData>| event.stop_propagation(),
+            if edit_mode {
+                button {
+                    r#type: "button",
+                    class: "schedule-match-action",
+                    aria_label: if selection_active { format!("Select {event_title}") } else { format!("Edit {event_title}") },
+                    aria_pressed: selection_active.then_some(selected),
+                    onclick: {
+                        let id = event.id.clone();
+                        move |_| on_edit_match.call(id.clone())
+                    },
+                    "{event.name}"
+                }
+            } else if !is_structural {
+                Link {
+                    to: Route::MatchPageById { url: tournament_url.clone(), match_id: event.id.clone() },
+                    class: "schedule-match-action",
+                    aria_label: "View {event_title}",
+                    "{event.name}"
+                }
+            } else {
+                "{event.name}"
+            }
+        }
+    };
     let event_class = format!(
         "schedule-timeline-event{}{}{}{}{}{}",
         if event.highlight_playing {
@@ -4538,8 +4637,11 @@ fn TimelineEventCard(
                     on_hover.call((event_id_for_leave.clone(), false, ev.modifiers().alt()));
                 }
             },
-            onclick: move |_| {
-                if is_break && !edit_mode {
+            onclick: move |event: Event<MouseData>| {
+                if event.modifiers().ctrl() || event.modifiers().meta() || event.modifiers().shift() || event.modifiers().alt() {
+                    return;
+                }
+                if is_structural && !edit_mode {
                 } else if edit_mode {
                     on_edit_match.call(event_id_clone.clone());
                 } else {
@@ -4599,7 +4701,7 @@ fn TimelineEventCard(
                 div { class: "schedule-timeline-event-team-row",
                     div { class: "schedule-timeline-event-main",
                         div { class: "schedule-timeline-event-header d-flex align-items-center flex-wrap gap-1",
-                            div { class: "schedule-timeline-event-name", "{event.name}" }
+                            {title_action.clone()}
                             if let Some(opp) = event.opponent_slot.clone() {
                                 span { class: "schedule-timeline-event-teams schedule-timeline-inline-vs d-inline-flex align-items-center flex-wrap gap-1",
                                     span { "vs" }
@@ -4650,7 +4752,7 @@ fn TimelineEventCard(
                 }
             } else if !is_break {
                 div { class: "schedule-timeline-event-header d-flex align-items-center flex-wrap gap-1",
-                    div { class: "schedule-timeline-event-name", "{event.name}" }
+                    {title_action.clone()}
                 }
                 div { class: "schedule-timeline-event-teams d-flex align-items-center flex-wrap gap-1",
                     TeamLabel {
@@ -4680,7 +4782,7 @@ fn TimelineEventCard(
                 }
             } else {
                 div { class: "schedule-timeline-event-header d-flex align-items-center flex-wrap gap-1",
-                    div { class: "schedule-timeline-event-name", "{event.name}" }
+                    {title_action.clone()}
                 }
             }
             if event.ribbon {
@@ -6474,13 +6576,28 @@ fn ScheduleTimeline(
                         span { class: "schedule-timeline-date",
                             " {visible_date_signal().format(\"%A, %B %d\")}"
                         }
-                        span {
-                            class: "ms-auto small text-muted",
-                            title: "Pinch on mobile, or Shift+scroll on desktop, to zoom the time axis",
-                            if (scale - 1.0).abs() > 0.02 {
-                                "{(scale * 100.0) as i32}%"
-                            } else {
-                                ""
+                        div { class: "schedule-scale-controls", role: "group", aria_label: "Time scale",
+                            span { class: "small text-muted", "Time scale" }
+                            button {
+                                r#type: "button", class: "btn btn-sm btn-outline-secondary",
+                                aria_label: "Decrease time scale",
+                                disabled: scale <= MIN_VERTICAL_SCALE,
+                                onclick: move |_| change_time_scale(vertical_scale, pending_scroll_top, scroll_el_id, vertical_scale() / 1.2),
+                                "−"
+                            }
+                            button {
+                                r#type: "button", class: "btn btn-sm btn-outline-secondary schedule-scale-reset",
+                                aria_label: "Time scale {(scale * 100.0).round() as i32}%; reset to 100%",
+                                title: "Reset time scale to 100%",
+                                onclick: move |_| change_time_scale(vertical_scale, pending_scroll_top, scroll_el_id, 1.0),
+                                "{(scale * 100.0).round() as i32}%"
+                            }
+                            button {
+                                r#type: "button", class: "btn btn-sm btn-outline-secondary",
+                                aria_label: "Increase time scale",
+                                disabled: scale >= MAX_VERTICAL_SCALE,
+                                onclick: move |_| change_time_scale(vertical_scale, pending_scroll_top, scroll_el_id, vertical_scale() * 1.2),
+                                "+"
                             }
                         }
                     }
@@ -6676,8 +6793,10 @@ fn ScheduleTimeline(
                                                             style: format!("top: calc(var(--slot-height) * {});", join_top_fraction),
                                                             div { class: "schedule-timeline-join-line-in-cell" }
                                                             if edit_mode {
-                                                                div {
+                                                                button {
+                                                                    r#type: "button",
                                                                     class: "schedule-timeline-join-label",
+                                                                    aria_label: "Edit join {join_name}",
                                                                     // Don't let a click on the join label start a create drag.
                                                                     onpointerdown: move |ev: Event<PointerData>| ev.stop_propagation(),
                                                                     onclick: move |_| on_edit_match.call(match_id.clone()),
@@ -6904,6 +7023,7 @@ fn ScheduleTimeline(
                                         on_edit_match: wrapped_on_edit,
                                         editor: editor,
                                         selected: selected_ids.contains(&ev.id),
+                                        selection_active: bulk_select_active,
                                         dep_class: dep_class_map.get(&ev.id).map(|c| c.to_string()),
                                         // Rings for the hovered source AND every dependency target.
                                         dep_shadow: dep_shadow_by_id.get(&ev.id).cloned(),
@@ -7276,7 +7396,7 @@ fn EditMatchModal(
                 tabindex: -1,
                 onkeydown: modal_keydown,
                 div { class: "edit-section-heading d-flex justify-content-between align-items-center",
-                    h5 { class: "mb-0", "Edit Match: {name}" }
+                    h5 { class: "mb-0", tabindex: "-1", onmounted: move |event| async move { let _ = event.data.set_focus(true).await; }, "Edit Match: {name}" }
                     button {
                         class: "btn-close",
                         r#type: "button",

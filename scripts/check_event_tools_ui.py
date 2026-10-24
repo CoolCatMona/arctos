@@ -227,6 +227,161 @@ async def menu_history(check: SmokeCheck, page: Page) -> None:
     await expect(page.locator("#organizer-tools-options")).to_have_count(0)
 
 
+async def settings_and_penalty_recovery(check: SmokeCheck, page: Page) -> None:
+    """Browser-only failure fixtures; every mutation is fulfilled or aborted locally.
+
+    These cases were authored with the persistence fix. Execute separately from
+    backend tests; compilation or Flask tests do not establish browser coverage.
+    """
+    probe = await page.context.new_page()
+    probe.on("pageerror", lambda error: check.page_errors.append(str(error)))
+    try:
+        for kind, path, detail, save_path, penalties in (
+            (
+                "event",
+                "/demo-open/settings",
+                "/_api/tournaments/demo-open",
+                "/_api/demo-open/update-settings",
+                "/_api/demo-open/penalty-types",
+            ),
+            (
+                "league",
+                "/leagues/demo-coast-league/settings",
+                "/_api/leagues/demo-coast-league",
+                "/_api/leagues/demo-coast-league/settings",
+                "/_api/leagues/demo-coast-league/penalty-types",
+            ),
+        ):
+            payload = await api_json(page.context, check.base_url, detail)
+            payload["penalty_types"] = [
+                {"id": 987601, "name": "Fixture penalty", "color": "808080", "desc": "Old description"}
+            ]
+            details_url, save_url, penalty_url = (check.base_url + value for value in (detail, save_path, penalties))
+            started, release = asyncio.Event(), asyncio.Event()
+            requests, writes = [], []
+            save_succeeds = False
+            mode = "update-failure"
+
+            async def details_fixture(route):
+                if route.request.method == "GET":
+                    await route.fulfill(json=payload)
+                else:
+                    await route.fallback()
+
+            async def settings_fixture(route):
+                if route.request.method != "POST":
+                    await route.fallback()
+                    return
+                requests.append(route.request)
+                started.set()
+                await release.wait()
+                await route.fulfill(
+                    status=200 if save_succeeds else 500,
+                    json={"success": True} if save_succeeds else {"error": "Fixture settings failure"},
+                )
+
+            async def penalty_fixture(route):
+                request = route.request
+                if request.method == "GET":
+                    await route.fulfill(json={"penalty_types": payload["penalty_types"]})
+                    return
+                writes.append((request.method, request.post_data_json if request.post_data else None))
+                if request.method == "PATCH":
+                    if mode == "update-failure":
+                        await route.fulfill(status=400, json={"error": "Fixture update failure"})
+                    else:
+                        payload["penalty_types"][0].update(request.post_data_json)
+                        await route.fulfill(json={"success": True})
+                elif request.method == "POST":
+                    if mode == "create-not-saved":
+                        await route.fulfill(status=500, json={"error": "Fixture create failure"})
+                    else:
+                        item = {"id": 987602, **request.post_data_json}
+                        payload["penalty_types"].append(item)
+                        if mode == "create-response-lost":
+                            await route.abort("failed")  # Commit happened, response did not arrive.
+                        else:
+                            await route.fulfill(json={"success": True, "penalty_type": item})
+                elif request.method == "DELETE":
+                    await route.fulfill(status=409, json={"error": "Cannot delete penalty type that is in use."})
+                else:
+                    await route.fallback()
+
+            await page.context.route(details_url, details_fixture)
+            await page.context.route(save_url, settings_fixture)
+            await page.context.route(penalty_url + "**", penalty_fixture)
+            try:
+                await probe.goto(check.base_url + path, wait_until="domcontentloaded")
+                await probe.locator("#about").fill("Retain this settings draft.")
+                await probe.locator("#require_waiver_signature").check()
+                await probe.locator('input[type="file"][accept="*/*"]').set_input_files(
+                    {"name": "draft-waiver.txt", "mimeType": "text/plain", "buffer": b"retained waiver"}
+                )
+                await expect(probe.get_by_text("Selected waiver: draft-waiver.txt", exact=True)).to_be_visible()
+                save = probe.get_by_role("button", name="Save settings", exact=False)
+                await save.click()
+                await asyncio.wait_for(started.wait(), timeout=5)
+                await expect(probe.locator("#about")).to_be_disabled()
+                await expect(probe.get_by_role("button", name="Saving…", exact=True)).to_be_disabled()
+                await probe.locator('button[type="submit"]').dispatch_event("click")
+                assert len(requests) == 1
+                release.set()
+                await expect(probe.get_by_role("alert").filter(has_text="Fixture settings failure")).to_be_visible()
+                await expect(probe.locator("#about")).to_have_value("Retain this settings draft.")
+                await expect(probe.get_by_text("Selected waiver: draft-waiver.txt", exact=True)).to_be_visible()
+                assert "multipart/form-data" in requests[0].headers["content-type"]
+                assert "retained waiver" in requests[0].post_data
+                save_succeeds = True
+                await save.click()
+                await expect(probe).not_to_have_url(check.base_url + path)
+                assert len(requests) == 2
+
+                await probe.goto(check.base_url + path, wait_until="domcontentloaded")
+                await probe.locator("#penalty-types-toggle").click()
+                section = probe.locator("#penalty-types-content")
+                await section.get_by_role("button", name="Edit", exact=True).click()
+                await probe.locator("#penalty-type-edit-name").fill("Retained penalty draft")
+                await probe.locator("#penalty-type-edit-description").fill("")
+                await probe.locator("#penalty-type-save").click()
+                await expect(probe.locator("#penalty-save-error")).to_contain_text("Fixture update failure")
+                await expect(probe.locator("#penalty-type-edit-name")).to_have_value("Retained penalty draft")
+                await expect(probe.locator("#penalty-type-edit-description")).to_have_value("")
+                assert writes[-1][1]["desc"] == ""
+                mode = "update-success"
+                await probe.locator("#penalty-type-save").click()
+                await expect(probe.locator("#penalty-type-edit-name")).to_have_count(0)
+                await section.get_by_role("button", name="Delete", exact=True).click()
+                await expect(probe.locator("#penalty-save-error")).to_contain_text("in use")
+                await expect(section.get_by_text("Retained penalty draft", exact=True)).to_be_visible()
+
+                for create_mode in ("create-not-saved", "create-response-lost"):
+                    mode = create_mode
+                    await probe.get_by_role("button", name="Add penalty type", exact=True).click()
+                    await probe.locator("#penalty-type-new-name").fill("New fixture " + create_mode)
+                    await probe.locator("#penalty-type-save").click()
+                    await expect(probe.locator("#penalty-type-save")).to_have_text("Check save status")
+                    await expect(probe.locator("#penalty-type-new-name")).to_be_disabled()
+                    post_count = sum(method == "POST" for method, _ in writes)
+                    await probe.locator("#penalty-type-save").click()
+                    if create_mode == "create-not-saved":
+                        await expect(probe.locator("#penalty-type-save")).to_have_text("Save")
+                        await expect(probe.locator("#penalty-type-new-name")).to_have_value(
+                            "New fixture " + create_mode
+                        )
+                        await section.get_by_role("button", name="Cancel", exact=True).click()
+                    else:
+                        await expect(probe.locator("#penalty-type-new-name")).to_have_count(0)
+                        await expect(section.get_by_text("New fixture " + create_mode, exact=True)).to_be_visible()
+                    assert sum(method == "POST" for method, _ in writes) == post_count
+            finally:
+                release.set()
+                await page.context.unroute(details_url, details_fixture)
+                await page.context.unroute(save_url, settings_fixture)
+                await page.context.unroute(penalty_url + "**", penalty_fixture)
+    finally:
+        await probe.close()
+
+
 async def run(args) -> int:
     check = SmokeCheck(args.base_url, args.screenshots)
     async with async_playwright() as playwright:
@@ -345,6 +500,12 @@ async def run(args) -> int:
                     )
                     await check.workflow(page, "flat-schedule-panels", width, lambda: schedule_panels(check, page))
                     if width == 360:
+                        await check.workflow(
+                            page,
+                            "settings-and-penalty-recovery",
+                            width,
+                            lambda: settings_and_penalty_recovery(check, page),
+                        )
                         await check.workflow(
                             page, "late-account-tab-reveal", width, lambda: late_account_tabs(check, page)
                         )

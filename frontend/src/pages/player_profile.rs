@@ -341,6 +341,11 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                 }
                             }
                             div { class: "profile-section-body",
+                                if can_edit_injuries {
+                                    p { id: "injury-visibility-help", class: "form-text",
+                                        "Public injuries are visible to anyone. Private injuries are hidden from your public profile. Active injuries are still shown to authorized match referees during match setup at events you are registered for."
+                                    }
+                                }
                                 if let Some(err) = injury_error() {
                                     div { class: "alert alert-danger", "{err}" }
                                 }
@@ -434,6 +439,7 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                                                     input {
                                                                         class: "form-check-input",
                                                                         "type": "checkbox", id: "{row_key}-public",
+                                                                        aria_describedby: "injury-visibility-help",
                                                                         checked: inj.show,
                                                                         onchange: move |e| {
                                                                             let mut rows = injuries_state.write();
@@ -608,11 +614,11 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                                                     message: "".to_string(),
                                                     date: "".to_string(),
                                                     active: true,
-                                                    show: true,
+                                                    show: false,
                                                     original_message: "".to_string(),
                                                     original_date: "".to_string(),
                                                     original_active: true,
-                                                    original_show: true,
+                                                    original_show: false,
                                                     editing: true,
                                                     is_new: true,
                                                 });

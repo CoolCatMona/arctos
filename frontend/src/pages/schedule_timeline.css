@@ -1304,3 +1304,29 @@
 @media (min-width: 992px) {
     .schedule-editor-panel { top: calc(var(--header-height, 76px) + 1rem); max-height: calc(100dvh - var(--header-height, 76px) - 2rem); }
 }
+
+/* Named native actions share the existing timeline geometry and team links. */
+.schedule-match-action {
+    display: inline-block;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ui-link);
+    font: inherit;
+    font-weight: inherit;
+    text-align: left;
+    line-height: inherit;
+    white-space: normal;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: .15em;
+}
+.schedule-match-action:hover { color: var(--ui-link-hover); }
+.schedule-match-action:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+.schedule-timeline-event:focus-within { outline: 2px solid var(--ui-accent); outline-offset: 1px; z-index: 30; }
+.schedule-filter { display: flex; flex-direction: column; gap: .2rem; min-width: 0; max-width: 100%; }
+.schedule-filter label { font-size: .8125rem; font-weight: 600; }
+.schedule-filter .form-select, .schedule-filter .form-control { max-width: 100%; }
+.schedule-scale-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; margin-left: auto; }
+.schedule-scale-controls .btn { min-width: 44px; }
+.schedule-scale-controls .schedule-scale-reset { min-width: 68px; font-variant-numeric: tabular-nums; }

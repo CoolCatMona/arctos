@@ -196,7 +196,7 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
                             div { class: "profile-preview-tabs", aria_hidden: "true", span { "Information" } span { "History" } }
                             div { class: "profile-preview-content",
                                 if team && !fields().website.trim().is_empty() { p { strong { "Website: " } span { class: "profile-preview-link", "{fields().website}" } } }
-                                if team && !fields().email.trim().is_empty() { p { strong { "Email: " } "{fields().email}" } }
+                                if team && !fields().email.trim().is_empty() { p { strong { "Public contact email: " } "{fields().email}" } }
                                 if !fields().about.trim().is_empty() {
                                     ProfileBio { source: fields().about, preview: true }
                                 } else { p { class: "text-muted", "No profile details added yet." } }
@@ -212,7 +212,7 @@ fn ProfileEditForm(account_id: String, team: bool, data: ProfileEditData) -> Ele
                             help: "Markdown supported: **bold**, *italic*, headings, lists, and [links](https://example.com).", disabled: saving() }
                         if team {
                             ProfileField { state: fields, field: Field::Website, label: "Website", input_type: "url", disabled: saving() }
-                            ProfileField { state: fields, field: Field::Email, label: "Email", input_type: "email", disabled: saving() }
+                            ProfileField { state: fields, field: Field::Email, label: "Public contact email", input_type: "email", help: "Optional. Anyone can see this address on your team's profile.", disabled: saving() }
                         } else {
                             ProfileField { state: fields, field: Field::Phone, label: "Phone number", input_type: "tel", help: "Only you can see this.", disabled: saving() }
                         }

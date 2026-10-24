@@ -20,7 +20,7 @@ use crate::types::{
     BracketMatchInfo, BracketMatchesResponse, BracketPlacementData, BracketPlacementRow,
     BracketTextData, MatchSetupData, TagSetupData, TeamOption,
 };
-use crate::{Route, api};
+use crate::{api, Route};
 
 const DEFAULT_WIDTH: f64 = 280.0;
 const DEFAULT_HEIGHT: f64 = 100.0;
@@ -715,6 +715,111 @@ fn apply_bootstrap(
     dirty.set(false);
 }
 
+/// Complete idempotent layout write. Only committed gestures enter the queue.
+#[derive(Clone, PartialEq)]
+struct LayoutSnapshot {
+    placements: Vec<serde_json::Value>,
+    texts: Vec<serde_json::Value>,
+    labeled: Vec<serde_json::Value>,
+    images: Vec<serde_json::Value>,
+    clear_missing: bool,
+}
+
+impl LayoutSnapshot {
+    fn capture(
+        matches: &[BracketMatchData],
+        texts: &[BracketTextData],
+        labeled: &[BracketLabeledTeamData],
+        images: &[BracketImageData],
+        clear_missing: bool,
+    ) -> Self {
+        Self {
+            placements: all_placements_json(matches),
+            texts: texts_json(texts),
+            labeled: labeled_json(labeled),
+            images: images_json(images),
+            clear_missing,
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+struct LayoutSaveState {
+    pending: Option<LayoutSnapshot>,
+    revision: u64,
+    running: bool,
+    failed: bool,
+    saved: bool,
+}
+
+impl LayoutSaveState {
+    fn can_acknowledge(
+        &self,
+        revision: u64,
+        sent: &LayoutSnapshot,
+        current: &LayoutSnapshot,
+    ) -> bool {
+        self.revision == revision && sent == current
+    }
+    fn enqueue(&mut self, snapshot: LayoutSnapshot) -> bool {
+        self.revision += 1;
+        self.pending = Some(snapshot);
+        self.saved = false;
+        if self.running || self.failed {
+            return false;
+        }
+        self.running = true;
+        true
+    }
+}
+
+#[derive(Clone, Copy)]
+struct BracketSave {
+    busy: Signal<bool>,
+    layout: Signal<LayoutSaveState>,
+    error: Signal<Option<String>>,
+    gesture: Signal<bool>,
+}
+
+impl std::ops::Deref for BracketSave {
+    type Target = Signal<bool>;
+    fn deref(&self) -> &Self::Target {
+        &self.busy
+    }
+}
+
+impl std::fmt::Display for BracketSave {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", (self.busy)())
+    }
+}
+
+impl BracketSave {
+    fn error(self) -> Option<String> {
+        (self.error)()
+    }
+    fn layout(self) -> LayoutSaveState {
+        (self.layout)()
+    }
+    fn set(&mut self, value: bool) {
+        self.busy.set(value);
+    }
+    fn structural_busy(self) -> bool {
+        ((self.busy)() && !self.layout.peek().running)
+            || (self.error.peek().is_some() && !self.layout.peek().failed)
+    }
+    fn begin(&mut self, dirty: bool) -> bool {
+        if (self.busy)() || dirty || self.error.peek().is_some() {
+            return false;
+        }
+        self.busy.set(true);
+        true
+    }
+    fn fail(&mut self, message: impl Into<String>) {
+        self.error.set(Some(message.into()));
+    }
+}
+
 fn persist_all(
     url: String,
     matches: Vec<BracketMatchData>,
@@ -726,32 +831,80 @@ fn persist_all(
     local_texts: Signal<Vec<BracketTextData>>,
     local_labeled: Signal<Vec<BracketLabeledTeamData>>,
     local_images: Signal<Vec<BracketImageData>>,
-    dirty: Signal<bool>,
-    mut saving: Signal<bool>,
+    mut dirty: Signal<bool>,
+    mut saving: BracketSave,
     canvas_size: Signal<(f64, f64)>,
 ) {
-    let p = all_placements_json(&matches);
-    let t = texts_json(&texts);
-    let l = labeled_json(&labeled);
-    let i = images_json(&images);
+    let snapshot = LayoutSnapshot::capture(&matches, &texts, &labeled, &images, clear_missing);
+    if !saving.layout.write().enqueue(snapshot) {
+        return;
+    }
     saving.set(true);
     spawn(async move {
-        match api::save_bracket_placements(&url, &p, &t, &l, &i, clear_missing).await {
-            Ok(resp) => apply_layout(
-                resp,
-                local_matches,
-                local_texts,
-                local_labeled,
-                local_images,
-                dirty,
-                canvas_size,
-            ),
-            Err(e) => {
-                #[cfg(target_arch = "wasm32")]
-                web_sys::console::error_1(&format!("Bracket save failed: {e}").into());
-                let _ = e;
+        loop {
+            let (snapshot, revision) = {
+                let mut state = saving.layout.write();
+                let Some(snapshot) = state.pending.take() else {
+                    break;
+                };
+                (snapshot, state.revision)
+            };
+            match api::save_bracket_placements(
+                &url,
+                &snapshot.placements,
+                &snapshot.texts,
+                &snapshot.labeled,
+                &snapshot.images,
+                snapshot.clear_missing,
+            )
+            .await
+            {
+                Ok(resp) => {
+                    // A response must not replace a newer committed edit or a drag still underway.
+                    let current = LayoutSnapshot::capture(
+                        &local_matches(),
+                        &local_texts(),
+                        &local_labeled(),
+                        &local_images(),
+                        snapshot.clear_missing,
+                    );
+                    if saving
+                        .layout
+                        .peek()
+                        .can_acknowledge(revision, &snapshot, &current)
+                    {
+                        if !(saving.gesture)() {
+                            apply_layout(
+                                resp,
+                                local_matches,
+                                local_texts,
+                                local_labeled,
+                                local_images,
+                                dirty,
+                                canvas_size,
+                            );
+                        } else {
+                            // Pan/marquee do not change the snapshot. Acknowledge the save
+                            // without replacing coordinates under an active pointer.
+                            dirty.set(false);
+                        }
+                        saving.layout.write().saved = true;
+                        saving.error.set(None);
+                    }
+                }
+                Err(message) => {
+                    let mut state = saving.layout.write();
+                    if state.pending.is_none() {
+                        state.pending = Some(snapshot);
+                    }
+                    state.failed = true;
+                    drop(state);
+                    saving.fail(format!("Changes have not been confirmed saved. {message}"));
+                    break;
+                }
             }
         }
+        saving.layout.write().running = false;
         saving.set(false);
     });
 }
@@ -766,12 +919,14 @@ fn convert_match_port(
     local_labeled: Signal<Vec<BracketLabeledTeamData>>,
     local_images: Signal<Vec<BracketImageData>>,
     dirty: Signal<bool>,
-    mut saving: Signal<bool>,
+    mut saving: BracketSave,
     canvas_size: Signal<(f64, f64)>,
 ) {
     let side = side.to_string();
     let mode = mode.to_string();
-    saving.set(true);
+    if !saving.begin(dirty()) {
+        return;
+    }
     spawn(async move {
         match api::convert_bracket_port(&url, &match_uuid, &side, &mode).await {
             Ok(resp) => apply_layout(
@@ -784,9 +939,7 @@ fn convert_match_port(
                 canvas_size,
             ),
             Err(e) => {
-                #[cfg(target_arch = "wasm32")]
-                web_sys::console::error_1(&format!("Convert failed: {e}").into());
-                let _ = e;
+                saving.fail(e);
             }
         }
         saving.set(false);
@@ -823,8 +976,14 @@ fn output_consumers(
             continue;
         }
         for (initial, mode) in [
-            (m.team1_initial.as_deref(), m.placement.as_ref().map(|p| p.team1.as_str())),
-            (m.team2_initial.as_deref(), m.placement.as_ref().map(|p| p.team2.as_str())),
+            (
+                m.team1_initial.as_deref(),
+                m.placement.as_ref().map(|p| p.team1.as_str()),
+            ),
+            (
+                m.team2_initial.as_deref(),
+                m.placement.as_ref().map(|p| p.team2.as_str()),
+            ),
         ] {
             if !initial.map(&refs_source).unwrap_or(false) {
                 continue;
@@ -841,7 +1000,11 @@ fn output_consumers(
         }
         any = true;
         if !is_net(&lt.kind) {
-            push(if lt.label.is_empty() { "Label".into() } else { lt.label.clone() });
+            push(if lt.label.is_empty() {
+                "Label".into()
+            } else {
+                lt.label.clone()
+            });
         }
     }
     OutputConsumers { any, unwired }
@@ -863,7 +1026,7 @@ fn toggle_output_consumers(
     local_labeled: Signal<Vec<BracketLabeledTeamData>>,
     local_images: Signal<Vec<BracketImageData>>,
     dirty: Signal<bool>,
-    mut saving: Signal<bool>,
+    mut saving: BracketSave,
     canvas_size: Signal<(f64, f64)>,
 ) {
     let src_name = source.name.clone();
@@ -877,7 +1040,9 @@ fn toggle_output_consumers(
         };
         let lx = sx + sp.width + OUTPUT_LABEL_GAP;
         let ly = out_port_y(sy, sp.height, qual) - LABELED_TEAM_H * 0.5;
-        saving.set(true);
+        if !saving.begin(dirty()) {
+            return;
+        }
         spawn(async move {
             match api::add_bracket_labeled_team_with(&url, lx, ly, &token, "NET").await {
                 Ok(resp) => apply_layout(
@@ -890,9 +1055,7 @@ fn toggle_output_consumers(
                     canvas_size,
                 ),
                 Err(e) => {
-                    #[cfg(target_arch = "wasm32")]
-                    web_sys::console::error_1(&e.into());
-                    let _ = e;
+                    saving.fail(e);
                 }
             }
             saving.set(false);
@@ -950,7 +1113,11 @@ fn toggle_output_consumers(
             if wire_only && port_is_net && is_placed(m) {
                 continue;
             }
-            let mode = if port_is_net && !wire_only { "LABEL" } else { "NET" };
+            let mode = if port_is_net && !wire_only {
+                "LABEL"
+            } else {
+                "NET"
+            };
             let place_at = if !is_placed(m) && mode == "NET" {
                 let nx = sx + sp.width + 80.0;
                 let ny = sy + (place_i as f64) * (DEFAULT_HEIGHT + 24.0);
@@ -992,7 +1159,9 @@ fn toggle_output_consumers(
         return;
     }
 
-    saving.set(true);
+    if !saving.begin(dirty()) {
+        return;
+    }
     spawn(async move {
         let mut last_ok = None;
         for act in actions {
@@ -1007,8 +1176,7 @@ fn toggle_output_consumers(
                         match api::add_bracket_placement(&url, &uuid, nx, ny).await {
                             Ok(resp) => last_ok = Some(resp),
                             Err(e) => {
-                                #[cfg(target_arch = "wasm32")]
-                                web_sys::console::error_1(&e.into());
+                                saving.fail(e);
                                 continue;
                             }
                         }
@@ -1016,8 +1184,7 @@ fn toggle_output_consumers(
                     match api::convert_bracket_port(&url, &uuid, &side, &mode).await {
                         Ok(resp) => last_ok = Some(resp),
                         Err(e) => {
-                            #[cfg(target_arch = "wasm32")]
-                            web_sys::console::error_1(&e.into());
+                            saving.fail(e);
                         }
                     }
                 }
@@ -1025,8 +1192,7 @@ fn toggle_output_consumers(
                     match api::convert_labeled_team_port(&url, &id, &mode).await {
                         Ok(resp) => last_ok = Some(resp),
                         Err(e) => {
-                            #[cfg(target_arch = "wasm32")]
-                            web_sys::console::error_1(&e.into());
+                            saving.fail(e);
                         }
                     }
                 }
@@ -1268,7 +1434,9 @@ fn capture_canvas_pointer(ev: &Event<PointerData>) {
     #[cfg(target_arch = "wasm32")]
     {
         use dioxus_web::WebEventExt;
-        if let Some(target) = ev.data().try_as_web_event()
+        if let Some(target) = ev
+            .data()
+            .try_as_web_event()
             .and_then(|event| event.target())
             .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
         {
@@ -1281,7 +1449,9 @@ fn release_canvas_pointer(ev: &Event<PointerData>) {
     #[cfg(target_arch = "wasm32")]
     {
         use dioxus_web::WebEventExt;
-        if let Some(target) = ev.data().try_as_web_event()
+        if let Some(target) = ev
+            .data()
+            .try_as_web_event()
             .and_then(|event| event.target())
             .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
         {
@@ -1387,12 +1557,22 @@ impl Default for ActiveModal {
 
 #[derive(Clone, Debug, PartialEq)]
 enum LabelKind {
-    Team { display: String },
-    Tag { name: String },
-    Winner { match_name: String },
-    Loser { match_name: String },
+    Team {
+        display: String,
+    },
+    Tag {
+        name: String,
+    },
+    Winner {
+        match_name: String,
+    },
+    Loser {
+        match_name: String,
+    },
     /// Output side: comma-separated consumers not drawn as wires.
-    Destinations { names: String },
+    Destinations {
+        names: String,
+    },
     Raw(String),
 }
 
@@ -1483,7 +1663,12 @@ fn BracketContent(url: String) -> Element {
     let mut hand_last = use_signal(|| None::<(f64, f64)>);
     let mut active_modal = use_signal(ActiveModal::default);
     let mut add_match_query = use_signal(String::new);
-    let mut saving = use_signal(|| false);
+    let mut saving = BracketSave {
+        busy: use_signal(|| false),
+        layout: use_signal(LayoutSaveState::default),
+        error: use_signal(|| None),
+        gesture: use_signal(|| false),
+    };
     let mut dirty = use_signal(|| false);
     let mut canvas_size = use_signal(|| (CANVAS_MIN_W, CANVAS_MIN_H));
     let mut initialized = use_signal(|| false);
@@ -1507,7 +1692,14 @@ fn BracketContent(url: String) -> Element {
     let mut pointer_gesture = use_signal(|| None::<PointerGesture>);
     let mut begin_pointer_gesture = move |ev: &Event<PointerData>| {
         // The first finger owns the drag; extra touches must not replace it.
-        if !ev.is_primary() || pointer_gesture.peek().is_some() { return false; }
+        if saving.structural_busy()
+            || saving.error.peek().is_some() && !saving.layout.peek().failed
+            || !ev.is_primary()
+            || pointer_gesture.peek().is_some()
+        {
+            return false;
+        }
+        saving.gesture.set(true);
         pointer_gesture.set(Some(PointerGesture {
             pointer_id: ev.pointer_id(),
             interaction: interaction(),
@@ -1521,9 +1713,13 @@ fn BracketContent(url: String) -> Element {
         capture_canvas_pointer(ev);
         true
     };
-    let mut cancel_pointer_gesture = move || {
+    let cancel_url = url.clone();
+    let cancel_pointer_gesture = EventHandler::<()>::new(move |_| {
         let origin = pointer_gesture.write().take();
-        let Some(origin) = origin else { return; };
+        let Some(origin) = origin else {
+            return;
+        };
+        saving.gesture.set(false);
         interaction.set(origin.interaction);
         local_matches.set(origin.matches);
         local_texts.set(origin.texts);
@@ -1531,9 +1727,26 @@ fn BracketContent(url: String) -> Element {
         local_images.set(origin.images);
         pan.set(origin.pan);
         dirty.set(origin.dirty);
+        if origin.dirty {
+            persist_all(
+                cancel_url.clone(),
+                local_matches(),
+                local_texts(),
+                local_labeled(),
+                local_images(),
+                true,
+                local_matches,
+                local_texts,
+                local_labeled,
+                local_images,
+                dirty,
+                saving,
+                canvas_size,
+            );
+        }
         hand_last.set(None);
         clear_field_hover();
-    };
+    });
 
     // Hoist resource read handle so effects/rsx share one stable Readable
     // (calling data.value() inside use_effect can ValueDroppedError).
@@ -1929,7 +2142,7 @@ fn BracketContent(url: String) -> Element {
                 let handle_keydown = {
                     let u_key = tournament_url.clone();
                     move |ev: Event<KeyboardData>| {
-                        if !edit_mode() || !is_to { return; }
+                        if !edit_mode() || !is_to || saving.structural_busy() { return; }
                         let key_str = ev.key().to_string();
                         let modal = active_modal();
 
@@ -1952,7 +2165,7 @@ fn BracketContent(url: String) -> Element {
                                     let stagger = next_add_stagger(&local_matches(), &local_texts(), &local_labeled(), &local_images());
                                     let (ax, ay) = view_add_position(zoom(), pan(), stagger);
                                     active_modal.set(ActiveModal::None);
-                                    saving.set(true);
+                                    if !saving.begin(dirty()) { return; }
                                     spawn(async move {
                                         match api::add_bracket_text(&u, ax, ay).await {
                                             Ok(resp) => {
@@ -1967,8 +2180,7 @@ fn BracketContent(url: String) -> Element {
                                                 }
                                             }
                                             Err(e) => {
-                                                #[cfg(target_arch = "wasm32")]
-                                                web_sys::console::error_1(&e.into());
+                                                saving.fail(e);
                                             }
                                         }
                                         saving.set(false);
@@ -1980,7 +2192,7 @@ fn BracketContent(url: String) -> Element {
                                     let stagger = next_add_stagger(&local_matches(), &local_texts(), &local_labeled(), &local_images());
                                     let (ax, ay) = labeled_add_position(zoom(), pan(), stagger, grid_size());
                                     active_modal.set(ActiveModal::None);
-                                    saving.set(true);
+                                    if !saving.begin(dirty()) { return; }
                                     let before_ids: HashSet<String> =
                                         local_labeled().iter().map(|t| t.id.clone()).collect();
                                     spawn(async move {
@@ -1995,8 +2207,7 @@ fn BracketContent(url: String) -> Element {
                                                 }
                                             }
                                             Err(e) => {
-                                                #[cfg(target_arch = "wasm32")]
-                                                web_sys::console::error_1(&e.into());
+                                                saving.fail(e);
                                             }
                                         }
                                         saving.set(false);
@@ -2138,6 +2349,46 @@ fn BracketContent(url: String) -> Element {
                         },
                         onmounted: move |_| focus_bracket_root(),
 
+                        if is_to {
+                            if let Some(message) = saving.error() {
+                                div { class: "alert alert-danger d-flex flex-wrap align-items-center gap-2", role: "alert", id: "bracket-save-error",
+                                    span { "{message}" }
+                                    if saving.layout().failed {
+                                        button { r#type: "button", class: "btn btn-outline-danger", disabled: saving(),
+                                            onclick: { let u = tournament_url.clone(); move |_| {
+                                                saving.layout.write().failed = false;
+                                                persist_all(u.clone(), local_matches(), local_texts(), local_labeled(), local_images(), true, local_matches, local_texts, local_labeled, local_images, dirty, saving, canvas_size);
+                                            } }, "Retry save"
+                                        }
+                                        span { class: "small", "Keep this page open until your changes are saved." }
+                                    } else {
+                                        button { r#type: "button", class: "btn btn-outline-danger", disabled: saving(),
+                                            onclick: { let u = tournament_url.clone(); move |_| {
+                                                if saving() || dirty() { return; }
+                                                saving.set(true);
+                                                let u = u.clone();
+                                                spawn(async move {
+                                                    match api::tournament_bracket(&u).await {
+                                                        Ok(resp) => {
+                                                            bracket_published.set(resp.bracket_published);
+                                                            legacy_brackets.set(resp.legacy_brackets.clone());
+                                                            apply_layout(resp, local_matches, local_texts, local_labeled, local_images, dirty, canvas_size);
+                                                            saving.error.set(None);
+                                                        }
+                                                        Err(message) => saving.fail(message),
+                                                    }
+                                                    saving.set(false);
+                                                });
+                                            } }, "Check saved bracket"
+                                        }
+                                        span { class: "small", "Check the saved diagram before trying the action again." }
+                                    }
+                                }
+                            }
+                            p { class: "small text-muted mb-2", role: "status", aria_live: "polite", id: "bracket-save-status",
+                                if saving() { "Saving…" } else if dirty() { "Unsaved changes" } else if saving.layout().saved { "All changes saved" }
+                            }
+                        }
                         div { class: "row",
                             div { class: "col-12",
                                 div { class: "bracket-page-toolbar",
@@ -2186,7 +2437,7 @@ fn BracketContent(url: String) -> Element {
                                                 role: "switch",
                                                 id: "bracketPublished",
                                                 checked: "{bracket_published}",
-                                                disabled: "{saving}",
+                                                disabled: saving() || dirty() || saving.error().is_some(),
                                                 onchange: {
                                                     let u = tournament_url.clone();
                                                     move |e| {
@@ -2194,7 +2445,7 @@ fn BracketContent(url: String) -> Element {
                                                         // Optimistic update; revert on failure.
                                                         let prev = bracket_published();
                                                         bracket_published.set(on);
-                                                        saving.set(true);
+                                                        if !saving.begin(dirty()) { return; }
                                                         let u = u.clone();
                                                         spawn(async move {
                                                             match api::set_bracket_published(&u, on).await {
@@ -2203,8 +2454,7 @@ fn BracketContent(url: String) -> Element {
                                                                 }
                                                                 Err(err) => {
                                                                     bracket_published.set(prev);
-                                                                    #[cfg(target_arch = "wasm32")]
-                                                                    web_sys::console::error_1(&err.into());
+                                                                    saving.fail(err);
                                                                 }
                                                             }
                                                             saving.set(false);
@@ -2225,6 +2475,7 @@ fn BracketContent(url: String) -> Element {
                                         div { class: "dropdown",
                                             button {
                                                 class: "btn btn-sm btn-primary dropdown-toggle",
+                                                disabled: saving() || dirty() || saving.error().is_some(),
                                                 r#type: "button",
                                                 onclick: move |ev: Event<MouseData>| {
                                                     ev.stop_propagation();
@@ -2257,9 +2508,9 @@ fn BracketContent(url: String) -> Element {
                                                                     let stagger = next_add_stagger(&local_matches(), &local_texts(), &local_labeled(), &local_images());
                                                                     let (ax, ay) = view_add_position(zoom(), pan(), stagger);
                                                                     active_modal.set(ActiveModal::None);
-                                                                    saving.set(true);
+                                                                    if !saving.begin(dirty()) { return; }
                                                                     spawn(async move {
-                                                                        if let Ok(resp) = api::add_bracket_text(&u, ax, ay).await {
+                                                                        match api::add_bracket_text(&u, ax, ay).await { Ok(resp) => {
                                                                             let before: HashSet<String> =
                                                                                 local_texts().iter().map(|t| t.id.clone()).collect();
                                                                             apply_layout(resp, local_matches, local_texts, local_labeled, local_images, dirty, canvas_size);
@@ -2269,7 +2520,7 @@ fn BracketContent(url: String) -> Element {
                                                                                 pending_create.set(Some(("text".into(), t.id.clone())));
                                                                                 active_modal.set(ActiveModal::EditText { id: t.id.clone() });
                                                                             }
-                                                                        }
+                                                                        }, Err(message) => saving.fail(message), }
                                                                         saving.set(false);
                                                                     });
                                                                 }
@@ -2286,11 +2537,11 @@ fn BracketContent(url: String) -> Element {
                                                                     let stagger = next_add_stagger(&local_matches(), &local_texts(), &local_labeled(), &local_images());
                                                                     let (ax, ay) = labeled_add_position(zoom(), pan(), stagger, grid_size());
                                                                     active_modal.set(ActiveModal::None);
-                                                                    saving.set(true);
+                                                                    if !saving.begin(dirty()) { return; }
                                                                     spawn(async move {
                                                                         let before_ids: HashSet<String> =
                                                                             local_labeled().iter().map(|t| t.id.clone()).collect();
-                                                                        if let Ok(resp) = api::add_bracket_labeled_team(&u, ax, ay).await {
+                                                                        match api::add_bracket_labeled_team(&u, ax, ay).await { Ok(resp) => {
                                                                             apply_layout(resp, local_matches, local_texts, local_labeled, local_images, dirty, canvas_size);
                                                                             if let Some(t) = local_labeled().iter().find(|t| !before_ids.contains(&t.id)) {
                                                                                 label_draft.set(if t.label.is_empty() { "Label".into() } else { t.label.clone() });
@@ -2298,7 +2549,7 @@ fn BracketContent(url: String) -> Element {
                                                                                 pending_create.set(Some(("labeled".into(), t.id.clone())));
                                                                                 active_modal.set(ActiveModal::EditLabeledTeam { id: t.id.clone() });
                                                                             }
-                                                                        }
+                                                                        }, Err(message) => saving.fail(message), }
                                                                         saving.set(false);
                                                                     });
                                                                 }
@@ -2317,7 +2568,7 @@ fn BracketContent(url: String) -> Element {
                                         }
                                         button {
                                             class: "btn btn-sm btn-outline-secondary",
-                                            disabled: interaction().selected.is_empty(),
+                                            disabled: saving.structural_busy() || interaction().selected.is_empty(),
                                             title: "Swap team1/team2 vertical order (S)",
                                             onclick: {
                                                 let u = tournament_url.clone();
@@ -2345,7 +2596,7 @@ fn BracketContent(url: String) -> Element {
                                         }
                                         button {
                                             class: "btn btn-sm btn-outline-danger",
-                                            disabled: interaction().selected.is_empty(),
+                                            disabled: saving.structural_busy() || interaction().selected.is_empty(),
                                             title: "Remove selected (D)",
                                             onclick: {
                                                 let u = tournament_url.clone();
@@ -2790,6 +3041,7 @@ fn BracketContent(url: String) -> Element {
                                 move |ev: Event<PointerData>| {
                                 if pointer_gesture.read().as_ref().map(|gesture| gesture.pointer_id) != Some(ev.pointer_id()) { return; }
                                 pointer_gesture.set(None);
+                                saving.gesture.set(false);
                                 release_canvas_pointer(&ev);
                                 let mut ix = interaction.write();
                                 let Some(drag) = ix.drag.take() else { return };
@@ -2860,13 +3112,13 @@ fn BracketContent(url: String) -> Element {
                             }},
                             onpointercancel: move |ev: Event<PointerData>| {
                                 if pointer_gesture.read().as_ref().map(|gesture| gesture.pointer_id) == Some(ev.pointer_id()) {
-                                    cancel_pointer_gesture();
+                                    cancel_pointer_gesture.call(());
                                     release_canvas_pointer(&ev);
                                 }
                             },
                             onlostpointercapture: move |ev: Event<PointerData>| {
                                 if pointer_gesture.read().as_ref().map(|gesture| gesture.pointer_id) == Some(ev.pointer_id()) {
-                                    cancel_pointer_gesture();
+                                    cancel_pointer_gesture.call(());
                                 }
                             },
                             onpointerdown: move |ev: Event<PointerData>| {
@@ -2939,16 +3191,16 @@ fn BracketContent(url: String) -> Element {
                                                         let u = tournament_url.clone();
                                                         let tkey = tkey.clone();
                                                         move |ev: Event<MouseData>| {
-                                                            if !edit_mode() { return; }
+                                                            if !edit_mode() || saving.structural_busy() { return; }
                                                             ev.stop_propagation();
                                                             if is_lt {
                                                                 let u = u.clone();
                                                                 let id = tkey.clone();
-                                                                saving.set(true);
+                                                                if !saving.begin(dirty()) { return; }
                                                                 spawn(async move {
-                                                                    if let Ok(resp) = api::convert_labeled_team_port(&u, &id, "LABEL").await {
+                                                                    match api::convert_labeled_team_port(&u, &id, "LABEL").await { Ok(resp) => {
                                                                         apply_layout(resp, local_matches, local_texts, local_labeled, local_images, dirty, canvas_size);
-                                                                    }
+                                                                    }, Err(message) => saving.fail(message), }
                                                                     saving.set(false);
                                                                 });
                                                             } else {
@@ -3099,7 +3351,7 @@ fn BracketContent(url: String) -> Element {
                                                     ix.drag = Some(DragKind::Move { origins, pointer_start: (cx, cy) });
                                                 },
                                                 ondblclick: move |ev: Event<MouseData>| {
-                                                    if !edit_mode() { return; }
+                                                    if !edit_mode() || saving.structural_busy() { return; }
                                                     ev.stop_propagation();
                                                     text_draft.set(t.text.clone());
                                                     text_size_draft.set(t.size);
@@ -3155,11 +3407,11 @@ fn BracketContent(url: String) -> Element {
                                                                     if !edit_mode() || !can_wire { return; }
                                                                     let u = u.clone();
                                                                     let id = id.clone();
-                                                                    saving.set(true);
+                                                                    if !saving.begin(dirty()) { return; }
                                                                     spawn(async move {
-                                                                        if let Ok(resp) = api::convert_labeled_team_port(&u, &id, "NET").await {
+                                                                        match api::convert_labeled_team_port(&u, &id, "NET").await { Ok(resp) => {
                                                                             apply_layout(resp, local_matches, local_texts, local_labeled, local_images, dirty, canvas_size);
-                                                                        }
+                                                                        }, Err(message) => saving.fail(message), }
                                                                         saving.set(false);
                                                                     });
                                                                 }
@@ -3194,7 +3446,7 @@ fn BracketContent(url: String) -> Element {
                                                     ix.drag = Some(DragKind::Move { origins, pointer_start: (cx, cy) });
                                                 },
                                                 ondblclick: move |ev: Event<MouseData>| {
-                                                    if !edit_mode() { return; }
+                                                    if !edit_mode() || saving.structural_busy() { return; }
                                                     ev.stop_propagation();
                                                     label_draft.set(if lt.label.is_empty() { "Label".into() } else { lt.label.clone() });
                                                     team_draft.set(lt.team.clone());
@@ -3352,7 +3604,7 @@ fn BracketContent(url: String) -> Element {
                                                             let u = tournament_url.clone();
                                                             let src = m.clone();
                                                             move |_| {
-                                                                if !edit_mode() { return; }
+                                                                if !edit_mode() || saving.structural_busy() { return; }
                                                                 toggle_output_consumers(
                                                                     u.clone(),
                                                                     &src,
@@ -3448,7 +3700,7 @@ fn BracketContent(url: String) -> Element {
                                                                 let u = tournament_url.clone();
                                                                 let src = m.clone();
                                                                 move |ev: Event<MouseData>| {
-                                                                    if !edit_mode() { return; }
+                                                                    if !edit_mode() || saving.structural_busy() { return; }
                                                                     ev.prevent_default();
                                                                     ev.stop_propagation();
                                                                     toggle_output_consumers(
@@ -3521,7 +3773,7 @@ fn BracketContent(url: String) -> Element {
                                                                 let u = tournament_url.clone();
                                                                 let src = m.clone();
                                                                 move |ev: Event<MouseData>| {
-                                                                    if !edit_mode() { return; }
+                                                                    if !edit_mode() || saving.structural_busy() { return; }
                                                                     ev.prevent_default();
                                                                     ev.stop_propagation();
                                                                     toggle_output_consumers(
@@ -3716,13 +3968,13 @@ fn BracketContent(url: String) -> Element {
                                                                     let stagger = next_add_stagger(&local_matches(), &local_texts(), &local_labeled(), &local_images());
                                                                     let (nx, ny) = view_add_position(zoom(), pan(), stagger);
                                                                     active_modal.set(ActiveModal::None);
-                                                                    saving.set(true);
+                                                                    if !saving.begin(dirty()) { return; }
                                                                     let u = u.clone();
                                                                     let mid = mid.clone();
                                                                     spawn(async move {
-                                                                        if let Ok(resp) = api::add_bracket_placement(&u, &mid, nx, ny).await {
+                                                                        match api::add_bracket_placement(&u, &mid, nx, ny).await { Ok(resp) => {
                                                                             apply_layout(resp, local_matches, local_texts, local_labeled, local_images, dirty, canvas_size);
-                                                                        }
+                                                                        }, Err(message) => saving.fail(message), }
                                                                         saving.set(false);
                                                                         focus_bracket_root();
                                                                     });
@@ -4037,32 +4289,31 @@ fn BracketContent(url: String) -> Element {
                                                             let stagger = next_add_stagger(&local_matches(), &local_texts(), &local_labeled(), &local_images());
                                                             let (ax, ay) = view_add_position(zoom(), pan(), stagger);
                                                             active_modal.set(ActiveModal::None);
-                                                            saving.set(true);
+                                                            if !saving.begin(dirty()) { return; }
                                                             spawn(async move {
                                                                 let filename = file.name();
                                                                 match file.read_bytes().await {
                                                                     Ok(bytes) => {
                                                                         if bytes.len() > 10 * 1024 * 1024 {
                                                                             #[cfg(target_arch = "wasm32")]
-                                                                            web_sys::console::error_1(&"Image must be under 10 MB".into());
+                                                                            saving.fail("Image must be under 10 MB");
                                                                             saving.set(false);
                                                                             return;
                                                                         }
                                                                         match api::upload_bracket_image_bytes(&u, n as u32, &filename, bytes).await {
                                                                             Ok(path) => {
-                                                                                if let Ok(resp) = api::add_bracket_image_element(
+                                                                                match api::add_bracket_image_element(
                                                                                     &u, &path, ax, ay, 240.0, 160.0,
-                                                                                ).await {
+                                                                                ).await { Ok(resp) => {
                                                                                     apply_layout(resp, local_matches, local_texts, local_labeled, local_images, dirty, canvas_size);
-                                                                                }
+                                                                                }, Err(message) => saving.fail(message), }
                                                                             }
                                                                             Err(e) => {
-                                                                                #[cfg(target_arch = "wasm32")]
-                                                                                web_sys::console::error_1(&e.into());
+                                                                                saving.fail(e);
                                                                             }
                                                                         }
                                                                     }
-                                                                    Err(_) => {}
+                                                                    Err(message) => saving.fail(message.to_string()),
                                                                 }
                                                                 saving.set(false);
                                                                 focus_bracket_root();
@@ -4142,7 +4393,7 @@ fn BracketContent(url: String) -> Element {
                                                                         disabled: saving(),
                                                                         onclick: move |_| {
                                                                             let u = u.clone();
-                                                                            saving.set(true);
+                                                                            if !saving.begin(dirty()) { return; }
                                                                             spawn(async move {
                                                                                 match api::delete_legacy_bracket(&u, idx_u).await {
                                                                                     Ok(resp) => {
@@ -4152,8 +4403,7 @@ fn BracketContent(url: String) -> Element {
                                                                                         }
                                                                                     }
                                                                                     Err(e) => {
-                                                                                        #[cfg(target_arch = "wasm32")]
-                                                                                        web_sys::console::error_1(&e.into());
+                                                                                        saving.fail(e);
                                                                                     }
                                                                                 }
                                                                                 saving.set(false);
@@ -4178,7 +4428,7 @@ fn BracketContent(url: String) -> Element {
                                                     let u = tournament_url.clone();
                                                     move |_| {
                                                         let u = u.clone();
-                                                        saving.set(true);
+                                                        if !saving.begin(dirty()) { return; }
                                                         spawn(async move {
                                                             match api::clear_legacy_brackets(&u).await {
                                                                 Ok(resp) => {
@@ -4186,8 +4436,7 @@ fn BracketContent(url: String) -> Element {
                                                                     active_modal.set(ActiveModal::None);
                                                                 }
                                                                 Err(e) => {
-                                                                    #[cfg(target_arch = "wasm32")]
-                                                                    web_sys::console::error_1(&e.into());
+                                                                    saving.fail(e);
                                                                 }
                                                             }
                                                             saving.set(false);
@@ -4231,7 +4480,7 @@ fn cancel_pending_create(
     mut dirty: Signal<bool>,
     url: String,
     local_matches: Signal<Vec<BracketMatchData>>,
-    saving: Signal<bool>,
+    saving: BracketSave,
     canvas_size: Signal<(f64, f64)>,
 ) {
     let Some((kind, id)) = pending else {
@@ -4374,5 +4623,60 @@ fn NetLabelView(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::{LayoutSaveState, LayoutSnapshot};
+    fn layout(x: i32) -> LayoutSnapshot {
+        LayoutSnapshot {
+            placements: vec![serde_json::json!({"x_pos": x})],
+            texts: vec![],
+            labeled: vec![],
+            images: vec![],
+            clear_missing: true,
+        }
+    }
+    #[test]
+    fn saves_coalesce_to_latest_without_parallel_worker() {
+        let mut state = LayoutSaveState::default();
+        assert!(state.enqueue(layout(1)));
+        assert!(!state.enqueue(layout(2)));
+        assert!(!state.enqueue(layout(3)));
+        assert!(state.pending.as_ref() == Some(&layout(3)));
+        assert_eq!(state.revision, 3);
+        assert!(state.running);
+    }
+    #[test]
+    fn failed_save_keeps_latest_edit_until_explicit_retry() {
+        let mut state = LayoutSaveState {
+            failed: true,
+            ..Default::default()
+        };
+        assert!(!state.enqueue(layout(9)));
+        assert!(!state.running);
+        assert!(state.pending.as_ref() == Some(&layout(9)));
+        state.failed = false;
+        assert!(state.enqueue(layout(9)));
+    }
+    #[test]
+    fn acknowledgment_depends_on_layout_not_pan_or_marquee() {
+        let mut state = LayoutSaveState::default();
+        state.enqueue(layout(1));
+        assert!(state.can_acknowledge(1, &layout(1), &layout(1)));
+        assert!(!state.can_acknowledge(1, &layout(1), &layout(2)));
+        state.enqueue(layout(2));
+        assert!(!state.can_acknowledge(1, &layout(1), &layout(1)));
+    }
+    #[test]
+    fn snapshot_includes_text_deletion_and_port_changes() {
+        let a = layout(1);
+        let mut b = a.clone();
+        b.texts.push(serde_json::json!({"id": "t", "text": "New"}));
+        assert!(a != b);
+        b = a.clone();
+        b.placements[0]["team1"] = serde_json::json!("NET");
+        assert!(a != b);
     }
 }

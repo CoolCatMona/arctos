@@ -108,8 +108,9 @@ pub fn EditInjury(player_id: String, injury_id: u32) -> Element {
                             form {
                                 onsubmit: onsubmit,
                                 div { class: "mb-3",
-                                    label { class: "form-label", "Injury Message" }
+                                    label { class: "form-label", r#for: "injury-message", "Injury Message" }
                                     input {
+                                        id: "injury-message",
                                         class: "form-control",
                                         "type": "text",
                                         value: "{message}",
@@ -118,8 +119,9 @@ pub fn EditInjury(player_id: String, injury_id: u32) -> Element {
                                     }
                                 }
                                 div { class: "mb-3",
-                                    label { class: "form-label", "Date (Optional)" }
+                                    label { class: "form-label", r#for: "injury-date", "Date (Optional)" }
                                     input {
+                                        id: "injury-date",
                                         class: "form-control",
                                         "type": "date",
                                         value: "{date}",
@@ -129,21 +131,24 @@ pub fn EditInjury(player_id: String, injury_id: u32) -> Element {
                                 div { class: "mb-3 form-check",
                                     input {
                                         class: "form-check-input",
+                                        id: "injury-active",
                                         "type": "checkbox",
                                         checked: active(),
                                         onchange: move |e| active.set(e.checked())
                                     }
-                                    label { class: "form-check-label", "Active (currently injured)" }
+                                    label { class: "form-check-label", r#for: "injury-active", "Active (currently injured)" }
                                 }
                                 div { class: "mb-3 form-check",
                                     input {
                                         class: "form-check-input",
+                                        id: "injury-public", aria_describedby: "injury-visibility-help",
                                         "type": "checkbox",
                                         checked: show(),
                                         onchange: move |e| show.set(e.checked())
                                     }
-                                    label { class: "form-check-label", "Show publicly" }
+                                    label { class: "form-check-label", r#for: "injury-public", "Show publicly" }
                                 }
+                                p { id: "injury-visibility-help", class: "form-text", "Public injuries are visible to anyone. Private injuries are hidden from your public profile. Active injuries are still shown to authorized match referees during match setup at events you are registered for." }
                                 div { class: "d-grid gap-2",
                                     button { class: "btn btn-primary", "type": "submit", "Update Injury" }
                                     button { class: "btn btn-danger", "type": "button", onclick: ondelete, "Delete Injury" }

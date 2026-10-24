@@ -1,0 +1,41 @@
+/* The dialog stays below .arctos-app in the DOM and inherits its current theme. */
+.arctos-app dialog.arctos-modal {
+  padding: 0;
+  border: 0;
+  margin: auto;
+  width: min(500px, calc(100% - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow: visible;
+  background: transparent;
+  color: var(--ui-text);
+}
+.arctos-app dialog.arctos-modal-large { width: min(800px, calc(100% - 32px)); }
+.arctos-app dialog.arctos-modal:not([open]) { display: none; }
+.arctos-modal::backdrop { background: rgba(0, 0, 0, .55); }
+.arctos-app .arctos-modal > .modal-content {
+  display: flex;
+  flex-direction: column;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  border-radius: 14px;
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+.arctos-app .arctos-modal .modal-header,
+.arctos-app .arctos-modal .modal-footer { flex-shrink: 0; padding: 16px 24px; gap: 12px; }
+.arctos-app .arctos-modal .modal-header { border-bottom: 1px solid var(--ui-border); }
+.arctos-app .arctos-modal .modal-header .btn-close { flex-shrink: 0; margin-inline-start: auto; }
+.arctos-app .arctos-modal .modal-title { margin: 0; line-height: 1.4; }
+.arctos-app .arctos-modal .modal-footer { border-top: 1px solid var(--ui-border); background: var(--ui-surface); }
+.arctos-app .arctos-modal .modal-footer > * { margin: 0; }
+.arctos-app .arctos-modal .modal-body { padding: 24px; overflow-y: auto; overscroll-behavior: contain; }
+/* Nested dialogs keep the page locked until the last open dialog is removed. */
+body:has(dialog.arctos-modal[open]) { overflow: hidden; }
+@media (max-width: 575.98px) {
+  .arctos-app dialog.arctos-modal { width: calc(100% - 16px); }
+  .arctos-app .arctos-modal .modal-header,
+  .arctos-app .arctos-modal .modal-body,
+  .arctos-app .arctos-modal .modal-footer { padding: 16px; }
+}

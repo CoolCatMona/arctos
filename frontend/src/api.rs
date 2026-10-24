@@ -365,6 +365,54 @@ pub async fn update_tournament_settings(
     post_form_status(&url, params).await
 }
 
+/// Save settings and the selected waiver together. Multipart also identifies
+/// the complete-save validation contract when no new file is selected.
+pub async fn save_tournament_settings(
+    tournament_url: &str,
+    params: &[(String, String)],
+    waiver: Option<bytes::Bytes>,
+    filename: Option<String>,
+) -> Result<StatusResponse, String> {
+    let mut form = reqwest::multipart::Form::new();
+    for (key, value) in params {
+        form = form.text(key.clone(), value.clone());
+    }
+    save_settings_multipart(
+        format!("{}/_api/{}/update-settings", base(), tournament_url),
+        form, waiver, filename,
+    ).await
+}
+
+pub async fn save_league_settings(
+    league_url: &str,
+    params: &std::collections::HashMap<String, serde_json::Value>,
+    waiver: Option<bytes::Bytes>,
+    filename: Option<String>,
+) -> Result<StatusResponse, String> {
+    let form = reqwest::multipart::Form::new().text(
+        "settings", serde_json::to_string(params).map_err(|e| e.to_string())?,
+    );
+    save_settings_multipart(
+        format!("{}/_api/leagues/{}/settings", base(), league_url),
+        form, waiver, filename,
+    ).await
+}
+
+async fn save_settings_multipart(
+    url: String,
+    mut form: reqwest::multipart::Form,
+    waiver: Option<bytes::Bytes>,
+    filename: Option<String>,
+) -> Result<StatusResponse, String> {
+    if let Some(bytes) = waiver {
+        form = form.part("waiver", reqwest::multipart::Part::bytes(bytes.to_vec())
+            .file_name(filename.unwrap_or_else(|| "waiver".into())));
+    }
+    let response = with_credentials(client().post(url).multipart(form))
+        .send().await.map_err(|e| e.to_string())?;
+    response_json(response).await
+}
+
 pub async fn add_tournament_to(
     tournament_url: &str,
     user_type: &str,
@@ -708,7 +756,7 @@ pub async fn league_register_player(
     post_form_status(&url, &params).await
 }
 
-/// Upload or replace the tournament waiver PDF (organizers only). Call after saving settings.
+/// Independently replace a tournament waiver (legacy upload API).
 pub async fn upload_waiver(
     tournament_url: &str,
     bytes: Vec<u8>,
@@ -2163,6 +2211,17 @@ pub async fn update_stones(
     Ok(data)
 }
 
+/// Explicit manual correction. Retain this exact body when offering a retry.
+pub async fn correct_stones(tournament_url: &str, body: &Value) -> Result<Value, String> {
+    let r = with_credentials(client().post(format!("{}/_api/{}/match-actions/update-stones", base(), tournament_url)).json(body))
+        .send().await.map_err(|e| e.to_string())?;
+    let data: Value = response_json(r).await?;
+    if !data.get("success").and_then(Value::as_bool).unwrap_or(false) {
+        return Err(data.get("error").and_then(Value::as_str).unwrap_or("Could not save stone count").to_string());
+    }
+    Ok(data)
+}
+
 /// Upload a single bracket image as raw bytes and return its relative static path.
 #[cfg(target_arch = "wasm32")]
 pub async fn upload_bracket_image_bytes(
@@ -3283,6 +3342,28 @@ pub async fn get_penalty_types(tournament_url: &str) -> Result<GetPenaltyTypesRe
         .await
         .map_err(|e| e.to_string())?;
     response_json(r).await
+}
+
+/// Reconcile an unconfirmed creation before offering another POST. Never retry
+/// a write automatically: the original response may have been lost after commit.
+pub async fn check_penalty_creation(
+    scope_url: &str,
+    league: bool,
+    known_ids: &[i32],
+    name: &str,
+    color: &str,
+    desc: &str,
+) -> Result<bool, String> {
+    let scope = if league { format!("leagues/{}", scope_url) } else { scope_url.to_string() };
+    let response = with_credentials(client().get(format!("{}/_api/{}/penalty-types", base(), scope)))
+        .header("Cache-Control", "no-cache")
+        .send().await.map_err(|e| e.to_string())?;
+    let data: GetPenaltyTypesResponse = response_json(response).await?;
+    Ok(data.penalty_types.iter().any(|penalty| {
+        !known_ids.contains(&penalty.id) && penalty.name == name
+            && penalty.color.eq_ignore_ascii_case(color)
+            && penalty.desc.as_deref().unwrap_or("") == desc
+    }))
 }
 
 pub async fn create_penalty_type(

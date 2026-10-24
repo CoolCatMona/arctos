@@ -454,7 +454,8 @@ def google_complete_profile_api():
                 id=username,
                 name=display_name,
                 google_id=oauth_data["google_id"],
-                email=email,
+                # Team contact email is public. Let the owner add it deliberately.
+                email=None,
                 profile_photo=(None if username.lower() not in ("jeb", "jebediah") else "jeb.png"),
             )
         db.session.add(user)

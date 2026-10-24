@@ -6,6 +6,22 @@ use dioxus::prelude::*;
 use serde_json::Value;
 use std::collections::HashSet;
 
+// The API treats both an absent limit and zero as an uncapped roster.
+fn roster_limit(configured: Option<u32>) -> Option<usize> {
+    configured.filter(|limit| *limit > 0).map(|limit| limit as usize)
+}
+
+fn exceeds_roster_limit(selected: usize, limit: Option<usize>) -> bool {
+    limit.is_some_and(|maximum| selected > maximum)
+}
+
+fn selected_roster_label(selected: usize, limit: Option<usize>) -> String {
+    match limit {
+        Some(maximum) => format!("{selected}/{maximum} players selected"),
+        None => format!("{selected} players selected"),
+    }
+}
+
 #[component]
 pub fn StartMatch(url: String, match_id: String) -> Element {
     let match_id_for_data = match_id.clone();
@@ -68,6 +84,7 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
 
     match data_snapshot {
         Some(Ok(d)) => {
+            let max_roster = roster_limit(d.tournament.max_team_size_field);
             let match_uuid = d.match_info.uuid.clone();
             let match_uuid_notes1 = match_uuid.clone();
             let match_uuid_notes2 = match_uuid.clone();
@@ -143,6 +160,16 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                                         submit_error.set(None);
                                         let team1_count = team1_selected().len();
                                         let team2_count = team2_selected().len();
+                                        if exceeds_roster_limit(team1_count, max_roster)
+                                            || exceeds_roster_limit(team2_count, max_roster)
+                                        {
+                                            submit_error.set(Some("Reduce the selected roster to the event's player limit before starting.".to_string()));
+                                            return;
+                                        }
+                                        if team1_has_unpaid || team2_has_unpaid {
+                                            submit_error.set(Some("Resolve payment for the selected players before starting.".to_string()));
+                                            return;
+                                        }
                                         #[cfg(target_arch = "wasm32")]
                                         {
                                             if team1_count == 0 || team2_count == 0 {
@@ -234,7 +261,7 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                                             }
                                             div { class: "mb-3",
                                                 label { class: "form-label",
-                                                    "Select Players (max {d.tournament.max_team_size_field.unwrap_or(0)}):"
+                                                    if let Some(maximum) = max_roster { "Select players · maximum {maximum}" } else { "Select players" }
                                                 }
                                                 div {
                                                     class: "border p-3",
@@ -261,12 +288,12 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                                                     }
                                                 }
                                                 p {
-                                                    class: if team1_selected().len() > d.tournament.max_team_size_field.unwrap_or(0) as usize {
+                                                    class: if exceeds_roster_limit(team1_selected().len(), max_roster) {
                                                         "small text-danger mb-0 mt-1"
                                                     } else {
                                                         "small text-muted mb-0 mt-1"
                                                     },
-                                                    "{team1_selected().len()}/{d.tournament.max_team_size_field.unwrap_or(0)} players selected"
+                                                    "{selected_roster_label(team1_selected().len(), max_roster)}"
                                                 }
                                                 if team1_has_unpaid {
                                                     p { class: "small text-danger mb-0 mt-1", "Unpaid players selected" }
@@ -355,7 +382,7 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                                             }
                                             div { class: "mb-3",
                                                 label { class: "form-label",
-                                                    "Select Players (max {d.tournament.max_team_size_field.unwrap_or(0)}):"
+                                                    if let Some(maximum) = max_roster { "Select players · maximum {maximum}" } else { "Select players" }
                                                 }
                                                 div {
                                                     class: "border p-3",
@@ -382,12 +409,12 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                                                     }
                                                 }
                                                 p {
-                                                    class: if team2_selected().len() > d.tournament.max_team_size_field.unwrap_or(0) as usize {
+                                                    class: if exceeds_roster_limit(team2_selected().len(), max_roster) {
                                                         "small text-danger mb-0 mt-1"
                                                     } else {
                                                         "small text-muted mb-0 mt-1"
                                                     },
-                                                    "{team2_selected().len()}/{d.tournament.max_team_size_field.unwrap_or(0)} players selected"
+                                                    "{selected_roster_label(team2_selected().len(), max_roster)}"
                                                 }
                                                 if team2_has_unpaid {
                                                     p { class: "small text-danger mb-0 mt-1", "Unpaid players selected" }
@@ -465,8 +492,8 @@ pub fn StartMatch(url: String, match_id: String) -> Element {
                                         button {
                                             r#type: "submit",
                                             class: "btn btn-success btn-lg",
-                                            disabled: submitting() || team1_selected().len() > d.tournament.max_team_size_field.unwrap_or(0) as usize
-                                                || team2_selected().len() > d.tournament.max_team_size_field.unwrap_or(0) as usize
+                                            disabled: submitting() || exceeds_roster_limit(team1_selected().len(), max_roster)
+                                                || exceeds_roster_limit(team2_selected().len(), max_roster)
                                                 || team1_has_unpaid
                                                 || team2_has_unpaid,
                                             if submitting() { "Starting match…" } else { "Start match" }
@@ -734,4 +761,28 @@ fn find_player(players: &[StartMatchPlayer], query: &str) -> Option<StartMatchPl
         .iter()
         .find(|p| p.name.to_lowercase().contains(&q) || p.id.to_lowercase().contains(&q))
         .cloned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn absent_and_zero_limits_allow_populated_rosters() {
+        for configured in [None, Some(0)] {
+            let limit = roster_limit(configured);
+            assert!(!exceeds_roster_limit(8, limit));
+            assert_eq!(selected_roster_label(8, limit), "8 players selected");
+        }
+    }
+
+    #[test]
+    fn positive_limit_allows_boundary_and_blocks_excess() {
+        for maximum in [1, 5, 8] {
+            let limit = roster_limit(Some(maximum));
+            assert!(!exceeds_roster_limit(maximum as usize, limit));
+            assert!(exceeds_roster_limit(maximum as usize + 1, limit));
+            assert_eq!(selected_roster_label(maximum as usize, limit), format!("{maximum}/{maximum} players selected"));
+        }
+    }
 }

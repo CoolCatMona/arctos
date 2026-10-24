@@ -1,20 +1,31 @@
 # Data Accessibility Guide
 
-Updated: Feb 20, 2026
+Updated: Oct 24, 2026
 
 This document details when and how data that you explicitly enter is
 accessible to others.
 
-## Never published, in any way
+## Account and contact information
 
-Arctos will never publish, to anyone, your email address, phone number
-(if entered), password/oauth secret info.
+Player email addresses and phone numbers are not displayed on public
+profiles. Passwords and OAuth credentials are not published.
+
+A team's **public contact email** is visible to anyone on its profile.
+The team owner can add, change or remove this address in Edit profile.
+Creating a new team with Google does not automatically publish the Google
+email address. Existing team contact addresses remain visible until the
+owner changes or removes them.
 
 ## Injuries
  
-If injuries are set to Public, they are visible to everyone.  If they
-are set to Private, then if they are not healed, they are shown to
-refs when they start a match you are participating in.
+New injuries are private by default. Injuries set to **Public** are visible
+to everyone on the player's profile. **Private** injuries are hidden from
+the public profile; the player can still view and edit them.
+
+Active injuries, including private ones, are shown to authorized match
+referees during match setup at events the player is registered for. Marking
+an injury healed removes it from this active-injury information. Changing
+the default for new injuries does not change existing records.
 
 In either case, injury (description, date, and status) may be
 published anonymously. This could be in the form of statistics or

@@ -130,6 +130,9 @@ pub fn GoogleCompleteProfile() -> Element {
                             strong { "{email}" }
                             ". Please choose your username and display name to complete your account setup."
                         }
+                        if user_type() == "team" {
+                            p { class: "form-text", "Your Google email won't be published. You can add a public contact email in Edit profile." }
+                        }
                         if let Some(err) = error() {
                             div { class: "alert alert-danger", role: "alert", "{err}" }
                         }

@@ -57,9 +57,19 @@ fn PenaltyTypesTableBody(
     edit_color: Signal<String>,
     edit_desc: Signal<String>,
     edit_error: Signal<Option<String>>,
+    mutation_pending: Signal<bool>,
+    settings_saving: Signal<bool>,
+    creation_needs_check: Signal<bool>,
+    creation_known_ids: Signal<Vec<i32>>,
     show_color_picker_for: Signal<Option<i32>>,
     custom_color_hex: Signal<String>,
 ) -> Element {
+    use_effect(move || {
+        if !mutation_pending() && edit_error().is_some() {
+            crate::appearance::focus_control("penalty-save-error");
+        }
+    });
+    let existing_ids: Vec<i32> = penalty_types.iter().map(|penalty| penalty.id).collect();
     let penalty_rows: Vec<(i32, String, String, String, String, bool, String)> = penalty_types
         .iter()
         .map(|pt| {
@@ -94,6 +104,7 @@ fn PenaltyTypesTableBody(
                                 div { class: "penalty-edit-name",
                                     label { r#for: "penalty-type-edit-name", class: "form-label", "Name" }
                                     input {
+                                        disabled: settings_saving() || mutation_pending() || creation_needs_check(),
                                         id: "penalty-type-edit-name",
                                         aria_label: "Penalty type name",
                                         r#type: "text",
@@ -106,7 +117,7 @@ fn PenaltyTypesTableBody(
                                             edit_error.set(None);
                                         }
                                     }
-                                    span { class: "small text-muted", "{edit_name().len()}/{NAME_MAX_LEN}" }
+                                    span { class: "small text-muted", "{edit_name().chars().count()}/{NAME_MAX_LEN}" }
                                 }
                                 div { class: "penalty-edit-color",
                                     label { r#for: "penalty-type-edit-color", class: "form-label", "Color" }
@@ -115,6 +126,7 @@ fn PenaltyTypesTableBody(
                                         button {
                                             id: "penalty-type-edit-color",
                                             r#type: "button",
+                                            disabled: settings_saving() || mutation_pending() || creation_needs_check(),
                                             class: "penalty-color-swatch",
                                             aria_label: "Choose penalty color",
                                             aria_expanded: (show_color_picker_for() == Some(pt_id)).to_string(),
@@ -134,6 +146,7 @@ fn PenaltyTypesTableBody(
                                                     for c in PREDEFINED_COLORS.iter() {
                                                         button {
                                                             r#type: "button",
+                                                            disabled: settings_saving() || mutation_pending() || creation_needs_check(),
                                                             class: "penalty-color-swatch",
                                                             aria_label: format!("Use color #{}", c),
                                                             style: format!("background-color: #{};", *c),
@@ -147,6 +160,7 @@ fn PenaltyTypesTableBody(
                                                 div { class: "input-group input-group-sm",
                                                     span { class: "input-group-text", "#" }
                                                     input {
+                                                        disabled: settings_saving() || mutation_pending() || creation_needs_check(),
                                                         r#type: "text",
                                                         class: "form-control",
                                                         aria_label: "Hex color",
@@ -156,9 +170,10 @@ fn PenaltyTypesTableBody(
                                                     button {
                                                         class: "btn btn-outline-primary btn-sm",
                                                         r#type: "button",
+                                                        disabled: settings_saving() || mutation_pending() || creation_needs_check(),
                                                         onclick: move |_| {
                                                             let c = custom_color_hex().trim().trim_start_matches('#').to_string();
-                                                            if c.len() == 6 {
+                                                            if c.len() == 6 && c.chars().all(|value| value.is_ascii_hexdigit()) {
                                                                 edit_color.set(c);
                                                                 show_color_picker_for.set(None);
                                                             }
@@ -173,6 +188,7 @@ fn PenaltyTypesTableBody(
                                 div { class: "penalty-edit-description",
                                     label { r#for: "penalty-type-edit-description", class: "form-label", "Description (optional)" }
                                     textarea {
+                                        disabled: settings_saving() || mutation_pending() || creation_needs_check(),
                                         id: "penalty-type-edit-description",
                                         class: "form-control form-control-sm",
                                         rows: "3",
@@ -185,10 +201,13 @@ fn PenaltyTypesTableBody(
                                     button {
                                         class: "btn btn-sm btn-primary me-1",
                                         r#type: "button",
+                                    disabled: settings_saving() || mutation_pending(),
+                                    id: "penalty-type-save",
                                         onclick: move |_| {
+                                            if settings_saving() || mutation_pending() { return; }
                                             let u = url_save.clone();
                                             let name_trim = edit_name().trim().to_string();
-                                            let name_len = name_trim.len();
+                                            let name_len = name_trim.chars().count();
                                             if name_trim.is_empty() {
                                                 edit_error.set(Some("Name is required.".to_string()));
                                                 return;
@@ -198,21 +217,32 @@ fn PenaltyTypesTableBody(
                                                 return;
                                             }
                                             let color_val = edit_color().trim_start_matches('#').to_string();
+                                    if color_val.len() != 6 || !color_val.chars().all(|value| value.is_ascii_hexdigit()) {
+                                        edit_error.set(Some("Choose a color using six hexadecimal digits.".into()));
+                                        return;
+                                    }
                                             let desc_val = edit_desc().trim().to_string();
-                                            let desc_opt = if desc_val.is_empty() { None } else { Some(desc_val) };
-                                            editing_pt_id.set(None);
                                             edit_error.set(None);
-                                            let mut data = data.clone();
-                                            spawn(async move {
-                                                let _ = api::update_penalty_type(&u, pt_id, Some(&name_trim), Some(&color_val), desc_opt.as_deref()).await;
-                                                data.restart();
-                                            });
+                                        mutation_pending.set(true);
+                                        let mut data = data.clone();
+                                        spawn(async move {
+                                            match api::update_penalty_type(&u, pt_id, Some(&name_trim), Some(&color_val), Some(&desc_val)).await {
+                                                Ok(_) => {
+                                                    editing_pt_id.set(None);
+                                                    show_color_picker_for.set(None);
+                                                    data.restart();
+                                                }
+                                                Err(error) => edit_error.set(Some(error)),
+                                            }
+                                            mutation_pending.set(false);
+                                        });
                                         },
-                                        "Save"
+                                        if mutation_pending() { "Saving…" } else { "Save" }
                                     }
                                     button {
                                         class: "btn btn-sm btn-secondary",
                                         r#type: "button",
+                                        disabled: settings_saving() || mutation_pending() || creation_needs_check(),
                                         onclick: move |_| {
                                             editing_pt_id.set(None);
                                             edit_error.set(None);
@@ -238,7 +268,7 @@ fn PenaltyTypesTableBody(
                                                         button {
                                                             class: "btn btn-sm btn-outline-primary me-1",
                                                             r#type: "button",
-                                                            disabled: add_new_penalty() || editing_pt_id().is_some(),
+                                                            disabled: settings_saving() || mutation_pending() || add_new_penalty() || editing_pt_id().is_some(),
                                                             onclick: move |_| {
                                                                 editing_pt_id.set(Some(pt_id));
                                                                 edit_name.set(name.clone());
@@ -251,14 +281,21 @@ fn PenaltyTypesTableBody(
                                                         button {
                                                             class: "btn btn-sm btn-outline-danger",
                                                             r#type: "button",
+                                                            disabled: settings_saving() || mutation_pending() || add_new_penalty() || editing_pt_id().is_some(),
                                                             onclick: move |_| {
+                                                                if settings_saving() || mutation_pending() { return; }
                                                                 let u = url_del.clone();
                                                                 let row_id = pt_id;
                                                                 let mut data = data.clone();
-                                                                spawn(async move {
-                                                                    let _ = api::delete_penalty_type(&u, row_id).await;
-                                                                    data.restart();
-                                                                });
+                                                                edit_error.set(None);
+                                mutation_pending.set(true);
+                                spawn(async move {
+                                    match api::delete_penalty_type(&u, row_id).await {
+                                        Ok(_) => { data.restart(); }
+                                        Err(error) => edit_error.set(Some(error)),
+                                    }
+                                    mutation_pending.set(false);
+                                });
                                                             },
                                                             "Delete"
                                                         }
@@ -279,6 +316,7 @@ fn PenaltyTypesTableBody(
                         div { class: "penalty-edit-name",
                             label { r#for: "penalty-type-new-name", class: "form-label", "Name" }
                             input {
+                                disabled: settings_saving() || mutation_pending() || creation_needs_check(),
                                 id: "penalty-type-new-name",
                                 aria_label: "Penalty type name",
                                 onmounted: move |_| crate::appearance::focus_control("penalty-type-new-name"),
@@ -292,10 +330,7 @@ fn PenaltyTypesTableBody(
                                     edit_error.set(None);
                                 }
                             }
-                            span { class: "small text-muted", "{edit_name().len()}/{NAME_MAX_LEN}" }
-                            if let Some(ref err) = edit_error() {
-                                span { class: "small text-danger d-block", "{err}" }
-                            }
+                            span { class: "small text-muted", "{edit_name().chars().count()}/{NAME_MAX_LEN}" }
                         }
                         div { class: "penalty-edit-color",
                             label { r#for: "penalty-type-new-color", class: "form-label", "Color" }
@@ -304,6 +339,7 @@ fn PenaltyTypesTableBody(
                                 button {
                                     id: "penalty-type-new-color",
                                     r#type: "button",
+                                    disabled: settings_saving() || mutation_pending() || creation_needs_check(),
                                     class: "penalty-color-swatch",
                                     aria_label: "Choose penalty color",
                                     aria_expanded: (show_color_picker_for() == Some(-1)).to_string(),
@@ -323,6 +359,7 @@ fn PenaltyTypesTableBody(
                                             for c in PREDEFINED_COLORS.iter() {
                                                 button {
                                                     r#type: "button",
+                                                    disabled: settings_saving() || mutation_pending() || creation_needs_check(),
                                                     class: "penalty-color-swatch",
                                                     aria_label: format!("Use color #{}", c),
                                                     style: format!("background-color: #{};", *c),
@@ -336,6 +373,7 @@ fn PenaltyTypesTableBody(
                                         div { class: "input-group input-group-sm",
                                             span { class: "input-group-text", "#" }
                                             input {
+                                                disabled: settings_saving() || mutation_pending() || creation_needs_check(),
                                                 r#type: "text",
                                                 class: "form-control",
                                                 aria_label: "Hex color",
@@ -345,9 +383,10 @@ fn PenaltyTypesTableBody(
                                             button {
                                                 class: "btn btn-outline-primary btn-sm",
                                                 r#type: "button",
+                                                disabled: settings_saving() || mutation_pending() || creation_needs_check(),
                                                 onclick: move |_| {
                                                     let c = custom_color_hex().trim().trim_start_matches('#').to_string();
-                                                    if c.len() == 6 {
+                                                    if c.len() == 6 && c.chars().all(|value| value.is_ascii_hexdigit()) {
                                                         edit_color.set(c);
                                                         show_color_picker_for.set(None);
                                                     }
@@ -362,6 +401,7 @@ fn PenaltyTypesTableBody(
                         div { class: "penalty-edit-description",
                             label { r#for: "penalty-type-new-description", class: "form-label", "Description (optional)" }
                             textarea {
+                                disabled: settings_saving() || mutation_pending() || creation_needs_check(),
                                 id: "penalty-type-new-description",
                                 class: "form-control form-control-sm",
                                 rows: "3",
@@ -374,34 +414,72 @@ fn PenaltyTypesTableBody(
                             button {
                                 class: "btn btn-sm btn-primary me-1",
                                 r#type: "button",
+                                    disabled: settings_saving() || mutation_pending(),
+                                    id: "penalty-type-save",
                                 onclick: move |_| {
+                                    if settings_saving() || mutation_pending() { return; }
                                     let u = url.clone();
                                     let name_trim = edit_name().trim().to_string();
                                     if name_trim.is_empty() {
                                         edit_error.set(Some("Name is required.".to_string()));
                                         return;
                                     }
-                                    if name_trim.len() > NAME_MAX_LEN {
+                                    if name_trim.chars().count() > NAME_MAX_LEN {
                                         edit_error.set(Some(format!("Name must be at most {} characters.", NAME_MAX_LEN)));
                                         return;
                                     }
                                     let color_val = edit_color().trim_start_matches('#').to_string();
+                                    if color_val.len() != 6 || !color_val.chars().all(|value| value.is_ascii_hexdigit()) {
+                                        edit_error.set(Some("Choose a color using six hexadecimal digits.".into()));
+                                        return;
+                                    }
                                     let desc_val = edit_desc().trim().to_string();
                                     let color_opt = if color_val.len() == 6 { Some(color_val) } else { None };
                                     let desc_opt = if desc_val.is_empty() { None } else { Some(desc_val) };
-                                    add_new_penalty.set(false);
                                     edit_error.set(None);
+                                    mutation_pending.set(true);
+                                    let check_only = creation_needs_check();
+                                    if !check_only { creation_known_ids.set(existing_ids.clone()); }
+                                    let known_ids = creation_known_ids();
                                     let mut data = data.clone();
                                     spawn(async move {
-                                        let _ = api::create_penalty_type(&u, &name_trim, color_opt.as_deref(), desc_opt.as_deref()).await;
-                                        data.restart();
+                                        if check_only {
+                                            match api::check_penalty_creation(&u, false, &known_ids, &name_trim, color_opt.as_deref().unwrap_or("808080"), desc_opt.as_deref().unwrap_or("")).await {
+                                                Ok(true) => {
+                                                    creation_needs_check.set(false);
+                                                    add_new_penalty.set(false);
+                                                    show_color_picker_for.set(None);
+                                                    data.restart();
+                                                }
+                                                Ok(false) => {
+                                                    creation_needs_check.set(false);
+                                                    edit_error.set(Some("No matching saved penalty was found. Review the draft, then choose Save to try again.".into()));
+                                                }
+                                                Err(error) => edit_error.set(Some(format!("Could not check the saved penalty types. Your draft is unchanged. {error}"))),
+                                            }
+                                        } else {
+                                            match api::create_penalty_type(&u, &name_trim, color_opt.as_deref(), desc_opt.as_deref()).await {
+                                                Ok(result) if result.success => {
+                                                    add_new_penalty.set(false);
+                                                    show_color_picker_for.set(None);
+                                                    data.restart();
+                                                }
+                                                result => {
+                                                    creation_needs_check.set(true);
+                                                    let reason = result.err().unwrap_or_else(|| "The server did not confirm the save.".into());
+                                                    edit_error.set(Some(format!("Save was not confirmed. Choose Check save status before trying again, to avoid creating a duplicate. {reason}")));
+                                                }
+                                            }
+                                        }
+                                        mutation_pending.set(false);
                                     });
                                 },
-                                "Save"
+                                if mutation_pending() { "Saving…" } else if creation_needs_check() { "Check save status" } else { "Save" }
                             }
                             button {
                                 class: "btn btn-sm btn-secondary",
                                 r#type: "button",
+                                disabled: settings_saving() || mutation_pending() || creation_needs_check(),
                                 onclick: move |_| {
                                     add_new_penalty.set(false);
                                     edit_name.set(String::new());
@@ -500,6 +578,9 @@ pub fn TournamentSettings(url: String) -> Element {
     let mut edit_color = use_signal(|| "808080".to_string());
     let mut edit_desc = use_signal(|| String::new());
     let mut edit_error = use_signal(|| None as Option<String>);
+    let mut mutation_pending = use_signal(|| false);
+    let mut creation_needs_check = use_signal(|| false);
+    let mut creation_known_ids = use_signal(Vec::<i32>::new);
     let mut show_color_picker_for = use_signal(|| None as Option<i32>);
     let mut custom_color_hex = use_signal(|| String::new());
     let mut to_error = use_signal(|| None as Option<String>);
@@ -584,7 +665,7 @@ pub fn TournamentSettings(url: String) -> Element {
                                 id: "tournament-settings-form",
                                 onsubmit: move |ev| {
                                     ev.prevent_default();
-                                    if saving() || banner_busy() || waiver_reading() { return; }
+                                    if saving() || mutation_pending() || banner_busy() || waiver_reading() { return; }
                                     saving.set(true);
                                     save_error.set(None);
                                     let mut params: Vec<(String, String)> = vec![
@@ -629,21 +710,9 @@ pub fn TournamentSettings(url: String) -> Element {
                                     let waiver_bytes_for_save = waiver_file_bytes();
                                     let waiver_name_for_save = waiver_file_name();
                                     spawn(async move {
-                                        match api::update_tournament_settings(&url_submit, &params).await {
+                                        match api::save_tournament_settings(&url_submit, &params, waiver_bytes_for_save, waiver_name_for_save).await {
                                             Ok(res) => {
                                                 if res.success {
-                                                    if let Some(bytes) = waiver_bytes_for_save {
-                                                        let filename =
-                                                            waiver_name_for_save.as_deref().unwrap_or("waiver");
-                                                        match api::upload_waiver(&url_submit, bytes.to_vec(), filename).await {
-                                                            Ok(_) => {}
-                                                            Err(e) => {
-                                                                waiver_upload_error.set(Some(e));
-                                                                saving.set(false);
-                                                                return;
-                                                            }
-                                                        }
-                                                    }
                                                     nav.push(Route::TournamentHome { url: url_submit });
                                                 } else {
                                                     save_error.set(Some(res.error.unwrap_or_else(|| "Could not save settings. Try again.".into())));
@@ -654,6 +723,7 @@ pub fn TournamentSettings(url: String) -> Element {
                                         saving.set(false);
                                     });
                                 },
+                fieldset { disabled: saving(), class: "border-0 p-0 m-0",
                                 div { class: "row",
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
@@ -759,6 +829,7 @@ pub fn TournamentSettings(url: String) -> Element {
                                                 class: "form-check-input",
                                                 r#type: "checkbox",
                                                 id: "require_waiver_signature",
+                                    disabled: waiver_reading(),
                                                 checked: require_waiver_signature_ui(),
                                                 onchange: move |ev| {
                                                     let checked = ev.checked();
@@ -789,7 +860,7 @@ pub fn TournamentSettings(url: String) -> Element {
                                                     r#type: "file",
                                                     class: "form-control",
                                                     accept: "*/*",
-                                                    disabled: waiver_reading(),
+                                                    disabled: waiver_reading() || saving(),
                                                     onchange: move |evt| {
                                                         #[cfg(target_arch = "wasm32")]
                                                         {
@@ -819,15 +890,15 @@ pub fn TournamentSettings(url: String) -> Element {
                                                 }
                                             }
 
-                                            if waiver_file_bytes().is_some() {
-                                                p { class: "text-muted small mb-2", "Ready to upload the selected waiver file." }
+                                            if let Some(filename) = waiver_file_name() {
+                                                p { class: "text-muted small mb-2", "Selected waiver: {filename}" }
                                             }
 
                                             if let Some(ref err) = waiver_upload_error() {
                                                 div { class: "alert alert-danger small py-2", "{err}" }
                                             }
 
-                                            div { class: "form-text", "Selected waiver uploads when you click Save Settings." }
+                                            div { class: "form-text", "Settings and the selected waiver save together when you choose Save settings." }
                                         } else {
                                             div { class: "form-text text-muted", "Waiver signature will not be required." }
                                         }
@@ -900,11 +971,12 @@ pub fn TournamentSettings(url: String) -> Element {
 
                                 div { class: "d-grid",
                                     if let Some(message) = save_error() { p { class: "text-danger", role: "alert", "{message}" } }
-                                    button { r#type: "submit", class: "btn btn-primary", disabled: saving() || banner_busy() || waiver_reading(), if saving() { "Saving…" } else { "Save Settings" } }
+                                    button { r#type: "submit", class: "btn btn-primary", disabled: saving() || mutation_pending() || banner_busy() || waiver_reading(), if saving() { "Saving…" } else { "Save Settings" } }
                                 }
                             }
                         }
                     }
+                }
                 }
 
                 div { class: "col-12 mt-4",
@@ -921,9 +993,9 @@ pub fn TournamentSettings(url: String) -> Element {
                             }
                             button { id: "penalty-types-add", class: "btn btn-sm btn-outline-secondary penalty-types-add", r#type: "button",
                                 aria_label: "Add penalty type",
-                                disabled: add_new_penalty() || editing_pt_id().is_some(),
+                                disabled: saving() || mutation_pending() || add_new_penalty() || editing_pt_id().is_some(),
                                 onclick: move |_| {
-                                    if add_new_penalty() || editing_pt_id().is_some() { return; }
+                                    if saving() || mutation_pending() || add_new_penalty() || editing_pt_id().is_some() { return; }
                                     edit_name.set(String::new());
                                     edit_color.set("808080".to_string());
                                     edit_desc.set(String::new());
@@ -937,6 +1009,7 @@ pub fn TournamentSettings(url: String) -> Element {
                             }
                         }
                         div { id: "penalty-types-content", class: "edit-section-body", hidden: !penalties_open(),
+                                if let Some(error) = edit_error() { p { id: "penalty-save-error", tabindex: "-1", class: "text-danger", role: "alert", "{error}" } }
                             div { class: "table-responsive",
                                 table { class: "table table-sm",
                                     thead {
@@ -958,6 +1031,10 @@ pub fn TournamentSettings(url: String) -> Element {
                                             edit_color: edit_color,
                                             edit_desc: edit_desc,
                                             edit_error: edit_error,
+                                            mutation_pending: mutation_pending,
+                                            settings_saving: saving,
+                                            creation_needs_check: creation_needs_check,
+                                            creation_known_ids: creation_known_ids,
                                             show_color_picker_for: show_color_picker_for,
                                             custom_color_hex: custom_color_hex,
                                         }

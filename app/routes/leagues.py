@@ -40,6 +40,7 @@ from app.serializers.tournament_serializer import (
     tournament_to_dict,
 )
 from app.utils.datetime_helpers import dt_iso
+from app.utils.settings_save import SettingsSaveError, save_league_settings
 from app.serializers.league_serializer import league_to_dict, require_league
 from app.services._common import Scope, current_user_type
 from app.services.permission_service import PermissionService
@@ -430,39 +431,10 @@ def league_update_settings(league_url):
     if not PermissionService.is_league_organizer(league_url, current_user):
         return jsonify({"error": "Only league organizers can update settings"}), 403
 
-    data = request.get_json() or {}
-    if "about" in data:
-        league.about = data["about"]
-    rc = league.registrable_config
-    if rc:
-        if "team_reg_fee" in data:
-            rc.team_reg_fee = float(data["team_reg_fee"]) if data["team_reg_fee"] is not None else 0.0
-        if "player_reg_fee" in data:
-            rc.player_reg_fee = float(data["player_reg_fee"]) if data["player_reg_fee"] is not None else 0.0
-        if data.get("require_waiver_signature") is False:
-            rc.waiver_filepath = None
-            rc.waiver_sha256 = None
-        if "team_registration_open" in data:
-            rc.team_registration_open = bool(data["team_registration_open"])
-        if "player_registration_open" in data:
-            rc.player_registration_open = bool(data["player_registration_open"])
-        if "terms_link" in data:
-            rc.terms_link = data["terms_link"] or None
-        if "payment_info" in data:
-            rc.payment_info = data["payment_info"] or None
-        if "n_max_teams" in data:
-            v = data["n_max_teams"]
-            rc.n_max_teams = int(v) if v is not None and (v != "" if isinstance(v, str) else True) else None
-        if "max_team_size_roster" in data:
-            v = data["max_team_size_roster"]
-            rc.max_team_size_roster = int(v) if v is not None and (v != "" if isinstance(v, str) else True) else None
-        if "max_team_size_field" in data:
-            v = data["max_team_size_field"]
-            rc.max_team_size_field = int(v) if v is not None and (v != "" if isinstance(v, str) else True) else None
-    if "published" in data:
-        league.published = bool(data["published"])
-
-    db.session.commit()
+    try:
+        save_league_settings(league)
+    except SettingsSaveError as error:
+        return jsonify({"success": False, "error": str(error)}), error.status
     return jsonify({"success": True})
 
 
