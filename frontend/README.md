@@ -259,6 +259,22 @@ file upload that the server pushes to YouTube. Jump-to-point uses
 - Format with `cargo fmt` before committing.
 - The Rust toolchain is pinned in `rust-toolchain.toml` (channel `stable`).
 
+Use `components::Modal` for blocking dialogs. Give each dialog a unique ID and
+a visible labelled heading; select a safe initial focus target and preserve the
+caller's draft on errors. Set `dismissible: false` while a write is pending and
+guard the handler as well as disabling its controls. `dismiss_on_backdrop: false`
+keeps intentional draft-editing dialogs open on background taps without changing
+their Escape or Cancel behavior. Docked schedule editors and anchored menus are
+different interaction patterns and do not use a modal.
+
+`src/viewport.rs` measures the normal app header and the unzoomed visual viewport.
+Its scoped CSS properties keep sticky editing tools and native dialogs within
+available space, including browsers whose keyboard does not resize the layout
+viewport. Observers are removed when the normal layout unmounts; standalone
+scorers and OBS frames retain independent geometry. CSS provides fallbacks,
+separate physical safe-area insets and scrollable short-height dialogs. Do not
+disable browser zoom or substitute user-agent checks for these measurements.
+
 ## Testing
 
 Backend: `just test` / `just coverage-check`.

@@ -114,11 +114,14 @@ pub fn SideCompEnterResults(url: String, comp_id: i32) -> Element {
     rsx! {
         style { r#"
             .sc-enter {{
+                box-sizing: border-box;
                 display: flex;
                 flex-direction: column;
+                height: 100vh;
                 height: 100dvh;
                 max-width: 560px;
                 margin: 0 auto;
+                padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
                 background: var(--ui-bg);
                 color: var(--ui-text);
                 overflow: hidden;
@@ -299,6 +302,21 @@ pub fn SideCompEnterResults(url: String, comp_id: i32) -> Element {
                 box-shadow: 0 1px 1px rgba(0,0,0,0.05);
             }}
             .sc-num-btn:active {{ background: var(--ui-surface-hover); }}
+            /* A short landscape viewport must not clip the nonshrinking keypad. */
+            @media (max-height: 500px) {{
+                .sc-enter {{
+                    height: auto;
+                    min-height: 100vh;
+                    min-height: 100dvh;
+                    overflow: visible;
+                }}
+                .sc-results {{
+                    flex: 0 1 auto;
+                    min-height: 6rem;
+                    max-height: 40vh;
+                    max-height: 40dvh;
+                }}
+            }}
         "# }
 
         div { class: "sc-enter",

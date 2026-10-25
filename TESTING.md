@@ -375,3 +375,39 @@ the same browser and base-URL options as the other checks.
 Camera/audio device behavior and external Google/YouTube integrations still
 need real devices and configured credentials. Browser rendering alone cannot
 verify Bluetooth delay, actual recording, or third-party account flows.
+
+### Forms, dialogs and iPhone verification
+
+Check account setup, injury add/edit, league event creation, settings and schedule
+fields with loading, rejected reads, rejected writes and delayed responses.
+Failed reads must not expose an editable blank record. Failed writes must retain
+the draft and focus useful feedback. Labels, hints and custom errors must refer
+to the correct field. A delayed username check must not overwrite a newer draft.
+Intercept mutations when testing against the populated demo.
+
+Exercise match explanations/Force Start, penalty details, event/league deletion,
+all six schedule helpers, all five bracket editing/legacy dialogs and Stones
+calibration. Check initial focus, Tab/Shift+Tab containment, Escape, close buttons,
+background taps, nested dialogs and return focus. Pending writes must block a
+second request and dismissal. Verify that schedule refresh errors retain the
+open helper, disable further writes and offer a read-only retry; saving one row
+must not discard another row's draft. Cancelling a provisional bracket text or
+team label must remove only that provisional item. Cancelling calibration must
+restore its timing snapshot, including when a previous resync completes late.
+
+Test 320px and 390px portrait layouts and a short landscape viewport. Confirm
+that long dialogs can scroll to every field and action, profile toolbars release
+sticky positioning in short visible space, and the standalone side-event keypad
+does not clip its last row. Explicit inset/visual-height fixtures can check CSS
+arithmetic; they do not reproduce an iPhone keyboard, notch or browser toolbar.
+
+For an Apple-device report, record the route, iPhone model, iOS version, browser,
+orientation and whether the keyboard is open. On the affected device and current
+Safari, check both landscape orientations, text enlargement/pinch zoom, keyboard
+open/close/rotation, native dates/selects, image selection from Photos/Files,
+crop gestures and light/dark page edges. Inspect the focused field and dialog
+actions while Safari's toolbar expands or collapses. Test home-screen mode only
+if it is used. Do not infer Safari success from Chromium or Linux WebKit runs.
+The layout implementation follows [WebKit's safe-area guidance](https://webkit.org/blog/7929/designing-websites-for-iphone-x/)
+and the [VisualViewport API](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport);
+physical-device checks remain necessary for platform behavior.

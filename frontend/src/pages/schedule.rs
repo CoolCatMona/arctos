@@ -2,7 +2,7 @@ use super::TeamSelectionField;
 use super::tournament_home::TournamentHomeContent;
 use crate::Route;
 use crate::api;
-use crate::components::{ActionRecovery, AssEntry, Modal, ModalKind, TeamLabel, TeamLabelStyle, TeamSlot};
+use crate::components::{ActionRecovery, AssEntry, Modal, ModalKind, ModalSize, TeamLabel, TeamLabelStyle, TeamSlot};
 use crate::display::short_or_truncate;
 use crate::types::*;
 use dioxus::html::ModifiersInteraction;
@@ -822,6 +822,12 @@ fn SchedulePage(
     let mut is_to = use_signal(|| false);
 
     let mut active_modal = use_signal(|| "none".to_string());
+    let mut last_helper_setup = use_signal(|| None::<ScheduleSetupResponse>);
+    use_effect(move || {
+        if let Some(Ok(data)) = setup_data.read().as_ref() {
+            last_helper_setup.set(Some(data.clone()));
+        }
+    });
     let mut selected_match_id = use_signal(|| "".to_string());
     // Display name of the break group being edited (BREAK/STATBREAK/JOIN
     // blocks open the group modal instead of the single-match edit modal).
@@ -1022,17 +1028,23 @@ fn SchedulePage(
             }
 
             let handle = Interval::new(SCHEDULE_REFRESH_INTERVAL_MS, move || {
-                refresh_trigger.set(refresh_trigger().wrapping_add(1));
+                if active_modal.peek().as_str() == "none" {
+                    refresh_trigger.set(refresh_trigger().wrapping_add(1));
+                }
             });
             schedule_refresh_interval.set(Some(handle));
         });
     }
 
-    // Refocus the schedule container when a modal closes so keyboard shortcuts work without a click
+    // Native helper dialogs restore their own opener. Only docked editors need
+    // the schedule keyboard target restored when they close.
+    let mut previous_active_modal = use_signal(|| "none".to_string());
     use_effect(move || {
-        let _ = active_modal();
+        let current = active_modal();
+        let previous = previous_active_modal.peek().clone();
+        previous_active_modal.set(current.clone());
         #[cfg(target_arch = "wasm32")]
-        if active_modal() == "none" {
+        if current == "none" && is_docked_schedule_editor(&previous) {
             spawn(async move {
                 gloo_timers::future::TimeoutFuture::new(0).await;
                 focus_schedule_root();
@@ -1048,7 +1060,11 @@ fn SchedulePage(
     };
 
     let val = setup_data.value();
-    let data_opt = val.read().as_ref().and_then(|r| r.as_ref().ok().cloned());
+    let setup_reloading = *setup_data.state().read() == UseResourceState::Pending;
+    let helper_open = is_schedule_helper(&active_modal());
+    let helper_reload_error = val.read().as_ref().and_then(|result| result.as_ref().err().cloned());
+    let data_opt = val.read().as_ref().and_then(|r| r.as_ref().ok().cloned())
+        .or_else(|| helper_open.then(|| last_helper_setup()).flatten());
 
     match data_opt {
         Some(data) => {
@@ -1079,8 +1095,9 @@ fn SchedulePage(
                 let key_str = ev.key().to_string();
                 let modal_open = active_modal() != "none";
                 if modal_open {
-                    // When a modal is open, only handle Escape to close it; let all other keys go to modal inputs
-                    if key_str == "Escape" {
+                    // Native helpers own Escape, including their pending-write guard.
+                    // Docked editors retain their existing Escape behavior.
+                    if key_str == "Escape" && is_docked_schedule_editor(&active_modal()) {
                         ev.prevent_default();
                         active_modal.set("none".to_string());
                     }
@@ -1534,8 +1551,8 @@ fn SchedulePage(
                                     span { class: "small text-muted",
                                         "push back all non-started matches on {viewed_day()}"
                                     }
-                                    label { class: "small mb-0 ms-2", "Minutes" }
-                                    input {
+                                    label { r#for: "schedule-push-minutes", class: "small mb-0 ms-2", "Minutes" }
+                                    input { id: "schedule-push-minutes",
                                         class: "form-control form-control-sm d-inline-block",
                                         style: "width: 6rem;",
                                         r#type: "number",
@@ -1590,8 +1607,8 @@ fn SchedulePage(
                                     span { class: "small text-muted",
                                         "click blocks to select — {bulk_selected().len()} selected"
                                     }
-                                    label { class: "small mb-0 ms-2", "Length (min)" }
-                                    input {
+                                    label { r#for: "schedule-bulk-length", class: "small mb-0 ms-2", "Length (min)" }
+                                    input { id: "schedule-bulk-length",
                                         class: "form-control form-control-sm d-inline-block",
                                         style: "width: 6rem;",
                                         r#type: "number",
@@ -1949,6 +1966,9 @@ fn SchedulePage(
                     if active_modal() == "tags" {
                         TagsModal {
                             tournament_url: url.clone(),
+                            reload_error: helper_reload_error.clone(),
+                            reloading: setup_reloading,
+                            on_reload: move |_| refresh(),
                             data: data.clone(),
                             on_close: move |_| active_modal.set("none".to_string()),
                             on_change: move |_| refresh()
@@ -1957,6 +1977,9 @@ fn SchedulePage(
                     if active_modal() == "scripting" {
                         ScriptingModal {
                             tournament_url: url.clone(),
+                            reload_error: helper_reload_error.clone(),
+                            reloading: setup_reloading,
+                            on_reload: move |_| refresh(),
                             data: data.clone(),
                             on_close: move |_| active_modal.set("none".to_string()),
                             on_change: move |_| refresh()
@@ -1965,6 +1988,9 @@ fn SchedulePage(
                     if active_modal() == "fields" {
                         FieldsModal {
                             tournament_url: url.clone(),
+                            reload_error: helper_reload_error.clone(),
+                            reloading: setup_reloading,
+                            on_reload: move |_| refresh(),
                             data: data.clone(),
                             on_close: move |_| active_modal.set("none".to_string()),
                             on_change: move |_| refresh()
@@ -1973,6 +1999,9 @@ fn SchedulePage(
                     if active_modal() == "toml_import" {
                         TOMLImportModal {
                             tournament_url: url.clone(),
+                            reload_error: helper_reload_error.clone(),
+                            reloading: setup_reloading,
+                            on_reload: move |_| refresh(),
                             on_close: move |_| active_modal.set("none".to_string()),
                             on_import: move |_| {
                                 active_modal.set("none".to_string());
@@ -1983,6 +2012,9 @@ fn SchedulePage(
                     if active_modal() == "schedule_warnings" {
                         ScheduleWarningsModal {
                             tournament_url: url.clone(),
+                            reload_error: helper_reload_error.clone(),
+                            reloading: setup_reloading,
+                            on_reload: move |_| refresh(),
                             on_close: move |_| active_modal.set("none".to_string()),
                             selectable: editor,
                             on_select_match: {
@@ -2089,49 +2121,145 @@ fn matches_on_field_sorted<'a>(
     v
 }
 
+fn is_docked_schedule_editor(value: &str) -> bool {
+    matches!(value, "match_create" | "match_edit" | "break_group")
+}
+
+fn is_schedule_helper(value: &str) -> bool {
+    matches!(value, "tags" | "scripting" | "fields" | "toml_import" | "schedule_warnings")
+}
+
+/// Merge authoritative reloads without overwriting another row's local draft.
+fn merge_schedule_drafts(
+    drafts: &mut HashMap<u32, String>,
+    baseline: &mut HashMap<u32, String>,
+    fresh: HashMap<u32, String>,
+) {
+    drafts.retain(|id, _| fresh.contains_key(id));
+    for (id, value) in &fresh {
+        if !drafts.contains_key(id) || drafts.get(id) == baseline.get(id) {
+            drafts.insert(*id, value.clone());
+        }
+    }
+    *baseline = fresh;
+}
+
+#[component]
+fn ScheduleHelperDialog(
+    id: String,
+    title: String,
+    #[props(default)] pending: bool,
+    #[props(default)] reloading: bool,
+    #[props(default)] reload_error: Option<String>,
+    #[props(default)] on_reload: EventHandler<()>,
+    on_close: EventHandler<()>,
+    #[props(default)] footer: Option<Element>,
+    children: Element,
+) -> Element {
+    let title_id = format!("{id}-title");
+    let reload_error_id = format!("{id}-reload-error");
+    let focus_error_id = reload_error_id.clone();
+    use_effect(use_reactive(&reload_error, move |error| {
+        if error.is_some() { crate::form_validation::focus_after_render(focus_error_id.clone()); }
+    }));
+    rsx! {
+        Modal {
+            id, labelled_by: title_id.clone(), size: ModalSize::Large,
+            dismissible: !pending,
+            on_close: move |_| { if !pending { on_close.call(()); } },
+            div { class: "modal-header",
+                h2 { id: title_id.clone(), class: "modal-title h5", tabindex: "-1", "{title}" }
+                button { r#type: "button", class: "btn-close", aria_label: "Close {title}", disabled: pending,
+                    onclick: move |_| { if !pending { on_close.call(()); } },
+                }
+            }
+            div { class: "modal-body", aria_busy: "{pending}",
+                if let Some(error) = &reload_error {
+                    div { id: reload_error_id.clone(), class: "alert alert-danger", role: "alert", tabindex: "-1",
+                        p { class: "mb-2", "Could not refresh the schedule. Your open drafts are kept. Refresh before making another change. {error}" }
+                        button { r#type: "button", class: "btn btn-outline-secondary", disabled: pending,
+                            onclick: move |_| on_reload.call(()), "Retry refresh" }
+                    }
+                }
+                if reloading { p { class: "text-muted", role: "status", "Refreshing schedule…" } }
+                fieldset { disabled: pending || reloading || reload_error.is_some(), class: "m-0 p-0 border-0", style: "min-width: 0;",
+                    legend { class: "visually-hidden", "{title}" }
+                    {children}
+                }
+            }
+            if let Some(footer) = footer { {footer} } else {
+                div { class: "modal-footer",
+                    button { r#type: "button", class: "btn btn-secondary", disabled: pending,
+                        onclick: move |_| { if !pending { on_close.call(()); } }, "Close" }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod schedule_helper_tests {
+    use super::{is_docked_schedule_editor, is_schedule_helper, merge_schedule_drafts};
+    use std::collections::HashMap;
+
+    #[test]
+    fn helper_escape_is_distinct_from_docked_editor_escape() {
+        for helper in ["fields", "tags", "scripting", "toml_import", "schedule_warnings"] {
+            assert!(is_schedule_helper(helper));
+            assert!(!is_docked_schedule_editor(helper));
+        }
+        for editor in ["match_create", "match_edit", "break_group"] {
+            assert!(is_docked_schedule_editor(editor));
+            assert!(!is_schedule_helper(editor));
+        }
+        assert!(!is_schedule_helper("none"));
+        assert!(!is_docked_schedule_editor("none"));
+    }
+
+    #[test]
+    fn reload_preserves_dirty_rows_and_refreshes_untouched_values() {
+        let mut baseline = HashMap::from([(1, "saved".into()), (2, "old".into()), (3, "removed".into())]);
+        let mut drafts = HashMap::from([(1, "unsaved draft".into()), (2, "old".into()), (3, "removed".into())]);
+        merge_schedule_drafts(&mut drafts, &mut baseline,
+            HashMap::from([(1, "server update".into()), (2, "new".into()), (4, "created".into())]));
+        assert_eq!(drafts.get(&1).map(String::as_str), Some("unsaved draft"));
+        assert_eq!(drafts.get(&2).map(String::as_str), Some("new"));
+        assert_eq!(drafts.get(&4).map(String::as_str), Some("created"));
+        assert!(!drafts.contains_key(&3));
+        assert_eq!(baseline.get(&1).map(String::as_str), Some("server update"));
+        // Once that draft is saved, later authoritative changes are allowed through.
+        merge_schedule_drafts(&mut drafts, &mut baseline,
+            HashMap::from([(1, "unsaved draft".into()), (2, "new".into()), (4, "created".into())]));
+        merge_schedule_drafts(&mut drafts, &mut baseline,
+            HashMap::from([(1, "later server value".into()), (2, "new".into()), (4, "created".into())]));
+        assert_eq!(drafts.get(&1).map(String::as_str), Some("later server value"));
+    }
+}
+
 /// Skip condition help modal
 #[component]
 fn SkipConditionHelpModal(on_close: EventHandler<()>) -> Element {
     rsx! {
-        div {
-            class: "modal d-block",
-            style: "background: rgba(0,0,0,0.5); z-index: 1060;",
-            tabindex: -1,
-            div {
-                class: "modal-dialog modal-lg",
-                style: "z-index: 1061;",
-                div { class: "modal-content",
-                    div { class: "modal-header",
-                        h5 { class: "modal-title", "Skip Condition Help" }
-                        button { class: "btn-close", "type": "button", onclick: move |_| on_close.call(()) }
-                    }
-                    div { class: "modal-body",
-                          p {
-                  "The skip condition uses "
-                  Link {
-                  to: Route::ArctosScheduleScript {},
-                  "Arctos Schedule Script"
-                  }
-                  " to express boolean conditions. If it evaluates to true, the match will be skipped. This evaluation happens when this match's last dependency becomes finished or skipped. If this match is not skipped, the skip condition will be re-evaluated every time a match starts or finishes until it is started or the skip condition evaluates to true and it gets skipped."
-              }
+        ScheduleHelperDialog {
+            id: "schedule-skip-help", title: "Skip Condition Help",
+            on_close,
+            p {
+                "The skip condition uses "
+                Link { to: Route::ArctosScheduleScript {}, "Arctos Schedule Script" }
+                " to express boolean conditions. If it evaluates to true, the match will be skipped. This evaluation happens when this match's last dependency becomes finished or skipped. If this match is not skipped, the skip condition will be re-evaluated every time a match starts or finishes until it is started or the skip condition evaluates to true and it gets skipped."
+            }
 
-                        h6 { class: "mt-3", "Examples" }
-                        ul {
-                            li { code { "(== 0 (losses [TeamName]))" } " - Skip if team has no losses" }
-                            li { code { "(> (wins [TeamA]) (wins [TeamB]))" } " - Skip if TeamA has more wins than TeamB" }
-                            li { code { "(== (winner {{Match1}}) [TeamName])" } " - Skip if TeamName won Match1" }
-                        }
+            h6 { class: "mt-3", "Examples" }
+            ul {
+                li { code { "(== 0 (losses [TeamName]))" } " - Skip if team has no losses" }
+                li { code { "(> (wins [TeamA]) (wins [TeamB]))" } " - Skip if TeamA has more wins than TeamB" }
+                li { code { "(== (winner {{Match1}}) [TeamName])" } " - Skip if TeamName won Match1" }
+            }
 
-                        p { class: "text-muted small mt-3",
-                            strong { "Note:" } " The expression must eventually evaluate to a boolean (true/false), but it doesn't need to simplify to a boolean immediately. "
-                            "There is very minimal error checking, so be careful. "
-                            strong { "You can deadlock your tournament if you do this wrong!" }
-                        }
-                    }
-                    div { class: "modal-footer",
-                        button { class: "btn btn-secondary", "type": "button", onclick: move |_| on_close.call(()), "Close" }
-                    }
-                }
+            p { class: "text-muted small mt-3",
+                strong { "Note:" } " The expression must eventually evaluate to a boolean (true/false), but it doesn't need to simplify to a boolean immediately. "
+                "There is very minimal error checking, so be careful. "
+                strong { "You can deadlock your tournament if you do this wrong!" }
             }
         }
     }
@@ -2730,7 +2858,7 @@ fn CreateMatchModal(
                             div { class: "row",
                                 div { class: "col-md-6",
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Match Name" }
+                                        label { r#for: "new-match-name-input", class: "form-label", "Match Name" }
                                         input {
                                             id: "new-match-name-input",
                                             class: "form-control",
@@ -2744,8 +2872,8 @@ fn CreateMatchModal(
                                 if !matches!(schedule_type().as_str(), "BREAK" | "STATBREAK" | "JOIN") {
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Field" }
-                                            select {
+                                            label { r#for: "schedule-create-field", class: "form-label", "Field" }
+                                            select { id: "schedule-create-field",
                                                 class: "form-select",
                                                 value: "{field}",
                                                 onchange: move |e| on_field_change(e.value()),
@@ -2762,8 +2890,8 @@ fn CreateMatchModal(
                             div { class: "row",
                                 div { class: "col-md-6",
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Type" }
-                                        select { class: "form-select", value: "{schedule_type}", onchange: {
+                                        label { r#for: "schedule-create-type", class: "form-label", "Type" }
+                                        select { id: "schedule-create-type", class: "form-select", value: "{schedule_type}", onchange: {
                                             let prefill_prev = prefill_prev_match_id.clone();
                                             let compute_prev = compute_prev_from_start.clone();
                                             move |e: Event<FormData>| {
@@ -2793,8 +2921,8 @@ fn CreateMatchModal(
                                 if schedule_type() != "JOIN" {
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Length (min)" }
-                                            input { class: "form-control", "type": "number", min: "0", value: "{length}", oninput: move |e| { let mut length = length; length.set(e.value().parse().unwrap_or(60)); } }
+                                            label { r#for: "schedule-create-length", class: "form-label", "Length (min)" }
+                                            input { id: "schedule-create-length", class: "form-control", "type": "number", min: "0", value: "{length}", oninput: move |e| { let mut length = length; length.set(e.value().parse().unwrap_or(60)); } }
                                         }
                                     }
                                 }
@@ -2802,13 +2930,13 @@ fn CreateMatchModal(
 
                             if schedule_type() == "STATIC" || schedule_type() == "STATBREAK" {
                                 div { class: "mb-3",
-                                    label { class: "form-label", "Start Time" }
-                                    input { class: "form-control", "type": "datetime-local", value: "{start_time}", oninput: move |e| { let mut start_time = start_time; start_time.set(e.value()); } }
+                                    label { r#for: "schedule-create-start", class: "form-label", "Start Time" }
+                                    input { id: "schedule-create-start", class: "form-control", "type": "datetime-local", value: "{start_time}", oninput: move |e| { let mut start_time = start_time; start_time.set(e.value()); } }
                                 }
                             } else if schedule_type() == "SAFE" || schedule_type() == "FAST" {
                                 div { class: "mb-3",
-                                    label { class: "form-label", "Previous Match" }
-                                    select { class: "form-select", value: "{previous_match_id}", onchange: move |e| previous_match_id.set(e.value()),
+                                    label { r#for: "schedule-create-previous", class: "form-label", "Previous Match" }
+                                    select { id: "schedule-create-previous", class: "form-select", value: "{previous_match_id}", onchange: move |e| previous_match_id.set(e.value()),
                                         option { value: "", "None" }
                                         for m in &matches_on_field {
                                             option { value: "{m.uuid}", "{m.name}" }
@@ -2818,8 +2946,8 @@ fn CreateMatchModal(
                             }
 
                             if matches!(schedule_type().as_str(), "BREAK" | "STATBREAK" | "JOIN") {
-                                div { class: "mb-3",
-                                    label { class: "form-label", "Fields" }
+                                fieldset { class: "mb-3 border-0 p-0",
+                                    legend { class: "form-label fs-6", "Fields" }
                                     {
                                         let all_field_names: Vec<String> = data.fields.iter().map(|f| f.name.clone()).collect();
                                         let all_selected = !all_field_names.is_empty()
@@ -2937,8 +3065,8 @@ fn CreateMatchModal(
                                 div { class: "row",
                                     div { class: "col-md-4",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Format" }
-                                            select { class: "form-select", value: "{set_type}", onchange: move |e| { let mut set_type = set_type; set_type.set(e.value()); },
+                                            label { r#for: "schedule-create-format", class: "form-label", "Format" }
+                                            select { id: "schedule-create-format", class: "form-select", value: "{set_type}", onchange: move |e| { let mut set_type = set_type; set_type.set(e.value()); },
                                                 option { value: "SETS", "Sets" }
                                                 option { value: "STONES", "Stones" }
                                             }
@@ -2946,15 +3074,15 @@ fn CreateMatchModal(
                                     }
                                     div { class: "col-md-4",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Number of sets" }
-                                            input { class: "form-control", "type": "number", min: "1", value: "{nsets}", oninput: move |e| { let mut nsets = nsets; nsets.set(e.value().parse().unwrap_or(3)); } }
+                                            label { r#for: "schedule-create-sets", class: "form-label", "Number of sets" }
+                                            input { id: "schedule-create-sets", class: "form-control", "type": "number", min: "1", value: "{nsets}", oninput: move |e| { let mut nsets = nsets; nsets.set(e.value().parse().unwrap_or(3)); } }
                                         }
                                     }
                                     if set_type() == "STONES" {
                                         div { class: "col-md-4",
                                             div { class: "mb-3",
-                                                label { class: "form-label", "Stones per set" }
-                                                input { class: "form-control", "type": "number", min: "1", value: "{stones_per_set}", oninput: move |e| { let mut stones_per_set = stones_per_set; stones_per_set.set(e.value().parse().unwrap_or(100)); } }
+                                                label { r#for: "schedule-create-stones", class: "form-label", "Stones per set" }
+                                                input { id: "schedule-create-stones", class: "form-control", "type": "number", min: "1", value: "{stones_per_set}", oninput: move |e| { let mut stones_per_set = stones_per_set; stones_per_set.set(e.value().parse().unwrap_or(100)); } }
                                             }
                                         }
                                     }
@@ -2967,8 +3095,8 @@ fn CreateMatchModal(
                                 }
                                 if schedule_type() == "SAFE" || schedule_type() == "FAST" {
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Skip condition" }
-                                        div { class: "form-text mb-1",
+                                        label { r#for: "ass-entry-create", class: "form-label", "Skip condition" }
+                                        div { id: "schedule-create-skip-help", class: "form-text mb-1",
                                             "Optional expression that evaluates to a boolean. If true, this match will be skipped. "
                                             a {
                                                 href: "#",
@@ -2982,6 +3110,7 @@ fn CreateMatchModal(
                                         }
                                         AssEntry {
                                             id_suffix: "create".to_string(),
+                                            described_by: "schedule-create-skip-help".to_string(),
                                             value: skip_condition(),
                                             on_change: move |v| skip_condition.set(v),
                                             team_options: data.team_options.clone(),
@@ -3222,8 +3351,8 @@ fn BreakGroupModal(
                         // convert (create one deliberately, with a start time).
                         if !is_statbreak {
                             div { class: "mb-3",
-                                label { class: "form-label", "Type" }
-                                select {
+                                label { r#for: "schedule-break-type", class: "form-label", "Type" }
+                                select { id: "schedule-break-type",
                                     class: "form-select",
                                     value: "{sel_type}",
                                     disabled: edit_locked,
@@ -3237,8 +3366,8 @@ fn BreakGroupModal(
                             div { class: "row",
                                 div { class: "col-md-6",
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Length (min)" }
-                                        input {
+                                        label { r#for: "schedule-break-length", class: "form-label", "Length (min)" }
+                                        input { id: "schedule-break-length",
                                             class: "form-control",
                                             "type": "number",
                                             min: "0",
@@ -3251,8 +3380,8 @@ fn BreakGroupModal(
                                 if is_statbreak {
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Start Time" }
-                                            input {
+                                            label { r#for: "schedule-break-start", class: "form-label", "Start Time" }
+                                            input { id: "schedule-break-start",
                                                 class: "form-control",
                                                 "type": "datetime-local",
                                                 value: "{start_time}",
@@ -3264,8 +3393,8 @@ fn BreakGroupModal(
                                 }
                             }
                         }
-                        div { class: "mb-3",
-                            label { class: "form-label", "Fields" }
+                        fieldset { class: "mb-3 border-0 p-0",
+                            legend { class: "form-label fs-6", "Fields" }
                             {
                                 let all_field_names: Vec<String> = data.fields.iter().map(|f| f.name.clone()).collect();
                                 let all_selected = !all_field_names.is_empty()
@@ -3346,140 +3475,168 @@ fn BreakGroupModal(
 #[component]
 fn FieldsModal(
     tournament_url: String,
+    reload_error: Option<String>,
+    reloading: bool,
+    on_reload: EventHandler<()>,
     data: ScheduleSetupResponse,
     on_close: EventHandler<()>,
     on_change: EventHandler<()>,
 ) -> Element {
+    let blocked = reloading || reload_error.is_some();
     let mut new_name = use_signal(|| "".to_string());
+    let mut new_name_invalid = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
+    let mut pending = use_signal(|| false);
+    use_effect(move || {
+        if error().is_some() {
+            crate::form_validation::focus_after_render("schedule-fields-error");
+        }
+    });
     let url_sig = use_signal(|| tournament_url.clone());
     let mut editing_field_id = use_signal(|| None::<u32>);
     let mut editing_name = use_signal(|| "".to_string());
 
     rsx! {
-        div { class: "modal d-block", tabindex: "-1", style: "background: rgba(0,0,0,0.5)",
-            div { class: "modal-dialog modal-lg",
-                div { class: "modal-content",
-                    div { class: "modal-header d-flex justify-content-between align-items-center",
-                        h5 { class: "modal-title mb-0", "Manage Fields" }
-                        button { type: "button", class: "btn-close", "aria-label": "Close", onclick: move |_| on_close.call(()) }
+        ScheduleHelperDialog {
+            id: "schedule-fields", title: "Manage Fields",
+            pending: pending(),
+            reload_error, reloading, on_reload,
+            on_close: move |_| { if !pending() { on_close.call(()); } },
+            if let Some(err) = error() { div { id: "schedule-fields-error", class: "alert alert-danger", role: "alert", tabindex: "-1", "{err}" } }
+
+            form {
+                id: "schedule-add-field-form", class: "edit-section mb-3",
+                onsubmit: move |event| {
+                    event.prevent_default();
+                    if pending() || blocked { return; }
+                    let name = new_name().trim().to_string();
+                    if name.is_empty() {
+                        new_name_invalid.set(true);
+                        crate::form_validation::focus_after_render("schedule-new-field");
+                        return;
                     }
-                    div { class: "modal-body",
-                        if let Some(err) = error() { div { class: "alert alert-danger", "{err}" } }
-
-                        div { class: "edit-section mb-3",
-                            div { class: "edit-section-heading py-2", "Add field" }
-                            div { class: "edit-section-body py-3",
-                                div { class: "mb-3",
-                                    label { class: "form-label", "Field name" }
-                                    input {
-                                        class: "form-control",
-                                        placeholder: "e.g. Blue",
-                                        value: "{new_name}",
-                                        oninput: move |e| new_name.set(e.value())
-                                    }
-                                }
-                                button {
-                                    class: "btn btn-outline-success",
-                                    onclick: move |_| {
-                                        let u = url_sig().clone();
-                                        let on_change = on_change.clone();
-                                        let name = new_name().trim().to_string();
-                                        spawn(async move {
-                                            let req = CreateFieldRequest { name: name.clone() };
-                                            match api::create_field(&u, &req).await {
-                                                Ok(_) => {
-                                                    new_name.set("".to_string());
-                                                    on_change.call(());
-                                                }
-                                                Err(e) => error.set(Some(e)),
-                                            }
-                                        });
-                                    },
-                                    "Add field"
-                                }
+                    new_name_invalid.set(false);
+                    let u = url_sig();
+                    pending.set(true);
+                    error.set(None);
+                    spawn(async move {
+                        let req = CreateFieldRequest { name };
+                        match api::create_field(&u, &req).await {
+                            Ok(response) if response.success => {
+                                new_name.set(String::new());
+                                on_change.call(());
                             }
+                            Ok(_) => error.set(Some("The server did not save this change.".to_string())),
+                            Err(e) => error.set(Some(e)),
                         }
+                        pending.set(false);
+                    });
+                },
+                div { class: "edit-section-heading py-2", "Add field" }
+                div { class: "edit-section-body py-3",
+                    div { class: "mb-3",
+                        label { r#for: "schedule-new-field", class: "form-label", "Field name" }
+                        input {
+                            id: "schedule-new-field", class: "form-control", required: true,
+                            aria_invalid: if new_name_invalid() { "true" } else { "false" },
+                            aria_describedby: new_name_invalid().then_some("schedule-new-field-error"),
+                            placeholder: "e.g. Blue",
+                            value: "{new_name}",
+                            oninput: move |event| { new_name.set(event.value()); new_name_invalid.set(false); },
+                        }
+                        if new_name_invalid() {
+                            p { id: "schedule-new-field-error", class: "text-danger small mb-0 mt-1", "Enter a field name." }
+                        }
+                    }
+                    button { r#type: "submit", class: "btn btn-outline-success", "Add field" }
+                }
+            }
 
-                        h6 { class: "mb-2", "Existing fields" }
-                        ul { class: "list-group",
-                            {data.fields.iter().map(|f| {
-                                let fid = f.id;
-                                let fname = f.name.clone();
-                                let is_editing = editing_field_id() == Some(fid);
-                                rsx! {
-                                    li { key: "{fid}", class: "list-group-item d-flex flex-column gap-2",
-                                        if is_editing {
-                                            div { class: "d-flex flex-column gap-2",
-                                                div {
-                                                    label { class: "form-label small mb-0", "Field name" }
-                                                    input {
-                                                        class: "form-control form-control-sm",
-                                                        placeholder: "Field name",
-                                                        value: "{editing_name}",
-                                                        oninput: move |e| editing_name.set(e.value())
+            h6 { class: "mb-2", "Existing fields" }
+            ul { class: "list-group",
+                {data.fields.iter().map(|f| {
+                    let fid = f.id;
+                    let fname = f.name.clone();
+                    let is_editing = editing_field_id() == Some(fid);
+                    rsx! {
+                        li { key: "{fid}", class: "list-group-item d-flex flex-column gap-2",
+                            if is_editing {
+                                div { class: "d-flex flex-column gap-2",
+                                    div {
+                                        label { r#for: "schedule-field-name-{fid}", class: "form-label small mb-0", "Field name" }
+                                        input {
+                                            id: "schedule-field-name-{fid}", class: "form-control form-control-sm",
+                                            placeholder: "Field name",
+                                            value: "{editing_name}",
+                                            oninput: move |e| editing_name.set(e.value())
+                                        }
+                                    }
+                                    div { class: "d-flex gap-1 mt-1",
+                                        button { class: "btn btn-sm btn-primary",
+                                            onclick: move |_| {
+                                                if pending() || blocked { return; }
+                                                let u = url_sig().clone();
+                                                let name = editing_name().clone();
+                                                let on_change = on_change.clone();
+                                                pending.set(true);
+                                                error.set(None);
+                                                spawn(async move {
+                                                    let req = UpdateFieldRequest { name };
+                                                    if api::update_field(&u, fid, &req).await.is_ok() {
+                                                        editing_field_id.set(None);
+                                                        on_change.call(());
+                                                    } else {
+                                                        error.set(Some("Failed to update field".to_string()));
                                                     }
-                                                }
-                                                div { class: "d-flex gap-1 mt-1",
-                                                    button { class: "btn btn-sm btn-primary",
-                                                        onclick: move |_| {
-                                                            let u = url_sig().clone();
-                                                            let name = editing_name().clone();
-                                                            let on_change = on_change.clone();
-                                                            spawn(async move {
-                                                                let req = UpdateFieldRequest { name };
-                                                                if api::update_field(&u, fid, &req).await.is_ok() {
-                                                                    editing_field_id.set(None);
-                                                                    on_change.call(());
-                                                                } else {
-                                                                    error.set(Some("Failed to update field".to_string()));
-                                                                }
-                                                            });
-                                                        },
-                                                        "Save"
-                                                    }
-                                                    button { class: "btn btn-sm btn-secondary",
-                                                        onclick: move |_| editing_field_id.set(None),
-                                                        "Cancel"
-                                                    }
-                                                }
-                                            }
-                                        } else {
-                                            div { class: "d-flex justify-content-between align-items-center flex-wrap gap-2",
-                                                div { class: "d-flex align-items-center gap-2 flex-wrap",
-                                                    strong { "{fname}" }
-                                                }
-                                                div { class: "btn-group btn-group-sm",
-                                                    button { class: "btn btn-outline-primary",
-                                                        onclick: move |_| {
-                                                            editing_field_id.set(Some(fid));
-                                                            editing_name.set(fname.clone());
-                                                        },
-                                                        "Edit"
-                                                    }
-                                                    button { class: "btn btn-outline-danger",
-                                                        onclick: move |_| {
-                                                            let u = url_sig().clone();
-                                                            let on_change = on_change.clone();
-                                                            spawn(async move {
-                                                                if let Ok(_) = api::delete_field(&u, fid).await {
-                                                                    on_change.call(());
-                                                                } else {
-                                                                    error.set(Some("Cannot delete field with matches".to_string()));
-                                                                }
-                                                            });
-                                                        },
-                                                        "Delete"
-                                                    }
-                                                }
-                                            }
+                                                    pending.set(false);
+                                                });
+                                            },
+                                            "Save"
+                                        }
+                                        button { class: "btn btn-sm btn-secondary",
+                                            onclick: move |_| { if !pending() && !blocked { editing_field_id.set(None); } },
+                                            "Cancel"
                                         }
                                     }
                                 }
-                            })}
+                            } else {
+                                div { class: "d-flex justify-content-between align-items-center flex-wrap gap-2",
+                                    div { class: "d-flex align-items-center gap-2 flex-wrap",
+                                        strong { "{fname}" }
+                                    }
+                                    div { class: "btn-group btn-group-sm",
+                                        button { class: "btn btn-outline-primary",
+                                            onclick: move |_| {
+                                                if pending() || blocked { return; }
+                                                editing_field_id.set(Some(fid));
+                                                editing_name.set(fname.clone());
+                                            },
+                                            "Edit"
+                                        }
+                                        button { class: "btn btn-outline-danger",
+                                            onclick: move |_| {
+                                                if pending() || blocked { return; }
+                                                let u = url_sig().clone();
+                                                let on_change = on_change.clone();
+                                                pending.set(true);
+                                                error.set(None);
+                                                spawn(async move {
+                                                    if let Ok(_) = api::delete_field(&u, fid).await {
+                                                        on_change.call(());
+                                                    } else {
+                                                        error.set(Some("Cannot delete field with matches".to_string()));
+                                                    }
+                                                    pending.set(false);
+                                                });
+                                            },
+                                            "Delete"
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                }
+                })}
             }
         }
     }
@@ -3488,15 +3645,32 @@ fn FieldsModal(
 #[component]
 fn TOMLImportModal(
     tournament_url: String,
+    reload_error: Option<String>,
+    reloading: bool,
+    on_reload: EventHandler<()>,
     on_close: EventHandler<()>,
     on_import: EventHandler<()>,
 ) -> Element {
+    let blocked = reloading || reload_error.is_some();
     let mut error = use_signal(|| None::<String>);
     let mut import_warnings = use_signal(|| None::<Vec<String>>);
     let mut importing = use_signal(|| false);
+    use_effect(move || {
+        if error().is_some() { crate::form_validation::focus_after_render("schedule-import-error"); }
+    });
+    let close_import = move |_| {
+        if importing() { return; }
+        if import_warnings().is_some() { on_import.call(()); } else { on_close.call(()); }
+    };
     let on_file_change = move |ev: Event<FormData>| {
+        if importing() || blocked { return; }
         let files = ev.files();
         if let Some(file) = files.first().cloned() {
+            #[cfg(target_arch = "wasm32")]
+            if let Some(input) = web_sys::window().and_then(|window| window.document())
+                .and_then(|document| document.get_element_by_id("schedule-import-file"))
+                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+            { input.set_value(""); }
             let u = tournament_url.clone();
             let on_import = on_import.clone();
             importing.set(true);
@@ -3530,49 +3704,48 @@ fn TOMLImportModal(
         }
     };
     rsx! {
-        div { class: "modal d-block", tabindex: "-1", style: "background: rgba(0,0,0,0.5)",
-            div { class: "modal-dialog modal-lg",
-                div { class: "modal-content",
-                    div { class: "modal-header",
-                        h5 { class: "modal-title", "Import Schedule (TOML)" }
+        ScheduleHelperDialog {
+            id: "schedule-import", title: "Import Schedule (TOML)",
+            pending: importing(),
+            reload_error, reloading, on_reload,
+            on_close: close_import,
+            footer: Some(rsx! {
+            div { class: "modal-footer",
+                if import_warnings().is_some() {
+                    button {
+                        r#type: "button", class: "btn btn-primary", disabled: importing(),
+                        onclick: move |_| close_import(()),
+                        "Done"
                     }
-                    div { class: "modal-body",
-                        if let Some(err) = error() {
-                            div { class: "alert alert-danger", "{err}" }
-                        }
-                        if let Some(warnings) = import_warnings() {
-                            div { class: "alert alert-warning",
-                                p { class: "mb-2", strong { "Import succeeded with warnings:" } }
-                                ul { class: "mb-0",
-                                    for w in warnings.iter() {
-                                        li { "{w}" }
-                                    }
-                                }
-                            }
-                        } else {
-                            p { class: "text-muted", "Select a TOML file exported from a tournament schedule." }
-                            input {
-                                r#type: "file",
-                                class: "form-control",
-                                accept: ".toml",
-                                onchange: on_file_change,
-                            }
-                            if importing() {
-                                div { class: "mt-2 text-muted", "Importing..." }
-                            }
+                } else {
+                    button { r#type: "button", class: "btn btn-secondary", disabled: importing(), onclick: move |_| close_import(()), "Cancel" }
+                }
+            }
+            }),
+            if let Some(err) = error() {
+                div { id: "schedule-import-error", class: "alert alert-danger", role: "alert", tabindex: "-1", "{err}" }
+            }
+            if let Some(warnings) = import_warnings() {
+                div { class: "alert alert-warning",
+                    p { class: "mb-2", strong { "Import succeeded with warnings:" } }
+                    ul { class: "mb-0",
+                        for w in warnings.iter() {
+                            li { "{w}" }
                         }
                     }
-                    div { class: "modal-footer",
-                        if import_warnings().is_some() {
-                            button {
-                                class: "btn btn-primary",
-                                onclick: move |_| on_import.call(()),
-                                "Done"
-                            }
-                        } else {
-                            button { class: "btn btn-secondary", onclick: move |_| on_close.call(()), "Cancel" }
-                        }
-                    }
+                }
+            } else {
+                label { r#for: "schedule-import-file", class: "form-label", "Schedule file (TOML)" }
+                p { id: "schedule-import-help", class: "text-muted", "Select a TOML file exported from a tournament schedule." }
+                input {
+                    id: "schedule-import-file", aria_describedby: "schedule-import-help",
+                    r#type: "file",
+                    class: "form-control",
+                    accept: ".toml",
+                    onchange: on_file_change,
+                }
+                if importing() {
+                    div { class: "mt-2 text-muted", role: "status", "Importing…" }
                 }
             }
         }
@@ -3582,6 +3755,9 @@ fn TOMLImportModal(
 #[component]
 fn ScheduleWarningsModal(
     tournament_url: String,
+    reload_error: Option<String>,
+    reloading: bool,
+    on_reload: EventHandler<()>,
     on_close: EventHandler<()>,
     /// Editor: clicking a real match name focuses it on the timeline.
     #[props(default = false)]
@@ -3591,27 +3767,12 @@ fn ScheduleWarningsModal(
     #[props(default)]
     known_match_names: Vec<String>,
 ) -> Element {
-    use crate::types::ScheduleWarning;
-    let mut warnings = use_signal(|| None::<Vec<ScheduleWarning>>);
-    let mut error = use_signal(|| None::<String>);
-    let mut loading = use_signal(|| true);
-
-    let url_for_load = tournament_url.clone();
-    use_hook(move || {
-        let url = url_for_load.clone();
-        spawn(async move {
-            match api::fetch_schedule_warnings(&url).await {
-                Ok(ws) => {
-                    warnings.set(Some(ws));
-                    loading.set(false);
-                }
-                Err(e) => {
-                    error.set(Some(e));
-                    loading.set(false);
-                }
-            }
-        });
+    let mut warnings_resource = use_resource(move || {
+        let url = tournament_url.clone();
+        async move { api::fetch_schedule_warnings(&url).await }
     });
+    let warnings = warnings_resource.value();
+    let warnings_loading = *warnings_resource.state().read() == UseResourceState::Pending;
 
     fn kind_label(kind: &str) -> &'static str {
         match kind {
@@ -3633,69 +3794,61 @@ fn ScheduleWarningsModal(
     }
 
     rsx! {
-        div { class: "modal d-block", tabindex: "-1", style: "background: rgba(0,0,0,0.5)",
-            div { class: "modal-dialog modal-lg",
-                div { class: "modal-content",
-                    div { class: "modal-header",
-                        h5 { class: "modal-title", "Schedule Warnings" }
-                    }
-                    div { class: "modal-body",
-                        if loading() {
-                            div { class: "text-muted", "Checking schedule..." }
-                        } else if let Some(err) = error() {
-                            div { class: "alert alert-danger", "{err}" }
-                        } else {
-                            match warnings.read().as_ref() {
-                                Some(ws) if ws.is_empty() => rsx! {
-                                    div { class: "alert alert-success mb-0",
-                                        "No warnings — every match resolves cleanly."
-                                    }
-                                },
-                                Some(ws) => rsx! {
-                                    ul { class: "list-group",
-                                        for (i, w) in ws.iter().enumerate() {
-                                            li { key: "{i}", class: "list-group-item {kind_class(&w.kind)}",
-                                                div { class: "fw-semibold", "{kind_label(&w.kind)}" }
-                                                div { "{w.message}" }
-                                                if !w.matches.is_empty() {
-                                                    div { class: "small mt-1",
-                                                        span { class: "text-muted", "Matches: " }
-                                                        for (j, name) in w.matches.iter().enumerate() {
-                                                            {
-                                                                let name = name.clone();
-                                                                let selectable = selectable
-                                                                    && known_match_names.iter().any(|n| n == &name);
-                                                                let on_select_match = on_select_match;
-                                                                rsx! {
-                                                                    if j > 0 {
-                                                                        span { class: "text-muted", ", " }
-                                                                    }
-                                                                    if selectable {
-                                                                        button {
-                                                                            r#type: "button",
-                                                                            class: "btn btn-link btn-sm p-0 align-baseline",
-                                                                            onclick: move |_| on_select_match.call(name.clone()),
-                                                                            "{name}"
-                                                                        }
-                                                                    } else {
-                                                                        span { class: "text-muted", "{name}" }
-                                                                    }
-                                                                }
+        ScheduleHelperDialog {
+            id: "schedule-warnings", title: "Schedule Warnings",
+            reload_error, reloading, on_reload,
+            on_close,
+            if warnings_loading {
+                div { class: "text-muted", role: "status", "Checking schedule…" }
+            } else if let Some(Err(err)) = warnings.read().as_ref() {
+                div { class: "alert alert-danger", role: "alert", "{err}" }
+                button { r#type: "button", class: "btn btn-outline-secondary", onclick: move |_| warnings_resource.restart(), "Retry" }
+            } else {
+                match warnings.read().as_ref() {
+                    Some(Ok(ws)) if ws.is_empty() => rsx! {
+                        div { class: "alert alert-success mb-0",
+                            "No warnings — every match resolves cleanly."
+                        }
+                    },
+                    Some(Ok(ws)) => rsx! {
+                        ul { class: "list-group",
+                            for (i, w) in ws.iter().enumerate() {
+                                li { key: "{i}", class: "list-group-item {kind_class(&w.kind)}",
+                                    div { class: "fw-semibold", "{kind_label(&w.kind)}" }
+                                    div { "{w.message}" }
+                                    if !w.matches.is_empty() {
+                                        div { class: "small mt-1",
+                                            span { class: "text-muted", "Matches: " }
+                                            for (j, name) in w.matches.iter().enumerate() {
+                                                {
+                                                    let name = name.clone();
+                                                    let selectable = selectable
+                                                        && known_match_names.iter().any(|n| n == &name);
+                                                    let on_select_match = on_select_match;
+                                                    rsx! {
+                                                        if j > 0 {
+                                                            span { class: "text-muted", ", " }
+                                                        }
+                                                        if selectable {
+                                                            button {
+                                                                r#type: "button",
+                                                                class: "btn btn-link btn-sm p-0 align-baseline",
+                                                                onclick: move |_| on_select_match.call(name.clone()),
+                                                                "{name}"
                                                             }
+                                                        } else {
+                                                            span { class: "text-muted", "{name}" }
                                                         }
                                                     }
                                                 }
                                             }
                                         }
                                     }
-                                },
-                                None => rsx! {},
+                                }
                             }
                         }
-                    }
-                    div { class: "modal-footer",
-                        button { class: "btn btn-secondary", onclick: move |_| on_close.call(()), "Close" }
-                    }
+                    },
+                    _ => rsx! {},
                 }
             }
         }
@@ -3705,12 +3858,22 @@ fn ScheduleWarningsModal(
 #[component]
 fn TagsModal(
     tournament_url: String,
+    reload_error: Option<String>,
+    reloading: bool,
+    on_reload: EventHandler<()>,
     data: ScheduleSetupResponse,
     on_close: EventHandler<()>,
     on_change: EventHandler<()>,
 ) -> Element {
+    let blocked = reloading || reload_error.is_some();
     let mut new_tag = use_signal(|| "".to_string());
     let mut error = use_signal(|| None::<String>);
+    let mut pending = use_signal(|| false);
+    use_effect(move || {
+        if error().is_some() {
+            crate::form_validation::focus_after_render("schedule-tags-error");
+        }
+    });
     let url_sig = use_signal(|| tournament_url.clone());
     // Local state for dropdowns: tag_id -> team_id. Synced from data when modal has data so dropdowns show current values.
     let mut tag_teams = use_signal(|| HashMap::<u32, String>::new());
@@ -3719,218 +3882,225 @@ fn TagsModal(
     let mut tag_exprs = use_signal(|| HashMap::<u32, String>::new());
     let mut tag_expr_valid = use_signal(|| HashMap::<u32, Option<Result<(), String>>>::new());
 
-    // Sync tag_teams / expression drafts from data whenever we have tags, so
-    // inputs show correct values on open and after refetch.
-    let data_effect = data.clone();
-    use_effect(move || {
-        let tags = data_effect.tags.clone();
-        let mut map = tag_teams.write();
-        map.clear();
-        let mut exprs = tag_exprs.write();
-        exprs.clear();
-        for tag in tags {
-            map.insert(tag.id, tag.team.unwrap_or_default());
-            exprs.insert(tag.id, tag.expression.unwrap_or_default());
-        }
-    });
+    let mut team_baseline = use_signal(|| HashMap::<u32, String>::new());
+    let mut expression_baseline = use_signal(|| HashMap::<u32, String>::new());
+    use_effect(use_reactive(&data.tags, move |tags| {
+        merge_schedule_drafts(&mut tag_teams.write(), &mut team_baseline.write(),
+            tags.iter().map(|tag| (tag.id, tag.team.clone().unwrap_or_default())).collect());
+        merge_schedule_drafts(&mut tag_exprs.write(), &mut expression_baseline.write(),
+            tags.iter().map(|tag| (tag.id, tag.expression.clone().unwrap_or_default())).collect());
+    }));
 
     rsx! {
-        div { class: "modal d-block", tabindex: "-1", style: "background: rgba(0,0,0,0.5)",
-            div { class: "modal-dialog modal-lg",
-                div { class: "modal-content",
-                    div { class: "modal-header d-flex justify-content-between align-items-center",
-                        h5 { class: "modal-title mb-0", "Manage Tags" }
-                        button { type: "button", class: "btn-close", "aria-label": "Close", onclick: move |_| on_close.call(()) }
+        ScheduleHelperDialog {
+            id: "schedule-tags", title: "Manage Tags",
+            pending: pending(),
+            reload_error, reloading, on_reload,
+            on_close: move |_| { if !pending() { on_close.call(()); } },
+            if let Some(err) = error() { div { id: "schedule-tags-error", class: "alert alert-danger", role: "alert", tabindex: "-1", "{err}" } }
+
+            h6 { "Create Tag" }
+            label { r#for: "schedule-new-tag", class: "visually-hidden", "Tag name" }
+            form { class: "input-group mb-3",
+                id: "schedule-create-tag-form",
+                onsubmit: move |event| {
+                    event.prevent_default();
+                    if pending() || blocked { return; }
+                    let u = url_sig();
+                    let on_change = on_change.clone();
+                    let name = new_tag().trim().to_string();
+                    if name.is_empty() {
+                        error.set(Some("Tag name is required.".to_string()));
+                        return;
                     }
-                    div { class: "modal-body",
-                        if let Some(err) = error() { div { class: "alert alert-danger", "{err}" } }
-
-                        h6 { "Create Tag" }
-                        div { class: "input-group mb-3",
-                            input { class: "form-control", placeholder: "Tag Name (e.g. Pool A Winner)", value: "{new_tag}", oninput: move |e| { new_tag.set(e.value()); error.set(None); } }
-                            button { class: "btn btn-outline-success",
-                                onclick: move |_| {
-                                    let u = url_sig();
-                                    let on_change = on_change.clone();
-                                    let name = new_tag().trim().to_string();
-                                    if name.is_empty() {
-                                        error.set(Some("Tag name is required.".to_string()));
-                                        return;
-                                    }
-                                    if name.contains("::") {
-                                        error.set(Some("Tag name cannot contain \"::\".".to_string()));
-                                        return;
-                                    }
-                                    error.set(None);
-                                    spawn(async move {
-                                        let req = CreateTagRequest { name, expression: None };
-                                        match api::create_tag(&u, &req).await {
-                                            Ok(_) => { new_tag.set("".to_string()); on_change.call(()); }
-                                            Err(e) => error.set(Some(e)),
-                                        }
-                                    });
-                                },
-                                "Create"
-                            }
+                    if name.contains("::") {
+                        error.set(Some("Tag name cannot contain \"::\".".to_string()));
+                        return;
+                    }
+                    pending.set(true);
+                    error.set(None);
+                    spawn(async move {
+                        let req = CreateTagRequest { name, expression: None };
+                        match api::create_tag(&u, &req).await {
+                            Ok(response) if response.success => { new_tag.set("".to_string()); on_change.call(()); }
+                            Ok(_) => error.set(Some("The server did not save this change.".to_string())),
+                            Err(e) => error.set(Some(e)),
                         }
+                        pending.set(false);
+                    });
+                },
+                input { id: "schedule-new-tag", class: "form-control", required: true, placeholder: "Tag Name (e.g. Pool A Winner)", value: "{new_tag}", oninput: move |e| { new_tag.set(e.value()); error.set(None); } }
+                button { r#type: "submit", class: "btn btn-outline-success", "Create" }
+            }
 
-                        h6 { "Existing Tags" }
-                        ul { class: "list-group",
-                            {data.tags.iter().map(|tag| {
-                                let tag_id = tag.id;
-                                let current_team = tag_teams().get(&tag_id).cloned().unwrap_or_default();
-                                let tag_name = tag.name.clone();
-                                let is_updating = updating_tag_id() == Some(tag_id);
-                                let saved_expr = tag.expression.clone().unwrap_or_default();
-                                let edited_expr = tag_exprs()
-                                    .get(&tag_id)
-                                    .cloned()
-                                    .unwrap_or_else(|| saved_expr.clone());
-                                let expr_dirty = edited_expr.trim() != saved_expr.trim();
-                                let expr_verdict = tag_expr_valid().get(&tag_id).cloned().flatten();
-                                // Clearing (empty) is always saveable; otherwise require a passing validation.
-                                let expr_can_save = expr_dirty
-                                    && (edited_expr.trim().is_empty() || matches!(expr_verdict, Some(Ok(()))));
-                                // Effective resolution hint: override beats expression.
-                                let team_label = |tid: &str| -> String {
-                                    data.team_options
-                                        .iter()
-                                        .find(|t| t.id == tid)
-                                        .and_then(|t| t.pseudonym.clone())
-                                        .unwrap_or_else(|| tid.to_string())
-                                };
-                                let resolution_hint = if let Some(t) = tag.team.as_deref().filter(|t| !t.is_empty()) {
-                                    Some(format!("Resolves to {} (manual override)", team_label(t)))
-                                } else if let Some(t) = tag.resolved_team.as_deref().filter(|t| !t.is_empty()) {
-                                    Some(format!("Resolves to {} (from expression)", team_label(t)))
-                                } else if !saved_expr.trim().is_empty() {
-                                    Some("Expression not resolved yet".to_string())
-                                } else {
-                                    None
-                                };
-                                rsx! {
-                                    li { key: "{tag_id}", class: "list-group-item",
-                                        div { class: "d-flex justify-content-between align-items-center gap-2 flex-wrap",
-                                            span { class: "flex-grow-1 fw-semibold", "{tag_name}" }
-                                            div { class: "d-flex align-items-center gap-1",
-                                                span { class: "text-muted small", "Override:" }
-                                                select {
-                                                    class: "form-select form-select-sm",
-                                                    style: "max-width: 12rem;",
-                                                    value: "{current_team}",
-                                                    disabled: is_updating,
-                                                    onchange: move |e| {
-                                                        let u = url_sig();
-                                                        let team_id = e.value();
-                                                        let on_change = on_change.clone();
-                                                        tag_teams.write().insert(tag_id, team_id.clone());
-                                                        updating_tag_id.set(Some(tag_id));
-                                                        error.set(None);
-                                                        let prev_team = current_team.clone();
-                                                        spawn(async move {
-                                                            let req = UpdateTagsRequest {
-                                                                tag_id,
-                                                                team_id: Some(team_id),
-                                                                expression: None,
-                                                            };
-                                                            match api::update_tags(&u, &req).await {
-                                                                Ok(_) => {
-                                                                    updating_tag_id.set(None);
-                                                                    on_change.call(());
-                                                                }
-                                                                Err(e) => {
-                                                                    tag_teams.write().insert(tag_id, prev_team);
-                                                                    updating_tag_id.set(None);
-                                                                    error.set(Some(e));
-                                                                }
-                                                            }
-                                                        });
-                                                    },
-                                                    option { value: "", "No override" }
-                                                    for opt in &data.team_options {
-                                                        option { value: "{opt.id}", "{opt.pseudonym.as_deref().unwrap_or(&opt.id)}" }
+            h6 { "Existing Tags" }
+            ul { class: "list-group",
+                {data.tags.iter().map(|tag| {
+                    let tag_id = tag.id;
+                    let current_team = tag_teams().get(&tag_id).cloned().unwrap_or_default();
+                    let tag_name = tag.name.clone();
+                    let is_updating = updating_tag_id() == Some(tag_id);
+                    let saved_expr = tag.expression.clone().unwrap_or_default();
+                    let edited_expr = tag_exprs()
+                        .get(&tag_id)
+                        .cloned()
+                        .unwrap_or_else(|| saved_expr.clone());
+                    let expr_dirty = edited_expr.trim() != saved_expr.trim();
+                    let expr_verdict = tag_expr_valid().get(&tag_id).cloned().flatten();
+                    // Clearing (empty) is always saveable; otherwise require a passing validation.
+                    let expr_can_save = expr_dirty
+                        && (edited_expr.trim().is_empty() || matches!(expr_verdict, Some(Ok(()))));
+                    // Effective resolution hint: override beats expression.
+                    let team_label = |tid: &str| -> String {
+                        data.team_options
+                            .iter()
+                            .find(|t| t.id == tid)
+                            .and_then(|t| t.pseudonym.clone())
+                            .unwrap_or_else(|| tid.to_string())
+                    };
+                    let resolution_hint = if let Some(t) = tag.team.as_deref().filter(|t| !t.is_empty()) {
+                        Some(format!("Resolves to {} (manual override)", team_label(t)))
+                    } else if let Some(t) = tag.resolved_team.as_deref().filter(|t| !t.is_empty()) {
+                        Some(format!("Resolves to {} (from expression)", team_label(t)))
+                    } else if !saved_expr.trim().is_empty() {
+                        Some("Expression not resolved yet".to_string())
+                    } else {
+                        None
+                    };
+                    rsx! {
+                        li { key: "{tag_id}", class: "list-group-item",
+                            div { class: "d-flex justify-content-between align-items-center gap-2 flex-wrap",
+                                span { class: "flex-grow-1 fw-semibold", "{tag_name}" }
+                                div { class: "d-flex align-items-center gap-1",
+                                    label { r#for: "schedule-tag-override-{tag_id}", class: "text-muted small", "Override:" }
+                                    select {
+                                        id: "schedule-tag-override-{tag_id}", aria_label: "Override for tag {tag_name}",
+                                        class: "form-select form-select-sm",
+                                        style: "max-width: 12rem;",
+                                        value: "{current_team}",
+                                        disabled: is_updating,
+                                        onchange: move |e| {
+                                            if pending() || blocked { return; }
+                                            let u = url_sig();
+                                            let team_id = e.value();
+                                            let on_change = on_change.clone();
+                                            tag_teams.write().insert(tag_id, team_id.clone());
+                                            updating_tag_id.set(Some(tag_id));
+                                            error.set(None);
+                                            let prev_team = current_team.clone();
+                                            pending.set(true);
+                                            error.set(None);
+                                            spawn(async move {
+                                                let req = UpdateTagsRequest {
+                                                    tag_id,
+                                                    team_id: Some(team_id),
+                                                    expression: None,
+                                                };
+                                                match api::update_tags(&u, &req).await {
+                                                    Ok(_) => {
+                                                        updating_tag_id.set(None);
+                                                        on_change.call(());
+                                                    }
+                                                    Err(e) => {
+                                                        tag_teams.write().insert(tag_id, prev_team);
+                                                        updating_tag_id.set(None);
+                                                        error.set(Some(e));
                                                     }
                                                 }
-                                                if is_updating {
-                                                    span { class: "spinner-border spinner-border-sm text-secondary", role: "status", "aria-hidden": "true" }
-                                                }
-                                            }
-                                            button { class: "btn btn-sm btn-outline-danger",
-                                                disabled: is_updating,
-                                                onclick: move |_| {
-                                                    let u = url_sig();
-                                                    let on_change = on_change.clone();
-                                                    spawn(async move {
-                                                        match api::delete_tag(&u, tag_id).await {
-                                                            Ok(_) => { error.set(None); on_change.call(()); }
-                                                            Err(e) => error.set(Some(e)),
-                                                        }
-                                                    });
-                                                },
-                                                "×"
-                                            }
+                                                pending.set(false);
+                                            });
+                                        },
+                                        option { value: "", "No override" }
+                                        for opt in &data.team_options {
+                                            option { value: "{opt.id}", "{opt.pseudonym.as_deref().unwrap_or(&opt.id)}" }
                                         }
-                                        div { class: "mt-2 d-flex align-items-start gap-2",
-                                            div { class: "flex-grow-1",
-                                                AssEntry {
-                                                    id_suffix: format!("tag-expr-{tag_id}"),
-                                                    value: edited_expr.clone(),
-                                                    on_change: move |v: String| { tag_exprs.write().insert(tag_id, v); },
-                                                    team_options: data.team_options.clone(),
-                                                    tags: data.tags.clone(),
-                                                    matches: data.matches.clone(),
-                                                    tournament_url: url_sig(),
-                                                    placeholder: "Expression, e.g. (winner {Semi A})".to_string(),
-                                                    expected_type: vec!["TEAM".to_string()],
-                                                    on_validity_change: move |v: Option<Result<(), String>>| {
-                                                        tag_expr_valid.write().insert(tag_id, v);
-                                                    },
-                                                }
-                                            }
-                                            button { class: "btn btn-sm btn-outline-primary",
-                                                disabled: !expr_can_save || is_updating,
-                                                onclick: {
-                                                    let expr_to_save = edited_expr.clone();
-                                                    move |_| {
-                                                        let u = url_sig();
-                                                        let on_change = on_change.clone();
-                                                        let expression = expr_to_save.trim().to_string();
-                                                        updating_tag_id.set(Some(tag_id));
-                                                        error.set(None);
-                                                        spawn(async move {
-                                                            let req = UpdateTagsRequest {
-                                                                tag_id,
-                                                                team_id: None,
-                                                                expression: Some(expression),
-                                                            };
-                                                            match api::update_tags(&u, &req).await {
-                                                                Ok(_) => {
-                                                                    updating_tag_id.set(None);
-                                                                    on_change.call(());
-                                                                }
-                                                                Err(e) => {
-                                                                    updating_tag_id.set(None);
-                                                                    error.set(Some(e));
-                                                                }
-                                                            }
-                                                        });
-                                                    }
-                                                },
-                                                "Save"
-                                            }
-                                        }
-                                        if let Some(hint) = resolution_hint {
-                                            div { class: "form-text text-muted", "{hint}" }
-                                        }
+                                    }
+                                    if is_updating {
+                                        span { class: "spinner-border spinner-border-sm text-secondary", role: "status", "aria-hidden": "true" }
                                     }
                                 }
-                            })}
-                        }
-                        div { class: "form-text mt-2",
-                            "A tag resolves to its Override team if set, otherwise by evaluating its expression (which must produce a TEAM)."
+                                button { r#type: "button", class: "btn btn-sm btn-outline-danger", aria_label: "Delete tag {tag_name}",
+                                    disabled: is_updating,
+                                    onclick: move |_| {
+                                        if pending() || blocked { return; }
+                                        let u = url_sig();
+                                        let on_change = on_change.clone();
+                                        pending.set(true);
+                                        error.set(None);
+                                        spawn(async move {
+                                            match api::delete_tag(&u, tag_id).await {
+                                                Ok(_) => { error.set(None); on_change.call(()); }
+                                                Err(e) => error.set(Some(e)),
+                                            }
+                                            pending.set(false);
+                                        });
+                                    },
+                                    "×"
+                                }
+                            }
+                            div { class: "mt-2 d-flex flex-column flex-sm-row align-items-stretch gap-2",
+                                div { class: "flex-grow-1", style: "min-width: 0;",
+                                    AssEntry {
+                                        id_suffix: format!("tag-expr-{tag_id}"),
+                                        aria_label: format!("Expression for tag {tag_name}"),
+                                        value: edited_expr.clone(),
+                                        on_change: move |v: String| { if !pending() && !blocked { tag_exprs.write().insert(tag_id, v); } },
+                                        team_options: data.team_options.clone(),
+                                        tags: data.tags.clone(),
+                                        matches: data.matches.clone(),
+                                        tournament_url: url_sig(),
+                                        placeholder: "Expression, e.g. (winner {Semi A})".to_string(),
+                                        expected_type: vec!["TEAM".to_string()],
+                                        on_validity_change: move |v: Option<Result<(), String>>| {
+                                            tag_expr_valid.write().insert(tag_id, v);
+                                        },
+                                    }
+                                }
+                                button { class: "btn btn-sm btn-outline-primary",
+                                    disabled: !expr_can_save || is_updating,
+                                    onclick: {
+                                        let expr_to_save = edited_expr.clone();
+                                        move |_| {
+                                            if pending() || blocked { return; }
+                                            let u = url_sig();
+                                            let on_change = on_change.clone();
+                                            let expression = expr_to_save.trim().to_string();
+                                            updating_tag_id.set(Some(tag_id));
+                                            error.set(None);
+                                            pending.set(true);
+                                            error.set(None);
+                                            spawn(async move {
+                                                let req = UpdateTagsRequest {
+                                                    tag_id,
+                                                    team_id: None,
+                                                    expression: Some(expression),
+                                                };
+                                                match api::update_tags(&u, &req).await {
+                                                    Ok(_) => {
+                                                        updating_tag_id.set(None);
+                                                        on_change.call(());
+                                                    }
+                                                    Err(e) => {
+                                                        updating_tag_id.set(None);
+                                                        error.set(Some(e));
+                                                    }
+                                                }
+                                                pending.set(false);
+                                            });
+                                        }
+                                    },
+                                    "Save"
+                                }
+                            }
+                            if let Some(hint) = resolution_hint {
+                                div { class: "form-text text-muted", "{hint}" }
+                            }
                         }
                     }
-                }
+                })}
+            }
+            div { class: "form-text mt-2",
+                "A tag resolves to its Override team if set, otherwise by evaluating its expression (which must produce a TEAM)."
             }
         }
     }
@@ -3939,12 +4109,22 @@ fn TagsModal(
 #[component]
 fn ScriptingModal(
     tournament_url: String,
+    reload_error: Option<String>,
+    reloading: bool,
+    on_reload: EventHandler<()>,
     data: ScheduleSetupResponse,
     on_close: EventHandler<()>,
     on_change: EventHandler<()>,
 ) -> Element {
+    let blocked = reloading || reload_error.is_some();
     let url_sig = use_signal(|| tournament_url.clone());
     let mut error = use_signal(|| None::<String>);
+    let mut pending = use_signal(|| false);
+    use_effect(move || {
+        if error().is_some() {
+            crate::form_validation::focus_after_render("schedule-scripting-error");
+        }
+    });
     let mut saving_var_id = use_signal(|| None::<u32>);
     // New-variable form.
     let mut new_name = use_signal(|| "".to_string());
@@ -3955,191 +4135,193 @@ fn ScriptingModal(
     let mut var_exprs = use_signal(|| HashMap::<u32, String>::new());
     let mut var_expr_valid = use_signal(|| HashMap::<u32, Option<Result<(), String>>>::new());
 
-    // Sync drafts from data so inputs show current values on open and after refetch.
-    let data_effect = data.clone();
-    use_effect(move || {
-        let vars = data_effect.script_variables.clone();
-        let mut names = var_names.write();
-        names.clear();
-        let mut exprs = var_exprs.write();
-        exprs.clear();
-        for v in vars {
-            names.insert(v.id, v.name);
-            exprs.insert(v.id, v.expression);
-        }
-    });
+    let mut name_baseline = use_signal(|| HashMap::<u32, String>::new());
+    let mut expression_baseline = use_signal(|| HashMap::<u32, String>::new());
+    use_effect(use_reactive(&data.script_variables, move |variables| {
+        merge_schedule_drafts(&mut var_names.write(), &mut name_baseline.write(),
+            variables.iter().map(|var| (var.id, var.name.clone())).collect());
+        merge_schedule_drafts(&mut var_exprs.write(), &mut expression_baseline.write(),
+            variables.iter().map(|var| (var.id, var.expression.clone())).collect());
+    }));
 
     let new_can_add = !new_name().trim().is_empty()
         && !new_expr().trim().is_empty()
         && matches!(new_expr_valid(), Some(Ok(())));
 
     rsx! {
-        div { class: "modal d-block", tabindex: "-1", style: "background: rgba(0,0,0,0.5)",
-            div { class: "modal-dialog modal-lg",
-                div { class: "modal-content",
-                    div { class: "modal-header d-flex justify-content-between align-items-center",
-                        h5 { class: "modal-title mb-0", "Scripting" }
-                        button { type: "button", class: "btn-close", "aria-label": "Close", onclick: move |_| on_close.call(()) }
-                    }
-                    div { class: "modal-body",
-                        if let Some(err) = error() { div { class: "alert alert-danger", "{err}" } }
-                        p { class: "form-text",
-                            "Variables can be used by name in any ASS expression in this tournament — skip conditions, tag expressions, and other variables."
-                        }
+        ScheduleHelperDialog {
+            id: "schedule-scripting", title: "Scripting",
+            pending: pending(),
+            reload_error, reloading, on_reload,
+            on_close: move |_| { if !pending() { on_close.call(()); } },
+            if let Some(err) = error() { div { id: "schedule-scripting-error", class: "alert alert-danger", role: "alert", tabindex: "-1", "{err}" } }
+            p { class: "form-text",
+                "Variables can be used by name in any ASS expression in this tournament — skip conditions, tag expressions, and other variables."
+            }
 
-                        h6 { "New Variable" }
-                        div { class: "d-flex align-items-start gap-2 mb-3",
-                            input {
-                                class: "form-control",
-                                style: "max-width: 12rem;",
-                                placeholder: "name (e.g. threshold)",
-                                value: "{new_name}",
-                                oninput: move |e| { new_name.set(e.value()); error.set(None); },
+            h6 { "New Variable" }
+            form { class: "d-flex flex-column flex-sm-row align-items-stretch gap-2 mb-3",
+                id: "schedule-create-variable-form",
+                onsubmit: move |event| {
+                    event.prevent_default();
+                    if pending() || blocked || new_name().trim().is_empty()
+                        || new_expr().trim().is_empty() || !matches!(new_expr_valid(), Some(Ok(()))) { return; }
+                    let u = url_sig();
+                    let on_change = on_change.clone();
+                    let req = CreateScriptVariableRequest {
+                        name: new_name().trim().to_string(),
+                        expression: new_expr().trim().to_string(),
+                    };
+                    pending.set(true);
+                    error.set(None);
+                    spawn(async move {
+                        match api::create_script_variable(&u, &req).await {
+                            Ok(response) if response.success => {
+                                new_name.set("".to_string());
+                                new_expr.set("".to_string());
+                                new_expr_valid.set(None);
+                                on_change.call(());
                             }
-                            div { class: "flex-grow-1",
-                                AssEntry {
-                                    id_suffix: "script-var-new".to_string(),
-                                    value: new_expr(),
-                                    on_change: move |v: String| new_expr.set(v),
-                                    team_options: data.team_options.clone(),
-                                    tags: data.tags.clone(),
-                                    matches: data.matches.clone(),
-                                    tournament_url: url_sig(),
-                                    placeholder: "expression, e.g. (+ 1 2)".to_string(),
-                                    on_validity_change: move |v: Option<Result<(), String>>| {
-                                        new_expr_valid.set(v);
-                                    },
-                                }
-                            }
-                            button { class: "btn btn-outline-success",
-                                disabled: !new_can_add,
-                                onclick: move |_| {
-                                    let u = url_sig();
-                                    let on_change = on_change.clone();
-                                    let req = CreateScriptVariableRequest {
-                                        name: new_name().trim().to_string(),
-                                        expression: new_expr().trim().to_string(),
-                                    };
-                                    error.set(None);
-                                    spawn(async move {
-                                        match api::create_script_variable(&u, &req).await {
-                                            Ok(_) => {
-                                                new_name.set("".to_string());
-                                                new_expr.set("".to_string());
-                                                new_expr_valid.set(None);
-                                                on_change.call(());
-                                            }
-                                            Err(e) => error.set(Some(e)),
-                                        }
-                                    });
-                                },
-                                "Add"
-                            }
+                            Ok(_) => error.set(Some("The server did not save this change.".to_string())),
+                            Err(e) => error.set(Some(e)),
                         }
-
-                        h6 { "Variables" }
-                        if data.script_variables.is_empty() {
-                            p { class: "text-muted small", "No variables defined yet." }
-                        }
-                        ul { class: "list-group",
-                            {data.script_variables.iter().map(|var| {
-                                let var_id = var.id;
-                                let saved_name = var.name.clone();
-                                let saved_expr = var.expression.clone();
-                                let edited_name = var_names()
-                                    .get(&var_id)
-                                    .cloned()
-                                    .unwrap_or_else(|| saved_name.clone());
-                                let edited_expr = var_exprs()
-                                    .get(&var_id)
-                                    .cloned()
-                                    .unwrap_or_else(|| saved_expr.clone());
-                                let dirty = edited_name.trim() != saved_name
-                                    || edited_expr.trim() != saved_expr.trim();
-                                let expr_changed = edited_expr.trim() != saved_expr.trim();
-                                let verdict = var_expr_valid().get(&var_id).cloned().flatten();
-                                let can_save = dirty
-                                    && !edited_name.trim().is_empty()
-                                    && !edited_expr.trim().is_empty()
-                                    && (!expr_changed || matches!(verdict, Some(Ok(()))));
-                                let is_saving = saving_var_id() == Some(var_id);
-                                let name_to_save = edited_name.clone();
-                                let expr_to_save = edited_expr.clone();
-                                rsx! {
-                                    li { key: "{var_id}", class: "list-group-item",
-                                        div { class: "d-flex align-items-start gap-2",
-                                            input {
-                                                class: "form-control font-monospace",
-                                                style: "max-width: 12rem;",
-                                                value: "{edited_name}",
-                                                disabled: is_saving,
-                                                oninput: move |e| { var_names.write().insert(var_id, e.value()); },
-                                            }
-                                            div { class: "flex-grow-1",
-                                                AssEntry {
-                                                    id_suffix: format!("script-var-{var_id}"),
-                                                    value: edited_expr.clone(),
-                                                    on_change: move |v: String| { var_exprs.write().insert(var_id, v); },
-                                                    team_options: data.team_options.clone(),
-                                                    tags: data.tags.clone(),
-                                                    matches: data.matches.clone(),
-                                                    tournament_url: url_sig(),
-                                                    placeholder: "expression".to_string(),
-                                                    on_validity_change: move |v: Option<Result<(), String>>| {
-                                                        var_expr_valid.write().insert(var_id, v);
-                                                    },
-                                                }
-                                            }
-                                            button { class: "btn btn-sm btn-outline-primary",
-                                                disabled: !can_save || is_saving,
-                                                onclick: move |_| {
-                                                    let u = url_sig();
-                                                    let on_change = on_change.clone();
-                                                    let req = UpdateScriptVariableRequest {
-                                                        name: name_to_save.trim().to_string(),
-                                                        expression: expr_to_save.trim().to_string(),
-                                                    };
-                                                    saving_var_id.set(Some(var_id));
-                                                    error.set(None);
-                                                    spawn(async move {
-                                                        match api::update_script_variable(&u, var_id, &req).await {
-                                                            Ok(_) => {
-                                                                saving_var_id.set(None);
-                                                                on_change.call(());
-                                                            }
-                                                            Err(e) => {
-                                                                saving_var_id.set(None);
-                                                                error.set(Some(e));
-                                                            }
-                                                        }
-                                                    });
-                                                },
-                                                "Save"
-                                            }
-                                            button { class: "btn btn-sm btn-outline-danger",
-                                                disabled: is_saving,
-                                                onclick: move |_| {
-                                                    let u = url_sig();
-                                                    let on_change = on_change.clone();
-                                                    spawn(async move {
-                                                        match api::delete_script_variable(&u, var_id).await {
-                                                            Ok(_) => { error.set(None); on_change.call(()); }
-                                                            Err(e) => error.set(Some(e)),
-                                                        }
-                                                    });
-                                                },
-                                                "×"
-                                            }
-                                        }
-                                    }
-                                }
-                            })}
-                        }
-                    }
-                    div { class: "modal-footer",
-                        button { class: "btn btn-secondary", onclick: move |_| on_close.call(()), "Close" }
+                        pending.set(false);
+                    });
+                },
+                input {
+                    id: "schedule-new-variable-name", class: "form-control", required: true,
+                    style: "max-width: 12rem;",
+                    placeholder: "name (e.g. threshold)", aria_label: "New variable name",
+                    value: "{new_name}",
+                    oninput: move |e| { new_name.set(e.value()); error.set(None); },
+                }
+                div { class: "flex-grow-1", style: "min-width: 0;",
+                    AssEntry {
+                        id_suffix: "script-var-new".to_string(), aria_label: "New variable expression".to_string(),
+                        value: new_expr(),
+                        on_change: move |v: String| { if !pending() && !blocked { new_expr.set(v); } },
+                        team_options: data.team_options.clone(),
+                        tags: data.tags.clone(),
+                        matches: data.matches.clone(),
+                        tournament_url: url_sig(),
+                        placeholder: "expression, e.g. (+ 1 2)".to_string(),
+                        on_validity_change: move |v: Option<Result<(), String>>| {
+                            new_expr_valid.set(v);
+                        },
                     }
                 }
+                button { r#type: "submit", class: "btn btn-outline-success",
+                    disabled: !new_can_add,
+                    "Add"
+                }
+            }
+
+            h6 { "Variables" }
+            if data.script_variables.is_empty() {
+                p { class: "text-muted small", "No variables defined yet." }
+            }
+            ul { class: "list-group",
+                {data.script_variables.iter().map(|var| {
+                    let var_id = var.id;
+                    let saved_name = var.name.clone();
+                    let saved_expr = var.expression.clone();
+                    let edited_name = var_names()
+                        .get(&var_id)
+                        .cloned()
+                        .unwrap_or_else(|| saved_name.clone());
+                    let edited_expr = var_exprs()
+                        .get(&var_id)
+                        .cloned()
+                        .unwrap_or_else(|| saved_expr.clone());
+                    let dirty = edited_name.trim() != saved_name
+                        || edited_expr.trim() != saved_expr.trim();
+                    let expr_changed = edited_expr.trim() != saved_expr.trim();
+                    let verdict = var_expr_valid().get(&var_id).cloned().flatten();
+                    let can_save = dirty
+                        && !edited_name.trim().is_empty()
+                        && !edited_expr.trim().is_empty()
+                        && (!expr_changed || matches!(verdict, Some(Ok(()))));
+                    let is_saving = saving_var_id() == Some(var_id);
+                    let name_to_save = edited_name.clone();
+                    let expr_to_save = edited_expr.clone();
+                    rsx! {
+                        li { key: "{var_id}", class: "list-group-item",
+                            div { class: "d-flex flex-column flex-sm-row align-items-stretch gap-2",
+                                input {
+                                    class: "form-control font-monospace",
+                                    style: "max-width: 12rem;",
+                                    value: "{edited_name}", aria_label: "Variable name",
+                                    disabled: is_saving,
+                                    oninput: move |e| { var_names.write().insert(var_id, e.value()); },
+                                }
+                                div { class: "flex-grow-1", style: "min-width: 0;",
+                                    AssEntry {
+                                        id_suffix: format!("script-var-{var_id}"),
+                                        aria_label: format!("Expression for variable {saved_name}"),
+                                        value: edited_expr.clone(),
+                                        on_change: move |v: String| { if !pending() && !blocked { var_exprs.write().insert(var_id, v); } },
+                                        team_options: data.team_options.clone(),
+                                        tags: data.tags.clone(),
+                                        matches: data.matches.clone(),
+                                        tournament_url: url_sig(),
+                                        placeholder: "expression".to_string(),
+                                        on_validity_change: move |v: Option<Result<(), String>>| {
+                                            var_expr_valid.write().insert(var_id, v);
+                                        },
+                                    }
+                                }
+                                button { class: "btn btn-sm btn-outline-primary",
+                                    disabled: !can_save || is_saving,
+                                    onclick: move |_| {
+                                        if pending() || blocked { return; }
+                                        let u = url_sig();
+                                        let on_change = on_change.clone();
+                                        let req = UpdateScriptVariableRequest {
+                                            name: name_to_save.trim().to_string(),
+                                            expression: expr_to_save.trim().to_string(),
+                                        };
+                                        saving_var_id.set(Some(var_id));
+                                        error.set(None);
+                                        pending.set(true);
+                                        error.set(None);
+                                        spawn(async move {
+                                            match api::update_script_variable(&u, var_id, &req).await {
+                                                Ok(_) => {
+                                                    saving_var_id.set(None);
+                                                    on_change.call(());
+                                                }
+                                                Err(e) => {
+                                                    saving_var_id.set(None);
+                                                    error.set(Some(e));
+                                                }
+                                            }
+                                            pending.set(false);
+                                        });
+                                    },
+                                    "Save"
+                                }
+                                button { r#type: "button", class: "btn btn-sm btn-outline-danger", aria_label: "Delete variable {saved_name}",
+                                    disabled: is_saving,
+                                    onclick: move |_| {
+                                        if pending() || blocked { return; }
+                                        let u = url_sig();
+                                        let on_change = on_change.clone();
+                                        pending.set(true);
+                                        error.set(None);
+                                        spawn(async move {
+                                            match api::delete_script_variable(&u, var_id).await {
+                                                Ok(_) => { error.set(None); on_change.call(()); }
+                                                Err(e) => error.set(Some(e)),
+                                            }
+                                            pending.set(false);
+                                        });
+                                    },
+                                    "×"
+                                }
+                            }
+                        }
+                    }
+                })}
             }
         }
     }
@@ -7458,8 +7640,8 @@ fn EditMatchModal(
                             div { class: "row",
                                 div { class: "col-md-6",
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Match Name" }
-                                        input {
+                                        label { r#for: "schedule-edit-name", class: "form-label", "Match Name" }
+                                        input { id: "schedule-edit-name",
                                             class: "form-control",
                                             "type": "text",
                                             value: "{name}",
@@ -7471,8 +7653,8 @@ fn EditMatchModal(
                                 }
                                 div { class: "col-md-6",
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Field" }
-                                        select {
+                                        label { r#for: "schedule-edit-field", class: "form-label", "Field" }
+                                        select { id: "schedule-edit-field",
                                             class: "form-select",
                                             value: "{field}",
                                             onchange: move |e| on_field_change_edit(e.value()),
@@ -7488,8 +7670,8 @@ fn EditMatchModal(
                             div { class: "row",
                                 div { class: "col-md-6",
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Match Type" }
-                                        select { class: "form-select", value: "{schedule_type}", onchange: move |e| {
+                                        label { r#for: "schedule-edit-type", class: "form-label", "Match Type" }
+                                        select { id: "schedule-edit-type", class: "form-select", value: "{schedule_type}", onchange: move |e| {
                                             let mut schedule_type = schedule_type;
                                             let mut previous_match_id = previous_match_id;
                                             let v = e.value();
@@ -7510,8 +7692,8 @@ fn EditMatchModal(
                                 if schedule_type() != "JOIN" {
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Length (min)" }
-                                            input { class: "form-control", "type": "number", min: "0", value: "{length}", oninput: move |e| { let mut length = length; length.set(e.value().parse().unwrap_or(60)); } }
+                                            label { r#for: "schedule-edit-length", class: "form-label", "Length (min)" }
+                                            input { id: "schedule-edit-length", class: "form-control", "type": "number", min: "0", value: "{length}", oninput: move |e| { let mut length = length; length.set(e.value().parse().unwrap_or(60)); } }
                                         }
                                     }
                                 }
@@ -7519,13 +7701,13 @@ fn EditMatchModal(
 
                             if schedule_type() == "STATIC" {
                                 div { class: "mb-3",
-                                    label { class: "form-label", "Start Time" }
-                                    input { class: "form-control", "type": "datetime-local", value: "{start_time}", oninput: move |e| { let mut start_time = start_time; start_time.set(e.value()); } }
+                                    label { r#for: "schedule-edit-start", class: "form-label", "Start Time" }
+                                    input { id: "schedule-edit-start", class: "form-control", "type": "datetime-local", value: "{start_time}", oninput: move |e| { let mut start_time = start_time; start_time.set(e.value()); } }
                                 }
                             } else if schedule_type() == "SAFE" || schedule_type() == "FAST" || schedule_type() == "BREAK" || schedule_type() == "JOIN" {
                                 div { class: "mb-3",
-                                    label { class: "form-label", "Previous Match" }
-                                    select { class: "form-select", value: "{previous_match_id}", onchange: move |e| { let mut previous_match_id = previous_match_id; previous_match_id.set(e.value()); },
+                                    label { r#for: "schedule-edit-previous", class: "form-label", "Previous Match" }
+                                    select { id: "schedule-edit-previous", class: "form-select", value: "{previous_match_id}", onchange: move |e| { let mut previous_match_id = previous_match_id; previous_match_id.set(e.value()); },
                                         option { value: "", "None" }
                                         for m in &matches_on_field_edit {
                                             option { value: "{m.uuid}", "{m.name}" }
@@ -7592,8 +7774,8 @@ fn EditMatchModal(
                                 div { class: "row",
                                     div { class: "col-md-4",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Format" }
-                                            select { class: "form-select", value: "{set_type}", onchange: move |e| { let mut set_type = set_type; set_type.set(e.value()); },
+                                            label { r#for: "schedule-edit-format", class: "form-label", "Format" }
+                                            select { id: "schedule-edit-format", class: "form-select", value: "{set_type}", onchange: move |e| { let mut set_type = set_type; set_type.set(e.value()); },
                                                 option { value: "SETS", "Sets" }
                                                 option { value: "STONES", "Stones" }
                                             }
@@ -7601,15 +7783,15 @@ fn EditMatchModal(
                                     }
                                     div { class: "col-md-4",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Number of sets" }
-                                            input { class: "form-control", "type": "number", min: "1", value: "{nsets}", oninput: move |e| { let mut nsets = nsets; nsets.set(e.value().parse().unwrap_or(3)); } }
+                                            label { r#for: "schedule-edit-sets", class: "form-label", "Number of sets" }
+                                            input { id: "schedule-edit-sets", class: "form-control", "type": "number", min: "1", value: "{nsets}", oninput: move |e| { let mut nsets = nsets; nsets.set(e.value().parse().unwrap_or(3)); } }
                                         }
                                     }
                                     if set_type() == "STONES" {
                                         div { class: "col-md-4",
                                             div { class: "mb-3",
-                                                label { class: "form-label", "Stones per set" }
-                                                input { class: "form-control", "type": "number", min: "1", value: "{stones_per_set}", oninput: move |e| { let mut stones_per_set = stones_per_set; stones_per_set.set(e.value().parse().unwrap_or(100)); } }
+                                                label { r#for: "schedule-edit-stones", class: "form-label", "Stones per set" }
+                                                input { id: "schedule-edit-stones", class: "form-control", "type": "number", min: "1", value: "{stones_per_set}", oninput: move |e| { let mut stones_per_set = stones_per_set; stones_per_set.set(e.value().parse().unwrap_or(100)); } }
                                             }
                                         }
                                     }
@@ -7622,8 +7804,8 @@ fn EditMatchModal(
                                 }
                                 if schedule_type() == "SAFE" || schedule_type() == "FAST" {
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Skip condition" }
-                                        div { class: "form-text mb-1",
+                                        label { r#for: "ass-entry-edit", class: "form-label", "Skip condition" }
+                                        div { id: "schedule-edit-skip-help", class: "form-text mb-1",
                                             "Optional expression that evaluates to a boolean. If true, this match will be skipped. "
                                             a {
                                                 href: "#",
@@ -7637,6 +7819,7 @@ fn EditMatchModal(
                                         }
                                         AssEntry {
                                             id_suffix: "edit".to_string(),
+                                            described_by: "schedule-edit-skip-help".to_string(),
                                             value: skip_condition(),
                                             on_change: move |v| skip_condition.set(v),
                                             team_options: data.team_options.clone(),

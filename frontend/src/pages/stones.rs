@@ -2,6 +2,8 @@
 
 use crate::api;
 use crate::components::PageIntro;
+#[cfg(target_arch = "wasm32")]
+use crate::components::Modal;
 use crate::types::StonesResponse;
 use dioxus::prelude::*;
 
@@ -87,7 +89,8 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
         mean_ms: 0.0,
         variance_ms2: 0.0,
     });
-    let step2_syncing = use_signal(|| false);
+    let mut step2_syncing = use_signal(|| false);
+    let mut calibration_generation = use_signal(|| 0_u64);
 
     let audio_ctx = use_signal(|| Option::<web_sys::AudioContext>::None);
     let mut audio_buffer = use_signal(|| Option::<web_sys::AudioBuffer>::None);
@@ -217,20 +220,27 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
         if calibration_step() != 2 {
             return;
         }
+        let generation = calibration_generation();
         let mut time_sync = time_sync;
         let mut step2_syncing = step2_syncing;
         spawn(async move {
+            // Cancel/reopen may occur before this task starts or while it waits.
+            // Only the current walkthrough may reset the clock or finish syncing.
+            if calibration_step() != 2 || calibration_generation() != generation { return; }
             time_sync.begin_clock_calibration();
             step2_syncing.set(true);
             let mut waited = 0u32;
             while waited < STEP2_MAX_SYNC_MS {
+                if calibration_step() != 2 || calibration_generation() != generation { return; }
                 if time_sync.quality().converged {
                     break;
                 }
                 gloo_timers::future::TimeoutFuture::new(STEP2_POLL_MS).await;
                 waited += STEP2_POLL_MS;
             }
-            step2_syncing.set(false);
+            if calibration_step() == 2 && calibration_generation() == generation {
+                step2_syncing.set(false);
+            }
         });
     });
 
@@ -385,25 +395,34 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
     };
 
     let on_open_calibration = move |_| {
+        if calibration_step() != 0 { return; }
+        calibration_generation.set(calibration_generation().wrapping_add(1));
         calibration_snapshot.set(time_sync.snapshot());
+        step2_syncing.set(false);
         calibration_step.set(1);
     };
 
     let on_calibration_next = move |_| {
         let step = calibration_step();
         if step == 1 {
+            step2_syncing.set(true);
             calibration_step.set(2);
-        } else if step >= 2 {
+            crate::form_validation::focus_after_render("stones-calibration-title");
+        } else if step >= 2 && !step2_syncing() {
             time_sync.set_offset_ms(time_sync.quality().offset_ms);
+            calibration_generation.set(calibration_generation().wrapping_add(1));
             calibration_step.set(0);
         }
     };
 
-    let on_calibration_cancel = move |_| {
+    let on_calibration_cancel = use_callback(move |_: ()| {
+        if calibration_step() == 0 { return; }
+        calibration_generation.set(calibration_generation().wrapping_add(1));
         let snap = *calibration_snapshot.read();
         time_sync.restore_snapshot(snap);
+        step2_syncing.set(false);
         calibration_step.set(0);
-    };
+    });
 
     let mut nudge_audio_delay = move |delta_ms: f64| {
         let cur = time_sync.calibration().audio_delay_ms;
@@ -581,7 +600,7 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                                     div { class: "mt-3",
                                         label { class: "form-label", r#for: "stones-custom-file", "Custom MP3" }
                                         input {
-                                            id: "stones-custom-file", r#type: "file", class: "form-control",
+                                            id: "stones-custom-file", aria_describedby: if custom_status().is_some() { "stones-custom-help stones-sound-error" } else { "stones-custom-help" }, r#type: "file", class: "form-control",
                                             accept: "audio/mpeg,audio/mp3,.mp3", disabled: starting() || previewing() || sound_loading(),
                                             onchange: move |_| {
                                                 let file = web_sys::window().and_then(|w| w.document())
@@ -615,16 +634,17 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                                                 });
                                             }
                                         }
-                                        p { class: "form-text", "Use a file under 1.5 seconds with no silence at the start." }
+                                        p { id: "stones-custom-help", class: "form-text", "Use a file under 1.5 seconds with no silence at the start." }
                                         if let Some(name) = custom_name() { p { class: "form-text", "Loaded: {name}" } }
                                     }
                                 }
-                                if let Some(message) = custom_status() { p { class: "text-danger form-text", role: "alert", "{message}" } }
+                                if let Some(message) = custom_status() { p { id: "stones-sound-error", class: "text-danger form-text", role: "alert", "{message}" } }
                             }
 
                             div { class: "mb-3",
                                 p { class: "form-text mb-1", "Something doesn't look or sound right?" }
                                 button {
+                                    id: "stones-calibration-trigger", r#type: "button", aria_haspopup: "dialog",
                                     class: "btn btn-outline-secondary",
                                     onclick: on_open_calibration,
                                     "Calibrate manually"
@@ -687,15 +707,17 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
         }
 
         if calibration_step() != 0 {
-            div { class: "modal show", style: "display: block;", role: "dialog", aria_modal: "true", aria_label: "Calibrate stone timing",
-                div { class: "modal-dialog modal-dialog-centered",
-                    div { class: "modal-content",
+            Modal {
+                id: "stones-calibration-dialog", labelled_by: "stones-calibration-title",
+                initial_focus_id: Some("stones-calibration-title".to_string()),
+                return_focus_id: Some("stones-calibration-trigger".to_string()),
+                on_close: on_calibration_cancel,
                         div { class: "modal-header",
-                            h5 { class: "modal-title",
+                            h2 { id: "stones-calibration-title", tabindex: "-1", class: "modal-title h5",
                                 if calibration_step() == 1 { "Calibrate — Step 1 of 2: Audio offset" }
                                 else { "Calibrate — Step 2 of 2: Clock offset" }
                             }
-                            button { r#type: "button", class: "btn-close", aria_label: "Close calibration", onclick: on_calibration_cancel }
+                            button { r#type: "button", class: "btn-close", aria_label: "Close calibration", onclick: move |_| on_calibration_cancel.call(()) }
                         }
                         div { class: "modal-body",
                             div { class: "d-flex flex-column align-items-center mb-3",
@@ -728,7 +750,7 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                                         if starting() { "Starting…" } else if is_playing() { "Pause" } else { "Start" }
                                     }
                                 }
-                                label { class: "form-label d-flex justify-content-between",
+                                label { r#for: "stones-audio-offset", class: "form-label d-flex justify-content-between",
                                     span { "Audio offset" }
                                     strong { class: "ms-2", "{audio_delay_val} ms" }
                                 }
@@ -792,7 +814,7 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                                             if starting() { "Starting…" } else if is_playing() { "Pause" } else { "Start" }
                                         }
                                     }
-                                    label { class: "form-label d-flex justify-content-between",
+                                    label { r#for: "stones-clock-offset", class: "form-label d-flex justify-content-between",
                                         span { "Clock offset" }
                                         strong { class: "ms-2", "{clock_offset_val} ms" }
                                     }
@@ -832,7 +854,7 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                             }
                         }
                         div { class: "modal-footer",
-                            button { r#type: "button", class: "btn btn-secondary", onclick: on_calibration_cancel, "Cancel" }
+                            button { r#type: "button", class: "btn btn-secondary", onclick: move |_| on_calibration_cancel.call(()), "Cancel" }
                             button {
                                 r#type: "button",
                                 class: "btn btn-primary",
@@ -841,10 +863,7 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
                                 if calibration_step() == 1 { "Next" } else { "Done" }
                             }
                         }
-                    }
-                }
             }
-            div { class: "modal-backdrop show" }
         }
     }
 }

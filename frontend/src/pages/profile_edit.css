@@ -30,7 +30,11 @@
 .arctos-app .profile-editor-feedback.is-error { color: var(--ui-danger-text); }
 .arctos-app .profile-editor-feedback:focus-visible { outline: 3px solid var(--ui-link); outline-offset: 3px; }
 .arctos-app .profile-editor :is(input, textarea, select, button, a, [tabindex]) { scroll-margin-top: calc(var(--header-height) + var(--profile-action-clearance) + 16px); scroll-margin-bottom: 1rem; }
-/* Short viewports need room for fields, including with a virtual keyboard. */
+/* VisualViewport also catches keyboards that do not resize the layout viewport. */
+.arctos-app[data-short-viewport="true"] .profile-editor { --profile-action-clearance: 0px; }
+.arctos-app[data-short-viewport="true"] .profile-editor-toolbar,
+.arctos-app[data-short-viewport="true"] .profile-edit-preview { position: static; }
+/* CSS fallback for browsers without VisualViewport. */
 @media (max-height: 600px) {
   .arctos-app .profile-editor { --profile-action-clearance: 0px; }
   .arctos-app .profile-editor-toolbar, .arctos-app .profile-edit-preview { position: static; }

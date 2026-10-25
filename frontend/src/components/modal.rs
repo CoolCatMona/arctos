@@ -29,6 +29,7 @@ pub fn Modal(
     #[props(default)] size: ModalSize,
     #[props(default)] kind: ModalKind,
     #[props(default = true)] dismissible: bool,
+    #[props(default = true)] dismiss_on_backdrop: bool,
     on_close: EventHandler<()>,
     children: Element,
 ) -> Element {
@@ -86,7 +87,7 @@ pub fn Modal(
                 let point = event.client_coordinates();
                 let outside = backdrop_pressed() && outside_dialog(&click_id, point.x, point.y);
                 backdrop_pressed.set(false);
-                if outside && dismissible && is_top_dialog(&click_id) { on_close.call(()); }
+                if outside && dismissible && dismiss_on_backdrop && is_top_dialog(&click_id) { on_close.call(()); }
             },
             div { class: "modal-content", {children} }
         }

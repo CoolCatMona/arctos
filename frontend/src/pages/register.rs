@@ -1,5 +1,6 @@
 use super::login::{go_to_next, is_safe_return_path, remember_google_return};
 use crate::api;
+use crate::form_validation::{described_by, field_message, focus_after_render, FieldError};
 use crate::pages::layout::use_auth_invalidate;
 use dioxus::prelude::*;
 
@@ -37,6 +38,15 @@ fn resolve_initial_type(account_type: Option<String>) -> String {
     }
 }
 
+fn registration_field_error(username: &str, name: &str, password: &str, confirmation: &str) -> Option<FieldError> {
+    if username.trim().is_empty() { Some(FieldError::new("username", "Enter your username.")) }
+    else if name.trim().is_empty() { Some(FieldError::new("name", "Enter a display name.")) }
+    else if password.is_empty() { Some(FieldError::new("password", "Enter a password.")) }
+    else if confirmation.is_empty() { Some(FieldError::new("confirm_password", "Confirm your password.")) }
+    else if password != confirmation { Some(FieldError::new("confirm_password", "Passwords do not match.")) }
+    else { None }
+}
+
 #[component]
 pub fn Register() -> Element {
     rsx! { RegisterPage { account_type: None } }
@@ -61,6 +71,8 @@ fn RegisterPage(account_type: Option<String>) -> Element {
     let mut name = use_signal(|| String::new());
     let mut user_type = use_signal(move || initial);
     let mut err = use_signal(|| None::<String>);
+    let mut field_error = use_signal(|| None::<FieldError>);
+    use_effect(move || { if err().is_some() { focus_after_render("account-error"); } });
     let mut busy = use_signal(|| false);
     let navigator = use_navigator();
     let auth_invalidate = use_auth_invalidate();
@@ -90,7 +102,7 @@ fn RegisterPage(account_type: Option<String>) -> Element {
                     }
                     div { class: "card-body",
                         if let Some(e) = err.read().as_ref() {
-                            div { class: "alert alert-danger mb-3", role: "alert", "{e}" }
+                            div { id: "account-error", tabindex: "-1", class: "alert alert-danger mb-3", role: "alert", "{e}" }
                         }
                         div { class: "account-type-picker mb-4", role: "group", aria_label: "Account type",
                             button { r#type: "button", class: if user_type() == "player" { "account-type-option is-selected" } else { "account-type-option" }, aria_pressed: user_type() == "player", disabled: busy(), onclick: move |_| user_type.set("player".into()),
@@ -102,6 +114,7 @@ fn RegisterPage(account_type: Option<String>) -> Element {
                         }
                         p { class: "form-text mb-3", "Both account types can organize events. Use a player account to referee matches." }
                         form {
+                            oninput: move |_| { err.set(None); field_error.set(None); },
                             onsubmit: move |ev| {
                                 ev.prevent_default();
                                 if busy() { return; }
@@ -110,12 +123,10 @@ fn RegisterPage(account_type: Option<String>) -> Element {
                                 let cp = confirm_password().clone();
                                 let n = name().trim().to_string();
                                 let t = user_type().clone();
-                                if u.is_empty() || p.is_empty() || n.is_empty() {
-                                    err.set(Some("Username, password, and display name required".into()));
-                                    return;
-                                }
-                                if p != cp {
-                                    err.set(Some("Passwords do not match".into()));
+                                if let Some(feedback) = registration_field_error(&u, &n, &p, &cp) {
+                                    focus_after_render(feedback.field_id.clone());
+                                    field_error.set(Some(feedback));
+                                    err.set(None);
                                     return;
                                 }
                                 err.set(None);
@@ -142,6 +153,8 @@ fn RegisterPage(account_type: Option<String>) -> Element {
                                     r#type: "text",
                                     class: "form-control",
                                     id: "username",
+                                    aria_invalid: field_message(&field_error(), "username").is_some(),
+                                    aria_describedby: described_by(&field_error(), "username", "username-help"),
                                     name: "username",
                                     autocomplete: "username",
                                     autocapitalize: "none",
@@ -153,7 +166,8 @@ fn RegisterPage(account_type: Option<String>) -> Element {
                                     required: true,
                                     pattern: r"[a-zA-Z0-9][a-zA-Z0-9_\-]*[a-zA-Z0-9]|[a-zA-Z0-9]",
                                 }
-                                div { class: "form-text",
+                                if let Some(message) = field_message(&field_error(), "username") { p { id: "username-error", class: "text-danger small mt-1", "{message}" } }
+                                div { id: "username-help", class: "form-text",
                                     "This will be your unique identifier. "
                                     strong { "It is permanent." }
                                     " Must be URL-safe: only letters, numbers, hyphens, and underscores. Cannot start or end with hyphen or underscore."
@@ -165,6 +179,8 @@ fn RegisterPage(account_type: Option<String>) -> Element {
                                     r#type: "text",
                                     class: "form-control",
                                     id: "name",
+                                    aria_invalid: field_message(&field_error(), "name").is_some(),
+                                    aria_describedby: described_by(&field_error(), "name", "name-help"),
                                     name: "name",
                                     autocomplete: if user_type() == "team" { "organization" } else { "nickname" },
                                     disabled: busy(),
@@ -172,7 +188,8 @@ fn RegisterPage(account_type: Option<String>) -> Element {
                                     oninput: move |ev| name.set(ev.value().clone()),
                                     required: true,
                                 }
-                                div { class: "form-text", "Your public name. You can change it later." }
+                                if let Some(message) = field_message(&field_error(), "name") { p { id: "name-error", class: "text-danger small mt-1", "{message}" } }
+                                div { id: "name-help", class: "form-text", "Your public name. You can change it later." }
                             }
                             div { class: "mb-3",
                                 label { r#for: "password", class: "form-label", "Password" }
@@ -180,6 +197,8 @@ fn RegisterPage(account_type: Option<String>) -> Element {
                                     r#type: "password",
                                     class: "form-control",
                                     id: "password",
+                                    aria_invalid: field_message(&field_error(), "password").is_some(),
+                                    aria_describedby: described_by(&field_error(), "password", ""),
                                     name: "password",
                                     autocomplete: "new-password",
                                     disabled: busy(),
@@ -187,6 +206,7 @@ fn RegisterPage(account_type: Option<String>) -> Element {
                                     oninput: move |ev| password.set(ev.value().clone()),
                                     required: true,
                                 }
+                                if let Some(message) = field_message(&field_error(), "password") { p { id: "password-error", class: "text-danger small mt-1", "{message}" } }
                             }
                             div { class: "mb-3",
                                 label { r#for: "confirm_password", class: "form-label", "Confirm Password" }
@@ -194,6 +214,8 @@ fn RegisterPage(account_type: Option<String>) -> Element {
                                     r#type: "password",
                                     class: "form-control",
                                     id: "confirm_password",
+                                    aria_invalid: field_message(&field_error(), "confirm_password").is_some(),
+                                    aria_describedby: described_by(&field_error(), "confirm_password", ""),
                                     name: "confirm_password",
                                     autocomplete: "new-password",
                                     disabled: busy(),
@@ -201,6 +223,7 @@ fn RegisterPage(account_type: Option<String>) -> Element {
                                     oninput: move |ev| confirm_password.set(ev.value().clone()),
                                     required: true,
                                 }
+                                if let Some(message) = field_message(&field_error(), "confirm_password") { p { id: "confirm_password-error", class: "text-danger small mt-1", "{message}" } }
                             }
                             div { class: "d-grid",
                                 button { r#type: "submit", class: "btn btn-primary", id: "submitBtn", disabled: busy(), if busy() { "Creating account…" } else { "Create account" } }
@@ -225,12 +248,28 @@ fn RegisterPage(account_type: Option<String>) -> Element {
                         }
                         hr {}
                         div { class: "text-center",
-                            p { "Already have an account? " a { href: "{login_url}", "Sign in" } }
+                            p { class: "mb-0", "Already have an account?" }
+                            a { class: "auth-switch-link", href: "{login_url}", "Sign in" }
                         }
 
                     }
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod form_tests {
+    use super::registration_field_error;
+
+    #[test]
+    fn account_feedback_uses_visual_order_and_preserves_password_spaces() {
+        assert_eq!(registration_field_error(" ", " ", "", "").unwrap().field_id, "username");
+        assert_eq!(registration_field_error("player", " ", "", "").unwrap().field_id, "name");
+        assert_eq!(registration_field_error("player", "Player", "", "").unwrap().field_id, "password");
+        assert_eq!(registration_field_error("player", "Player", " secret ", "secret").unwrap().field_id, "confirm_password");
+        assert!(registration_field_error("player", "Player", " secret ", " secret ").is_none());
+        assert!(registration_field_error("player", "Player", "a", "a").is_none());
     }
 }

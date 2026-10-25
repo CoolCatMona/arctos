@@ -60,6 +60,12 @@ pub fn TournamentHomeContent(
     let mut delete_modal_open = use_signal(|| false);
     let mut delete_confirm_url = use_signal(|| String::new());
     let mut delete_error = use_signal(|| None::<String>);
+    let mut delete_pending = use_signal(|| false);
+    use_effect(move || {
+        if delete_error().is_some() {
+            crate::form_validation::focus_after_render("delete-tournament-error");
+        }
+    });
     let mut show_edit_player_modal = use_signal(|| false);
     let mut show_edit_team_modal = use_signal(|| false);
     let mut show_league_edit_modal = use_signal(|| false);
@@ -467,76 +473,90 @@ pub fn TournamentHomeContent(
             }
 
             if is_current_user_to(me_res.read().as_ref(), &d.to_entries) && delete_modal_open() {
-                div { class: "modal d-block", tabindex: -1, style: "background: rgba(0,0,0,0.5)",
-                    div { class: "modal-dialog modal-dialog-centered",
-                        div { class: "modal-content",
-                            div { class: "modal-header",
-                                h5 { class: "modal-title", "Delete Tournament" }
-                                button { class: "btn-close", onclick: move |_| delete_modal_open.set(false) }
-                            }
-                            div { class: "modal-body",
-                                if let Some(ref err) = delete_error() {
-                                    div { class: "alert alert-danger mb-3", "{err}" }
+                Modal {
+                    id: "delete-tournament-dialog",
+                    labelled_by: "delete-tournament-title",
+                    described_by: Some("delete-tournament-warning".to_string()),
+                    initial_focus_id: Some("delete-tournament-cancel".to_string()),
+                    return_focus_id: Some("organizer-tools-trigger".to_string()),
+                    kind: ModalKind::AlertDialog,
+                    dismissible: !delete_pending(),
+                    on_close: move |_| { if !delete_pending() { delete_modal_open.set(false); } },
+                    div { class: "modal-header",
+                        h2 { id: "delete-tournament-title", class: "modal-title h5", tabindex: "-1", "Delete Tournament" }
+                        button {
+                            r#type: "button", class: "btn-close", aria_label: "Close delete tournament confirmation",
+                            disabled: delete_pending(),
+                            onclick: move |_| { if !delete_pending() { delete_modal_open.set(false); } },
+                        }
+                    }
+                    div { class: "modal-body",
+                        if let Some(ref err) = delete_error() {
+                            div { id: "delete-tournament-error", class: "alert alert-danger mb-3", role: "alert", tabindex: "-1", "{err}" }
+                        }
+                        div { id: "delete-tournament-warning", class: "alert alert-danger",
+                            strong { "Warning: " }
+                            "This action cannot be undone. All matches, registrations, and data will be permanently removed."
+                        }
+                        p { id: "delete-tournament-instructions", "To confirm, type the tournament URL exactly:" }
+                        p { class: "text-center mb-2", strong { "{url}" } }
+                        form {
+                            id: "delete-tournament-form",
+                            aria_busy: "{delete_pending()}",
+                            onsubmit: move |ev| {
+                                ev.prevent_default();
+                                if delete_pending() || delete_confirm_url() != url_for_delete_confirm {
+                                    return;
                                 }
-                                div { class: "alert alert-danger",
-                                    strong { "Warning: " }
-                                    "This action cannot be undone. All matches, registrations, and data will be permanently removed."
-                                }
-                                p { "To confirm, type the tournament URL exactly:" }
-                                p { class: "text-center mb-2", strong { "{url}" } }
-                                form {
-                                    id: "delete-tournament-form",
-                                    onsubmit: move |ev| {
-                                        ev.prevent_default();
-                                        if delete_confirm_url() != url_for_delete_confirm {
-                                            return;
-                                        }
-                                        delete_error.set(None);
-                                        let nav = navigator.clone();
-                                        let url_submit = url_for_delete_confirm.clone();
-                                        let confirm = delete_confirm_url();
-                                        let redirect_league = delete_redirect_league();
-                                        spawn(async move {
-                                            match api::delete_tournament(&url_submit, &confirm).await {
-                                                Ok(res) if res.success => {
-                                                    if let Some(lu) = redirect_league {
-                                                        let _ = nav.push(Route::LeagueHome { league_url: lu });
-                                                    } else {
-                                                        let _ = nav.push(Route::Index {});
-                                                    }
-                                                }
-                                                Ok(res) => {
-                                                    delete_error.set(Some(res.error.unwrap_or_else(|| "Delete failed.".to_string())));
-                                                }
-                                                Err(e) => {
-                                                    delete_error.set(Some(e));
-                                                }
+                                delete_pending.set(true);
+                                delete_error.set(None);
+                                let nav = navigator.clone();
+                                let url_submit = url_for_delete_confirm.clone();
+                                let confirm = delete_confirm_url();
+                                let redirect_league = delete_redirect_league();
+                                spawn(async move {
+                                    let result = api::delete_tournament(&url_submit, &confirm).await;
+                                    delete_pending.set(false);
+                                    match result {
+                                        Ok(res) if res.success => {
+                                            delete_modal_open.set(false);
+                                            if let Some(lu) = redirect_league {
+                                                let _ = nav.push(Route::LeagueHome { league_url: lu });
+                                            } else {
+                                                let _ = nav.push(Route::Index {});
                                             }
-                                        });
-                                    },
-                                    div { class: "mb-3",
-                                        label { class: "form-label", "Tournament URL:" }
-                                        input {
-                                            class: "form-control",
-                                            name: "confirm_url",
-                                            "type": "text",
-                                            placeholder: "{url}",
-                                            value: "{delete_confirm_url()}",
-                                            oninput: move |e| delete_confirm_url.set(e.value()),
+                                        }
+                                        Ok(res) => {
+                                            delete_error.set(Some(res.error.unwrap_or_else(|| "Delete failed.".to_string())));
+                                        }
+                                        Err(e) => {
+                                            delete_error.set(Some(e));
                                         }
                                     }
+                                });
+                            },
+                            div { class: "mb-3",
+                                label { class: "form-label", r#for: "delete-tournament-confirm-url", "Tournament URL:" }
+                                input {
+                                    id: "delete-tournament-confirm-url", class: "form-control", name: "confirm_url", r#type: "text",
+                                    aria_describedby: "delete-tournament-instructions",
+                                    placeholder: "{url}", value: "{delete_confirm_url()}", required: true,
+                                    disabled: delete_pending(),
+                                    oninput: move |e| { if !delete_pending() { delete_confirm_url.set(e.value()); } },
                                 }
                             }
-                            div { class: "modal-footer",
-                                button { class: "btn btn-secondary", onclick: move |_| delete_modal_open.set(false), "Cancel" }
-                                button {
-                                    class: "btn btn-danger",
-                                    "type": "submit",
-                                    form: "delete-tournament-form",
-                                    disabled: delete_confirm_url() != url,
-                                    "Delete Tournament"
-                                }
-                            }
+                        }
+                    }
+                    div { class: "modal-footer",
+                        button {
+                            id: "delete-tournament-cancel", r#type: "button", class: "btn btn-secondary", disabled: delete_pending(),
+                            onclick: move |_| { if !delete_pending() { delete_modal_open.set(false); } },
+                            "Cancel"
+                        }
+                        button {
+                            class: "btn btn-danger", r#type: "submit", form: "delete-tournament-form",
+                            disabled: delete_pending() || delete_confirm_url() != url,
+                            if delete_pending() { "Deleting…" } else { "Delete Tournament" }
                         }
                     }
                 }

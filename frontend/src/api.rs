@@ -1397,13 +1397,6 @@ pub async fn delete_legacy_bracket(
     .send()
     .await
     .map_err(|e| e.to_string())?;
-    if !r.status().is_success() {
-        let msg = r
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to delete legacy bracket".to_string());
-        return Err(msg);
-    }
     response_json(r).await
 }
 
@@ -1418,13 +1411,6 @@ pub async fn clear_legacy_brackets(tournament_url: &str) -> Result<BracketLayout
     .send()
     .await
     .map_err(|e| e.to_string())?;
-    if !r.status().is_success() {
-        let msg = r
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to clear legacy brackets".to_string());
-        return Err(msg);
-    }
     response_json(r).await
 }
 
@@ -1452,13 +1438,6 @@ pub async fn set_bracket_published(
     .send()
     .await
     .map_err(|e| e.to_string())?;
-    if !r.status().is_success() {
-        let msg = r
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to update bracket published state".to_string());
-        return Err(msg);
-    }
     response_json(r).await
 }
 
@@ -1488,13 +1467,6 @@ pub async fn save_bracket_placements(
     .send()
     .await
     .map_err(|e| e.to_string())?;
-    if !r.status().is_success() {
-        let msg = r
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to save bracket placements".to_string());
-        return Err(msg);
-    }
     response_json(r).await
 }
 
@@ -1514,12 +1486,6 @@ pub async fn add_bracket_text(
     .send()
     .await
     .map_err(|e| e.to_string())?;
-    if !r.status().is_success() {
-        return Err(r
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to add text".into()));
-    }
     response_json(r).await
 }
 
@@ -1556,12 +1522,6 @@ pub async fn add_bracket_labeled_team_with(
     .send()
     .await
     .map_err(|e| e.to_string())?;
-    if !r.status().is_success() {
-        return Err(r
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to add team label".into()));
-    }
     response_json(r).await
 }
 
@@ -1590,12 +1550,6 @@ pub async fn add_bracket_image_element(
     .send()
     .await
     .map_err(|e| e.to_string())?;
-    if !r.status().is_success() {
-        return Err(r
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to add image".into()));
-    }
     response_json(r).await
 }
 
@@ -1616,12 +1570,6 @@ pub async fn convert_labeled_team_port(
     .send()
     .await
     .map_err(|e| e.to_string())?;
-    if !r.status().is_success() {
-        return Err(r
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to convert port".into()));
-    }
     response_json(r).await
 }
 
@@ -1647,13 +1595,6 @@ pub async fn add_bracket_placement(
     .send()
     .await
     .map_err(|e| e.to_string())?;
-    if !r.status().is_success() {
-        let msg = r
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to add match to bracket".to_string());
-        return Err(msg);
-    }
     response_json(r).await
 }
 
@@ -1679,13 +1620,6 @@ pub async fn convert_bracket_port(
     .send()
     .await
     .map_err(|e| e.to_string())?;
-    if !r.status().is_success() {
-        let msg = r
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to convert bracket port".to_string());
-        return Err(msg);
-    }
     response_json(r).await
 }
 

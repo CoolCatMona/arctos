@@ -1,7 +1,7 @@
 use crate::api;
 use crate::components::{
     EditRegistrationContext, EditRegistrationModal, EventAbout, EventBannerPhoto, EventHeader, EventTab, EventTabs,
-    EventTeamsList, LeagueRegistrationButtons, OrganizerTools,
+    EventTeamsList, LeagueRegistrationButtons, Modal, ModalKind, OrganizerTools,
 };
 use crate::types::{ToEntry, User};
 use crate::Route;
@@ -55,6 +55,12 @@ pub fn LeagueHomeContent(
     let mut delete_modal_open = use_signal(|| false);
     let mut delete_confirm_url = use_signal(|| String::new());
     let mut delete_error = use_signal(|| None::<String>);
+    let mut delete_pending = use_signal(|| false);
+    use_effect(move || {
+        if delete_error().is_some() {
+            crate::form_validation::focus_after_render("delete-league-error");
+        }
+    });
     let mut show_registration_success = use_signal(|| false);
     let navigator = use_navigator();
     let url_for_delete_confirm = league_url.clone();
@@ -321,71 +327,85 @@ pub fn LeagueHomeContent(
                 }
             }
             if delete_modal_open() {
-                div { class: "modal d-block", tabindex: "-1", style: "background: rgba(0,0,0,0.5);",
-                    div { class: "modal-dialog modal-dialog-centered",
-                        div { class: "modal-content",
-                            div { class: "modal-header",
-                                h5 { class: "modal-title", "Delete League" }
-                                button { class: "btn-close", onclick: move |_| delete_modal_open.set(false) }
-                            }
-                            div { class: "modal-body",
-                                if let Some(ref err) = delete_error() {
-                                    div { class: "alert alert-danger mb-3", "{err}" }
+                Modal {
+                    id: "delete-league-dialog",
+                    labelled_by: "delete-league-title",
+                    described_by: Some("delete-league-warning".to_string()),
+                    initial_focus_id: Some("delete-league-cancel".to_string()),
+                    return_focus_id: Some("organizer-tools-trigger".to_string()),
+                    kind: ModalKind::AlertDialog,
+                    dismissible: !delete_pending(),
+                    on_close: move |_| { if !delete_pending() { delete_modal_open.set(false); } },
+                    div { class: "modal-header",
+                        h2 { id: "delete-league-title", class: "modal-title h5", tabindex: "-1", "Delete League" }
+                        button {
+                            r#type: "button", class: "btn-close", aria_label: "Close delete league confirmation",
+                            disabled: delete_pending(),
+                            onclick: move |_| { if !delete_pending() { delete_modal_open.set(false); } },
+                        }
+                    }
+                    div { class: "modal-body",
+                        if let Some(ref err) = delete_error() {
+                            div { id: "delete-league-error", class: "alert alert-danger mb-3", role: "alert", tabindex: "-1", "{err}" }
+                        }
+                        div { id: "delete-league-warning", class: "alert alert-danger",
+                            strong { "Warning: " }
+                            "This action cannot be undone. The league and all its events, registrations, and data will be permanently removed."
+                        }
+                        p { id: "delete-league-instructions", "To confirm, type the league URL exactly:" }
+                        p { class: "text-center mb-2", strong { "{league_url}" } }
+                        form {
+                            id: "delete-league-form",
+                            aria_busy: "{delete_pending()}",
+                            onsubmit: move |ev| {
+                                ev.prevent_default();
+                                if delete_pending() || delete_confirm_url() != url_for_delete_confirm {
+                                    return;
                                 }
-                                div { class: "alert alert-danger",
-                                    strong { "Warning: " }
-                                    "This action cannot be undone. The league and all its events, registrations, and data will be permanently removed."
-                                }
-                                p { "To confirm, type the league URL exactly:" }
-                                p { class: "text-center mb-2", strong { "{league_url}" } }
-                                form {
-                                    id: "delete-league-form",
-                                    onsubmit: move |ev| {
-                                        ev.prevent_default();
-                                        if delete_confirm_url() != url_for_delete_confirm {
-                                            return;
+                                delete_pending.set(true);
+                                delete_error.set(None);
+                                let nav = navigator.clone();
+                                let url_submit = url_for_delete_confirm.clone();
+                                let confirm = delete_confirm_url();
+                                spawn(async move {
+                                    let result = api::delete_league(&url_submit, &confirm).await;
+                                    delete_pending.set(false);
+                                    match result {
+                                        Ok(res) if res.success => {
+                                            delete_modal_open.set(false);
+                                            nav.push(Route::Index {});
                                         }
-                                        delete_error.set(None);
-                                        let nav = navigator.clone();
-                                        let url_submit = url_for_delete_confirm.clone();
-                                        let confirm = delete_confirm_url();
-                                        spawn(async move {
-                                            match api::delete_league(&url_submit, &confirm).await {
-                                                Ok(res) if res.success => {
-                                                    nav.push(Route::Index {});
-                                                }
-                                                Ok(res) => {
-                                                    delete_error.set(Some(res.error.unwrap_or_else(|| "Delete failed.".to_string())));
-                                                }
-                                                Err(e) => {
-                                                    delete_error.set(Some(e));
-                                                }
-                                            }
-                                        });
-                                    },
-                                    div { class: "mb-3",
-                                        label { class: "form-label", "League URL:" }
-                                        input {
-                                            class: "form-control",
-                                            name: "confirm_url",
-                                            r#type: "text",
-                                            placeholder: "{league_url}",
-                                            value: "{delete_confirm_url()}",
-                                            oninput: move |e| delete_confirm_url.set(e.value()),
+                                        Ok(res) => {
+                                            delete_error.set(Some(res.error.unwrap_or_else(|| "Delete failed.".to_string())));
+                                        }
+                                        Err(e) => {
+                                            delete_error.set(Some(e));
                                         }
                                     }
+                                });
+                            },
+                            div { class: "mb-3",
+                                label { class: "form-label", r#for: "delete-league-confirm-url", "League URL:" }
+                                input {
+                                    id: "delete-league-confirm-url", class: "form-control", name: "confirm_url", r#type: "text",
+                                    aria_describedby: "delete-league-instructions",
+                                    placeholder: "{league_url}", value: "{delete_confirm_url()}", required: true,
+                                    disabled: delete_pending(),
+                                    oninput: move |e| { if !delete_pending() { delete_confirm_url.set(e.value()); } },
                                 }
                             }
-                            div { class: "modal-footer",
-                                button { class: "btn btn-secondary", onclick: move |_| delete_modal_open.set(false), "Cancel" }
-                                button {
-                                    class: "btn btn-danger",
-                                    r#type: "submit",
-                                    form: "delete-league-form",
-                                    disabled: delete_confirm_url() != league_url,
-                                    "Delete League"
-                                }
-                            }
+                        }
+                    }
+                    div { class: "modal-footer",
+                        button {
+                            id: "delete-league-cancel", r#type: "button", class: "btn btn-secondary", disabled: delete_pending(),
+                            onclick: move |_| { if !delete_pending() { delete_modal_open.set(false); } },
+                            "Cancel"
+                        }
+                        button {
+                            class: "btn btn-danger", r#type: "submit", form: "delete-league-form",
+                            disabled: delete_pending() || delete_confirm_url() != league_url,
+                            if delete_pending() { "Deleting…" } else { "Delete League" }
                         }
                     }
                 }

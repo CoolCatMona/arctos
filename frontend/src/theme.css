@@ -143,9 +143,10 @@
   --bs-info-text-emphasis: var(--ui-info-text);
   --bs-info-bg-subtle: var(--ui-info-soft);
   --bs-info-border-subtle: var(--ui-info-border);
-  --header-height: 76px;
+  --header-height: calc(76px + env(safe-area-inset-top, 0px));
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
   min-height: 100dvh;
   background: var(--ui-bg);
   color: var(--bs-body-color);
@@ -504,14 +505,14 @@
 .arctos-app a { text-underline-offset: .2em; }
 .arctos-app .text-muted, .arctos-app .muted { color: var(--bs-secondary-color) !important; }
 .arctos-app .error { color: var(--ui-danger-text); }
-.arctos-app .container-wide { width: 100%; max-width: 1440px; margin-inline: auto; padding-inline: max(24px, env(safe-area-inset-left)); }
+.arctos-app .container-wide { width: 100%; max-width: 1440px; margin-inline: auto; padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: max(24px, env(safe-area-inset-right, 0px)); }
 .arctos-app .app-main { flex: 1; padding-block: 32px 56px; min-width: 0; }
 .arctos-app .row > *, .arctos-app .flex-grow-1 { min-width: 0; }
-.arctos-app .skip-link { position: fixed; top: -100px; left: 16px; z-index: 2000; padding: 12px 20px; background: var(--ui-surface); color: var(--ui-accent-text); border-radius: 8px; }
-.arctos-app .skip-link:focus { top: 8px; }
+.arctos-app .skip-link { position: fixed; top: -100px; left: max(16px, env(safe-area-inset-left, 0px)); max-width: calc(100% - max(16px, env(safe-area-inset-left, 0px)) - max(16px, env(safe-area-inset-right, 0px))); z-index: 2000; padding: 12px 20px; background: var(--ui-surface); color: var(--ui-accent-text); border-radius: 8px; }
+.arctos-app .skip-link:focus { top: max(8px, env(safe-area-inset-top, 0px)); }
 /* Navigation: a stable, visible row on phones instead of hidden essentials. */
 .arctos-app .app-header { position: sticky; top: 0; z-index: 1030; background: var(--ui-nav-surface); border-bottom: 1px solid var(--ui-nav-border); padding-top: env(safe-area-inset-top); }
-.arctos-app .app-header-inner { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 20px; max-width: 1440px; min-height: 76px; margin-inline: auto; padding-inline: 24px; }
+.arctos-app .app-header-inner { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 20px; max-width: 1440px; min-height: 76px; margin-inline: auto; padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: max(24px, env(safe-area-inset-right, 0px)); }
 .arctos-app .app-brand { display: inline-flex; align-items: center; gap: 10px; width: fit-content; color: var(--ui-nav-text); text-decoration: none; font-size: 1.25rem; font-weight: 700; letter-spacing: -.035em; }
 .arctos-app .brand-mark { width: 34px; height: 34px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--ui-gradient-start), var(--ui-gradient-end)); color: var(--ui-gradient-contrast); border-radius: 9px; font-size: 16px; }
 .arctos-app .app-nav { display: flex; gap: 3px; align-items: center; min-width: 0; }
@@ -523,7 +524,7 @@
 .arctos-app .app-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--ui-text); text-decoration: none; }
 .arctos-app .app-icon-button:hover { background: var(--ui-surface-hover); }
 .arctos-app .account-menu { position: relative; }
-.arctos-app .account-dropdown { position: absolute; z-index: 2; top: calc(100% + 12px); right: 0; width: min(310px, calc(100vw - 32px)); max-height: calc(100dvh - 100px); overflow-y: auto; overscroll-behavior: contain; padding: 8px; background: var(--ui-surface); border: 1px solid var(--bs-border-color); border-radius: 12px; box-shadow: 0 12px 40px var(--ui-shadow-strong); }
+.arctos-app .account-dropdown { position: absolute; z-index: 2; top: calc(100% + 12px); right: 0; width: min(310px, calc(100vw - 32px)); max-height: calc(100vh - 100px); max-height: calc(100dvh - 100px); overflow-y: auto; overscroll-behavior: contain; padding: 8px; background: var(--ui-surface); border: 1px solid var(--bs-border-color); border-radius: 12px; box-shadow: 0 12px 40px var(--ui-shadow-strong); }
 .arctos-app .account-identity { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-bottom: 1px solid var(--bs-border-color); margin-bottom: 8px; overflow-wrap: anywhere; }
 .arctos-app .account-identity span { font-size: .8rem; }
 .arctos-app .account-dismiss { position: fixed; inset: 0; background: transparent; border: 0; z-index: 1; cursor: default; }
@@ -713,7 +714,7 @@
 .arctos-app .pagination { flex-wrap: wrap; row-gap: 8px; }
 .arctos-app .loading-state { padding: 64px 24px; text-align: center; color: var(--ui-muted); }
 .arctos-app .modal-dialog { margin-block: max(16px, env(safe-area-inset-top)); }
-.arctos-app .modal-content { border-radius: 14px; border-color: var(--ui-border); box-shadow: 0 24px 80px var(--ui-shadow-strong); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.arctos-app .modal-content { border-radius: 14px; border-color: var(--ui-border); box-shadow: 0 24px 80px var(--ui-shadow-strong); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow-y: auto; }
 .arctos-app .modal-header, .arctos-app .modal-footer { padding: 16px 24px; gap: 12px; border-color: var(--bs-border-color); }
 .arctos-app .modal-body { padding: 24px; }
 .arctos-app .modal-footer { flex-wrap: wrap; }
@@ -760,6 +761,7 @@
 .arctos-app .form-column { width: 100%; max-width: 760px; }
 .arctos-app .auth-card { overflow: hidden; }
 .arctos-app .auth-card .card-header { background: var(--ui-surface); padding-top: 28px; text-align: center; }
+.arctos-app .auth-switch-link { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding-inline: 4px; white-space: nowrap; }
 .arctos-app .auth-eyebrow { color: var(--ui-link); font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .arctos-app .account-type-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
 .arctos-app .account-type-option { border: 1px solid var(--ui-control-border); border-radius: 10px; background: var(--ui-surface); padding: 16px; color: var(--ui-text); text-decoration: none; display: flex; flex-direction: column; text-align: left; gap: 6px; }
@@ -794,17 +796,17 @@
   .arctos-app .app-nav-link { padding-inline: 9px; }
 }
 @media (max-width: 991.98px) {
-  .arctos-app { --header-height: 120px; }
-  .arctos-app .app-header-inner { grid-template-columns: 1fr auto; gap: 0 16px; padding-inline: 16px; }
+  .arctos-app { --header-height: calc(120px + env(safe-area-inset-top, 0px)); }
+  .arctos-app .app-header-inner { grid-template-columns: 1fr auto; gap: 0 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   .arctos-app .app-brand, .arctos-app .app-header-actions { min-height: 64px; }
   .arctos-app .app-nav { grid-row: 2; grid-column: 1 / -1; padding-bottom: 8px; overflow-x: auto; scrollbar-width: none; }
   .arctos-app .app-nav::-webkit-scrollbar { display: none; }
   .arctos-app .app-nav-link { flex: 1; padding-inline: 12px; }
 }
 @media (max-width: 575.98px) {
-  .arctos-app .container-wide { padding-inline: max(16px, env(safe-area-inset-left)); }
+  .arctos-app .container-wide { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   .arctos-app .app-main { padding-block: 24px 36px; }
-  .arctos-app .app-header-inner { padding-inline: max(16px, env(safe-area-inset-left)); }
+  .arctos-app .app-header-inner { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   .arctos-app .app-nav-link { gap: 5px; padding-inline: 8px; font-size: .78rem; }
   .arctos-app .card-body { padding: 20px; }
   .arctos-app .card-header, .arctos-app .card-footer { padding: 16px 20px; }
@@ -813,12 +815,19 @@
   .arctos-app .form-check-label { padding-block: 5px; }
   .arctos-app .table td, .arctos-app .table th { padding: 10px; }
   .arctos-app .modal-dialog { margin: 8px; }
-  .arctos-app .modal-content { max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  .arctos-app .modal-content { max-height: calc(100vh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
   .arctos-app .modal-body, .arctos-app .modal-header, .arctos-app .modal-footer { padding: 16px; }
   .arctos-app .modal-footer > .btn { flex: 1; }
   .arctos-app .event-actions .btn { flex: 1 1 auto; }
   .arctos-app .footer-top, .arctos-app .footer-bottom { align-items: flex-start; flex-direction: column; }
   .arctos-app .footer-links { gap: 0 20px; }
+}
+/* Touch devices retain readable editable text in landscape as well as portrait.
+   Low specificity preserves intentional larger controls, such as the live count. */
+@media (any-pointer: coarse) {
+  .arctos-app :is(input, textarea).form-control,
+  .arctos-app select.form-select,
+  .arctos-app :where(input:not([type="button"], [type="submit"], [type="reset"], [type="image"], [type="hidden"], [type="checkbox"], [type="radio"], [type="range"], [type="color"]), textarea, select) { font-size: max(16px, 1em); }
 }
 @media (prefers-reduced-motion: reduce) {
   .arctos-app *, .arctos-app *::before, .arctos-app *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
@@ -829,7 +838,7 @@
 
 /* Keep every primary destination visible at phone widths. */
 @media (max-width: 575.98px) {
-  .arctos-app { --header-height: 124px; }
+  .arctos-app { --header-height: calc(124px + env(safe-area-inset-top, 0px)); }
   .arctos-app .app-nav-link { flex: 1 1 0; flex-direction: column; gap: 3px; min-width: 0; min-height: 50px; padding: 6px 2px; font-size: .75rem; }
   .arctos-app .app-nav-link i { font-size: .875rem; }
   .arctos-app .league-events .list-group-item { display: flex; flex-direction: column; align-items: flex-start !important; gap: 6px; padding-inline: 0; }

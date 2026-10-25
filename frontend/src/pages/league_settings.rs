@@ -503,8 +503,9 @@ pub fn LeagueSettings(league_url: String) -> Element {
                                     id: "to_user_id",
                                     name: "to_user_id",
                                     r#type: "text",
-                                    placeholder: "Case-sensitive",
+                                    placeholder: "Case-sensitive", required: true, aria_describedby: "organizer-id-help",
                                 }
+                                p { id: "organizer-id-help", class: "form-text", "Enter the exact player or team username, including its capitalization." }
                             }
                             div { class: "col-auto",
                                 button { r#type: "submit", class: "btn btn-primary btn-sm", "Add organizer" }

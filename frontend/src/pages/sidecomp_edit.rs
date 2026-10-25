@@ -144,7 +144,7 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                     div { class: "mb-3",
                         label { class: "form-label", r#for: "sidecomp-name", "Name" }
                         input {
-                            id: "sidecomp-name",
+                            id: "sidecomp-name", required: true,
                             class: "form-control",
                             r#type: "text",
                             value: "{name}",
@@ -166,19 +166,19 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                     div { class: "mb-3",
                         label { class: "form-label", r#for: "sidecomp-description", "Description" }
                         textarea {
-                            id: "sidecomp-description",
+                            id: "sidecomp-description", aria_describedby: "sidecomp-description-help",
                             class: "form-control",
                             rows: "4",
                             value: "{description}",
                             oninput: move |evt| description.set(evt.value()),
                         }
-                        div { class: "form-text", "Optional. Leave blank to clear." }
+                        div { id: "sidecomp-description-help", class: "form-text", "Optional. Leave blank to clear." }
                     }
                     div { class: "mb-3 form-check",
                         input {
                             class: "form-check-input",
                             r#type: "checkbox",
-                            id: "registration-open-toggle",
+                            id: "registration-open-toggle", aria_describedby: "registration-open-toggle-help",
                             checked: registration_open(),
                             onchange: move |evt| registration_open.set(evt.checked()),
                         }
@@ -187,7 +187,7 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                             r#for: "registration-open-toggle",
                             "Registration open"
                         }
-                        div { class: "form-text",
+                        div { id: "registration-open-toggle-help", class: "form-text",
                             "When unchecked, only organizers can register players."
                         }
                     }
@@ -195,7 +195,7 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                         input {
                             class: "form-check-input",
                             r#type: "checkbox",
-                            id: "active-toggle",
+                            id: "active-toggle", aria_describedby: "active-toggle-help",
                             checked: active(),
                             disabled: finalized(),
                             onchange: move |evt| active.set(evt.checked()),
@@ -205,7 +205,7 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                             r#for: "active-toggle",
                             "Active"
                         }
-                        div { class: "form-text",
+                        div { id: "active-toggle-help", class: "form-text",
                             if finalized() {
                                 "Results are finalized; this side competition cannot be activated again."
                             } else {
@@ -239,7 +239,7 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                             input {
                                 class: "form-check-input",
                                 r#type: "checkbox",
-                                id: "track-break-losses-toggle",
+                                id: "track-break-losses-toggle", aria_describedby: "track-break-losses-toggle-help",
                                 checked: track_break_losses(),
                                 onchange: move |evt| track_break_losses.set(evt.checked()),
                             }
@@ -248,7 +248,7 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                                 r#for: "track-break-losses-toggle",
                                 "Track losses (breakers)"
                             }
-                            div { class: "form-text",
+                            div { id: "track-break-losses-toggle-help", class: "form-text",
                                 "When unchecked, only wins are entered and ranked for that group."
                             }
                         }
@@ -257,7 +257,7 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                             input {
                                 class: "form-check-input",
                                 r#type: "checkbox",
-                                id: "track-losses-toggle",
+                                id: "track-losses-toggle", aria_describedby: "track-losses-toggle-help",
                                 checked: track_losses(),
                                 onchange: move |evt| track_losses.set(evt.checked()),
                             }
@@ -266,7 +266,7 @@ pub fn SideCompEdit(url: String, comp_id: i32) -> Element {
                                 r#for: "track-losses-toggle",
                                 "Track losses"
                             }
-                            div { class: "form-text",
+                            div { id: "track-losses-toggle-help", class: "form-text",
                                 "When checked, standings rank by win percentage. Otherwise, only wins are entered and ranked."
                             }
                         }

@@ -755,8 +755,8 @@ pub fn TournamentSettings(url: String) -> Element {
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
                                             label { r#for: "max_team_size_roster", class: "form-label", "Max Team Size (Roster)" }
-                                            input { r#type: "number", class: "form-control", id: "max_team_size_roster", name: "max_team_size_roster", value: draft_values.read().get("max_team_size_roster").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("max_team_size_roster".into(), event.value()); }, min: "1" }
-                                            div { class: "form-text", "Maximum players on team roster" }
+                                            input { r#type: "number", class: "form-control", id: "max_team_size_roster", aria_describedby: "max_team_size_roster-help", name: "max_team_size_roster", value: draft_values.read().get("max_team_size_roster").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("max_team_size_roster".into(), event.value()); }, min: "1" }
+                                            div { id: "max_team_size_roster-help", class: "form-text", "Maximum players on team roster" }
                                         }
                                     }
                                 }
@@ -765,8 +765,8 @@ pub fn TournamentSettings(url: String) -> Element {
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
                                             label { r#for: "max_team_size_field", class: "form-label", "Max Team Size (Field)" }
-                                            input { r#type: "number", class: "form-control", id: "max_team_size_field", name: "max_team_size_field", value: draft_values.read().get("max_team_size_field").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("max_team_size_field".into(), event.value()); }, min: "1" }
-                                            div { class: "form-text", "Maximum players on field at once" }
+                                            input { r#type: "number", class: "form-control", id: "max_team_size_field", aria_describedby: "max_team_size_field-help", name: "max_team_size_field", value: draft_values.read().get("max_team_size_field").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("max_team_size_field".into(), event.value()); }, min: "1" }
+                                            div { id: "max_team_size_field-help", class: "form-text", "Maximum players on field at once" }
                                         }
                                     }
                                 }
@@ -912,22 +912,22 @@ pub fn TournamentSettings(url: String) -> Element {
                                     p { class: "form-text", "Tell referees how these permissions work before play. A started match cannot be unstarted." }
                                 div { class: "mb-3",
                                     label { r#for: "head_refs_allowed_list", class: "form-label", "Explicit List of Allowed Usernames" }
-                                    input { r#type: "text", class: "form-control", id: "head_refs_allowed_list", name: "head_refs_allowed_list", value: draft_values.read().get("head_refs_allowed_list").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("head_refs_allowed_list".into(), event.value()); }, placeholder: "player1,player2,player3" }
-                                    div { class: "form-text", "Comma-separated list of player IDs who can ref matches" }
+                                    input { r#type: "text", class: "form-control", id: "head_refs_allowed_list", aria_describedby: "head_refs_allowed_list-help", name: "head_refs_allowed_list", value: draft_values.read().get("head_refs_allowed_list").cloned().unwrap_or_default(), oninput: move |event| { draft_values.write().insert("head_refs_allowed_list".into(), event.value()); }, placeholder: "player1,player2,player3" }
+                                    div { id: "head_refs_allowed_list-help", class: "form-text", "Comma-separated list of player IDs who can ref matches" }
                                 }
                                 div { class: "mb-3",
                                     div { class: "form-check",
-                                        input { class: "form-check-input", r#type: "checkbox", id: "head_refs_allow_anyone", name: "head_refs_allow_anyone", checked: draft_checks.read().get("head_refs_allow_anyone").copied().unwrap_or(false), onchange: move |event| { draft_checks.write().insert("head_refs_allow_anyone".into(), event.checked()); } }
+                                        input { class: "form-check-input", r#type: "checkbox", id: "head_refs_allow_anyone", aria_describedby: "head_refs_allow_anyone-help", name: "head_refs_allow_anyone", checked: draft_checks.read().get("head_refs_allow_anyone").copied().unwrap_or(false), onchange: move |event| { draft_checks.write().insert("head_refs_allow_anyone".into(), event.checked()); } }
                                         label { class: "form-check-label", r#for: "head_refs_allow_anyone", "Allow all registered players to run matches" }
-                                        div { class: "form-text", "When enabled, players who are registered for the tournament can head ref all matches." }
+                                        div { id: "head_refs_allow_anyone-help", class: "form-text", "When enabled, players who are registered for the tournament can head ref all matches." }
                                     }
                                 }
                                 div { id: "head_ref_specific_options",
                                     div { class: "mb-3",
                                         div { class: "form-check",
-                                            input { class: "form-check-input", r#type: "checkbox", id: "head_refs_allow_reffing_teams", name: "head_refs_allow_reffing_teams", checked: draft_checks.read().get("head_refs_allow_reffing_teams").copied().unwrap_or(false), onchange: move |event| { draft_checks.write().insert("head_refs_allow_reffing_teams".into(), event.checked()); } }
+                                            input { class: "form-check-input", r#type: "checkbox", id: "head_refs_allow_reffing_teams", aria_describedby: "head_refs_allow_reffing_teams-help", name: "head_refs_allow_reffing_teams", checked: draft_checks.read().get("head_refs_allow_reffing_teams").copied().unwrap_or(false), onchange: move |event| { draft_checks.write().insert("head_refs_allow_reffing_teams".into(), event.checked()); } }
                                             label { class: "form-check-label", r#for: "head_refs_allow_reffing_teams", "Allow reffing teams to head ref" }
-                                            div { class: "form-text", "When enabled, players on teams assigned to ref a match can head ref that match." }
+                                            div { id: "head_refs_allow_reffing_teams-help", class: "form-text", "When enabled, players on teams assigned to ref a match can head ref that match." }
                                         }
                                     }
                                 }
@@ -1111,8 +1111,9 @@ pub fn TournamentSettings(url: String) -> Element {
                                         id: "to_user_id",
                                         name: "to_user_id",
                                         r#type: "text",
-                                        placeholder: "Case-sensitive",
+                                        placeholder: "Case-sensitive", required: true, aria_describedby: "organizer-id-help",
                                     }
+                                    p { id: "organizer-id-help", class: "form-text", "Enter the exact player or team username, including its capitalization." }
                                 }
                                 div { class: "col-auto",
                                     button { r#type: "submit", class: "btn btn-primary btn-sm", "Add organizer" }

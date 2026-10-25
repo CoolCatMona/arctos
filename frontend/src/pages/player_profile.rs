@@ -1,5 +1,5 @@
 use crate::api;
-use crate::components::{EventTab, EventTabs, PenaltyDisplay, ProfileHeader, ProfileBio};
+use crate::components::{EventTab, EventTabs, Modal, PenaltyDisplay, ProfileHeader, ProfileBio};
 use crate::components::{PaymentStatusBadge, RecordTimestamp, RegistrationStatusBadge, WaiverStatusBadge};
 use crate::types::{NoteMatchInfo, PlayerInjury, PlayerNoteItem};
 use crate::Route;
@@ -644,22 +644,20 @@ pub fn PlayerProfile(id: Signal<String>, tab: String) -> Element {
                             }
                         }
                     }
-                    if penalty_desc_modal().is_some() {
-                        div { class: "modal show", style: "display: block;",
-                            div { class: "modal-dialog modal-dialog-centered",
-                                div { class: "modal-content",
-                                    div { class: "modal-header",
-                                        h5 { class: "modal-title", "Penalty description" }
-                                        button { r#type: "button", class: "btn-close", onclick: move |_| penalty_desc_modal.set(None) }
-                                    }
-                                    div { class: "modal-body", "{penalty_desc_modal().as_ref().unwrap_or(&String::new())}" }
-                                    div { class: "modal-footer",
-                                        button { r#type: "button", class: "btn btn-secondary", onclick: move |_| penalty_desc_modal.set(None), "Close" }
-                                    }
-                                }
+                    if let Some(description) = penalty_desc_modal() {
+                        Modal {
+                            id: "player-penalty-description-dialog",
+                            labelled_by: "player-penalty-description-title",
+                            on_close: move |_| penalty_desc_modal.set(None),
+                            div { class: "modal-header",
+                                h2 { id: "player-penalty-description-title", class: "modal-title h5", tabindex: "-1", "Penalty description" }
+                                button { r#type: "button", class: "btn-close", aria_label: "Close penalty description", onclick: move |_| penalty_desc_modal.set(None) }
+                            }
+                            div { class: "modal-body", "{description}" }
+                            div { class: "modal-footer",
+                                button { r#type: "button", class: "btn btn-secondary", onclick: move |_| penalty_desc_modal.set(None), "Close" }
                             }
                         }
-                        div { class: "modal-backdrop show" }
                     }
             }
             }

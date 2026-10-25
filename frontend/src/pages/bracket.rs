@@ -13,6 +13,7 @@ use wasm_bindgen::{JsCast, JsValue};
 
 use super::legacy_bracket::LegacyBracketDiagrams;
 use super::tournament_home::TournamentHomeContent;
+use crate::components::Modal;
 use crate::display::short_or_truncate;
 use crate::pages::TeamSelectionField;
 use crate::types::{
@@ -1549,6 +1550,16 @@ enum ActiveModal {
     LegacyManage,
 }
 
+/// Only the first editor for a newly created node may roll it back on dismissal.
+fn dismisses_provisional_node(modal: &ActiveModal, pending: Option<&(String, String)>) -> bool {
+    let Some((kind, pending_id)) = pending else { return false; };
+    match modal {
+        ActiveModal::EditText { id } => kind == "text" && pending_id == id,
+        ActiveModal::EditLabeledTeam { id } => kind == "labeled" && pending_id == id,
+        _ => false,
+    }
+}
+
 impl Default for ActiveModal {
     fn default() -> Self {
         Self::None
@@ -1688,6 +1699,20 @@ fn BracketContent(url: String) -> Element {
     /// When set, Cancel on the edit dialog deletes this just-created element.
     /// Cleared after the first Save (subsequent edits keep the element on cancel).
     let mut pending_create = use_signal(|| None::<(String, String)>);
+    // Native Escape, X and Cancel share exactly the same provisional rollback.
+    let modal_cancel_url = url.clone();
+    let close_editor_modal = EventHandler::<()>::new(move |_| {
+        if saving() { return; }
+        let pending = pending_create();
+        if dismisses_provisional_node(&active_modal(), pending.as_ref()) {
+            pending_create.set(None);
+            cancel_pending_create(
+                pending, local_texts, local_labeled, local_images, dirty,
+                modal_cancel_url.clone(), local_matches, saving, canvas_size,
+            );
+        }
+        active_modal.set(ActiveModal::None);
+    });
     let navigator = use_navigator();
     let mut pointer_gesture = use_signal(|| None::<PointerGesture>);
     let mut begin_pointer_gesture = move |ev: &Event<PointerData>| {
@@ -2228,15 +2253,7 @@ fn BracketContent(url: String) -> Element {
                                 ev.prevent_default();
                                 // Esc on a just-created element cancels creation (deletes it).
                                 let pend = pending_create();
-                                let should_cancel = match &modal {
-                                    ActiveModal::EditText { id } => {
-                                        pend.as_ref().map(|(k, i)| k == "text" && i == id).unwrap_or(false)
-                                    }
-                                    ActiveModal::EditLabeledTeam { id } => {
-                                        pend.as_ref().map(|(k, i)| k == "labeled" && i == id).unwrap_or(false)
-                                    }
-                                    _ => false,
-                                };
+                                let should_cancel = dismisses_provisional_node(&modal, pend.as_ref());
                                 if should_cancel {
                                     pending_create.set(None);
                                     cancel_pending_create(
@@ -3912,80 +3929,80 @@ fn BracketContent(url: String) -> Element {
                         // ---- Modals ----
 
                         if active_modal() == ActiveModal::AddMatch && edit_mode() {
-                            div { class: "bracket-add-modal-backdrop",
-                                onclick: move |_| { active_modal.set(ActiveModal::None); focus_bracket_root(); },
-                                div { class: "bracket-add-modal",
-                                    onclick: move |ev: Event<MouseData>| ev.stop_propagation(),
-                                    div { class: "bracket-add-modal-header",
-                                        h5 { class: "mb-0", "Add Match" }
-                                        button { class: "btn-close", onclick: move |_| { active_modal.set(ActiveModal::None); focus_bracket_root(); } }
-                                    }
-                                    div { class: "bracket-add-modal-body", style: "overflow: scroll",
-                                        div { class: "px-3 pb-2",
-                                            input {
-                                                class: "form-control form-control-sm",
-                                                r#type: "search",
-                                                placeholder: "Filter matches…",
-                                                value: "{add_q}",
-                                                oninput: move |e| add_match_query.set(e.value()),
-                                                onmounted: move |ev| {
-                                                    spawn(async move { let _ = ev.data().set_focus(true).await; });
-                                                },
-                                            }
+                            Modal {
+                                id: "bracket-add-match-dialog",
+                                labelled_by: "bracket-add-match-title",
+                                return_focus_id: Some("bracket-keyboard-focus".to_string()),
+                                initial_focus_id: Some("bracket-add-match-filter".to_string()),
+                                dismissible: !saving(),
+                                on_close: close_editor_modal,
+                                div { class: "modal-header",
+                                    h2 { id: "bracket-add-match-title", class: "modal-title h5", tabindex: "-1", "Add Match" }
+                                    button { r#type: "button", class: "btn-close", aria_label: "Close dialog", disabled: saving(), onclick: move |_| close_editor_modal.call(()) }
+                                }
+                                div { class: "modal-body",
+                                    div { class: "px-3 pb-2",
+                                        input {
+                                            id: "bracket-add-match-filter",
+                                            class: "form-control form-control-sm",
+                                            r#type: "search",
+                                            placeholder: "Filter matches…", aria_label: "Filter matches to add",
+                                            value: "{add_q}",
+                                            oninput: move |e| add_match_query.set(e.value()),
                                         }
-                                        if filtered_add_matches.is_empty() {
-                                            p { class: "text-muted px-3 py-2 mb-0",
-                                                if matches_snap.is_empty() { "No playable matches in this tournament." }
-                                                else { "No matches match your filter." }
-                                            }
-                                        } else {
-                                            for m in filtered_add_matches.iter() {
-                                                {
-                                                    let mid = m.uuid.clone();
-                                                    let mname = m.name.clone();
-                                                    let t1 = m.team1_name.clone();
-                                                    let t2 = m.team2_name.clone();
-                                                    let already = is_placed(m);
-                                                    rsx! {
-                                                        button {
-                                                            key: "{mid}",
-                                                            class: if already {
-                                                                "bracket-add-match-item already-placed"
-                                                            } else {
-                                                                "bracket-add-match-item"
-                                                            },
-                                                            disabled: already,
-                                                            title: if already {
-                                                                "Already on the bracket"
-                                                            } else {
-                                                                "Add to bracket"
-                                                            },
-                                                            onclick: {
-                                                                let u = tournament_url.clone();
+                                    }
+                                    if filtered_add_matches.is_empty() {
+                                        p { class: "text-muted px-3 py-2 mb-0",
+                                            if matches_snap.is_empty() { "No playable matches in this tournament." }
+                                            else { "No matches match your filter." }
+                                        }
+                                    } else {
+                                        for m in filtered_add_matches.iter() {
+                                            {
+                                                let mid = m.uuid.clone();
+                                                let mname = m.name.clone();
+                                                let t1 = m.team1_name.clone();
+                                                let t2 = m.team2_name.clone();
+                                                let already = is_placed(m);
+                                                rsx! {
+                                                    button {
+                                                        key: "{mid}",
+                                                        class: if already {
+                                                            "bracket-add-match-item already-placed"
+                                                        } else {
+                                                            "bracket-add-match-item"
+                                                        },
+                                                        disabled: already,
+                                                        title: if already {
+                                                            "Already on the bracket"
+                                                        } else {
+                                                            "Add to bracket"
+                                                        },
+                                                        onclick: {
+                                                            let u = tournament_url.clone();
+                                                            let mid = mid.clone();
+                                                            move |_| {
+                                                                // Place in the current viewport at click time.
+                                                                let stagger = next_add_stagger(&local_matches(), &local_texts(), &local_labeled(), &local_images());
+                                                                let (nx, ny) = view_add_position(zoom(), pan(), stagger);
+                                                                active_modal.set(ActiveModal::None);
+                                                                if !saving.begin(dirty()) { return; }
+                                                                let u = u.clone();
                                                                 let mid = mid.clone();
-                                                                move |_| {
-                                                                    // Place in the current viewport at click time.
-                                                                    let stagger = next_add_stagger(&local_matches(), &local_texts(), &local_labeled(), &local_images());
-                                                                    let (nx, ny) = view_add_position(zoom(), pan(), stagger);
-                                                                    active_modal.set(ActiveModal::None);
-                                                                    if !saving.begin(dirty()) { return; }
-                                                                    let u = u.clone();
-                                                                    let mid = mid.clone();
-                                                                    spawn(async move {
-                                                                        match api::add_bracket_placement(&u, &mid, nx, ny).await { Ok(resp) => {
-                                                                            apply_layout(resp, local_matches, local_texts, local_labeled, local_images, dirty, canvas_size);
-                                                                        }, Err(message) => saving.fail(message), }
-                                                                        saving.set(false);
-                                                                        focus_bracket_root();
-                                                                    });
-                                                                }
-                                                            },
-                                                            strong { "{mname}" }
-                                                            div { class: "meta",
-                                                                "{t1} vs {t2}"
-                                                                if already {
-                                                                    span { class: "already-tag", " · on bracket" }
-                                                                }
+                                                                spawn(async move {
+                                                                    match api::add_bracket_placement(&u, &mid, nx, ny).await { Ok(resp) => {
+                                                                        apply_layout(resp, local_matches, local_texts, local_labeled, local_images, dirty, canvas_size);
+                                                                    }, Err(message) => saving.fail(message), }
+                                                                    saving.set(false);
+                                                                    focus_bracket_root();
+                                                                });
+                                                            }
+                                                        },
+                                                        strong { "{mname}" }
+                                                        div { class: "meta",
+                                                            "{t1} vs {t2}"
+                                                            if already {
+                                                                span { class: "already-tag", " · on bracket" }
                                                             }
                                                         }
                                                     }
@@ -3993,12 +4010,12 @@ fn BracketContent(url: String) -> Element {
                                             }
                                         }
                                     }
-                                    div { class: "bracket-add-modal-footer",
-                                        button {
-                                            class: "btn btn-outline-secondary btn-sm",
-                                            onclick: move |_| { active_modal.set(ActiveModal::None); focus_bracket_root(); },
-                                            "Close"
-                                        }
+                                }
+                                div { class: "modal-footer",
+                                    button {
+                                        r#type: "button", class: "btn btn-outline-secondary btn-sm", disabled: saving(),
+                                        onclick: move |_| close_editor_modal.call(()),
+                                        "Close"
                                     }
                                 }
                             }
@@ -4009,116 +4026,86 @@ fn BracketContent(url: String) -> Element {
                                 let tid = id.clone();
                                 let is_create = pending_create().as_ref().map(|(k, i)| k == "text" && i == &tid).unwrap_or(false);
                                 rsx! {
-                                    div { class: "bracket-add-modal-backdrop",
-                                        onclick: move |_| { /* ignore backdrop — use Cancel */ },
-                                        div { class: "bracket-add-modal",
-                                            onclick: move |ev: Event<MouseData>| ev.stop_propagation(),
-                                            div { class: "bracket-add-modal-header",
-                                                h5 { class: "mb-0", if is_create { "New Text" } else { "Edit Text" } }
-                                                button {
-                                                    class: "btn-close",
-                                                    onclick: {
-                                                        let tid = tid.clone();
-                                                        let u = tournament_url.clone();
-                                                        move |_| {
-                                                            let pend = pending_create();
-                                                            if pend.as_ref().map(|(k, i)| k == "text" && i == &tid).unwrap_or(false) {
-                                                                pending_create.set(None);
-                                                                cancel_pending_create(
-                                                                    pend, local_texts, local_labeled, local_images, dirty,
-                                                                    u.clone(), local_matches, saving, canvas_size,
-                                                                );
-                                                            }
-                                                            active_modal.set(ActiveModal::None);
-                                                            focus_bracket_root();
-                                                        }
-                                                    },
-                                                }
+                                    Modal {
+                                        id: "bracket-text-dialog",
+                                        labelled_by: "bracket-text-title",
+                                        return_focus_id: Some("bracket-keyboard-focus".to_string()),
+                                        initial_focus_id: Some("bracket-text-content".to_string()),
+                                        dismiss_on_backdrop: false,
+                                        dismissible: !saving(),
+                                        on_close: close_editor_modal,
+                                        div { class: "modal-header",
+                                            h2 { id: "bracket-text-title", class: "modal-title h5", tabindex: "-1", if is_create { "New Text" } else { "Edit Text" } }
+                                            button {
+                                                r#type: "button", class: "btn-close", aria_label: "Close dialog", disabled: saving(),
+                                                onclick: move |_| close_editor_modal.call(()),
                                             }
-                                            div { class: "bracket-add-modal-body px-3 py-2",
-                                                label { class: "form-label", "Text" }
-                                                textarea {
-                                                    class: "form-control mb-2",
-                                                    rows: "3",
-                                                    value: "{text_draft}",
-                                                    oninput: move |e| text_draft.set(e.value()),
-                                                    onmounted: move |ev| {
-                                                        spawn(async move { let _ = ev.data().set_focus(true).await; });
-                                                    },
-                                                }
-                                                label { class: "form-label", "Font size (px)" }
-                                                input {
-                                                    class: "form-control",
-                                                    r#type: "number",
-                                                    min: "8",
-                                                    max: "200",
-                                                    value: "{text_size_draft()}",
-                                                    oninput: move |e| {
-                                                        if let Ok(v) = e.value().parse::<f64>() {
-                                                            text_size_draft.set(v.clamp(8.0, 200.0));
-                                                        }
-                                                    },
-                                                }
+                                        }
+                                        div { class: "modal-body px-3 py-2",
+                                            label { r#for: "bracket-text-content", class: "form-label", "Text" }
+                                            textarea { id: "bracket-text-content",
+                                                class: "form-control mb-2",
+                                                rows: "3",
+                                                value: "{text_draft}",
+                                                oninput: move |e| text_draft.set(e.value()),
                                             }
-                                            div { class: "bracket-add-modal-footer",
-                                                button {
-                                                    class: "btn btn-primary btn-sm",
-                                                    onclick: {
-                                                        let tid = tid.clone();
-                                                        let u = tournament_url.clone();
-                                                        move |_| {
-                                                            let mut ts = local_texts();
-                                                            if let Some(t) = ts.iter_mut().find(|t| t.id == tid) {
-                                                                t.text = text_draft();
-                                                                t.size = text_size_draft();
-                                                            }
-                                                            local_texts.set(ts);
-                                                            dirty.set(true);
-                                                            // First save commits creation — cancel no longer deletes.
-                                                            if pending_create().as_ref().map(|(k, i)| k == "text" && i == &tid).unwrap_or(false) {
-                                                                pending_create.set(None);
-                                                            }
-                                                            active_modal.set(ActiveModal::None);
-                                                            persist_all(
-                                                                    u.clone(),
-                                                                    local_matches(),
-                                                                    local_texts(),
-                                                                    local_labeled(),
-                                                                    local_images(),
-                                                                    true,
-                                                                    local_matches,
-                                                                    local_texts,
-                                                                    local_labeled,
-                                                                    local_images,
-                                                                    dirty,
-                                                                    saving,
-                                                                    canvas_size,
-                                                                );
-                                                            focus_bracket_root();
+                                            label { r#for: "bracket-text-size", class: "form-label", "Font size (px)" }
+                                            input { id: "bracket-text-size",
+                                                class: "form-control",
+                                                r#type: "number",
+                                                min: "8",
+                                                max: "200",
+                                                value: "{text_size_draft()}",
+                                                oninput: move |e| {
+                                                    if let Ok(v) = e.value().parse::<f64>() {
+                                                        text_size_draft.set(v.clamp(8.0, 200.0));
+                                                    }
+                                                },
+                                            }
+                                        }
+                                        div { class: "modal-footer",
+                                            button {
+                                                r#type: "button", class: "btn btn-primary btn-sm",
+                                                onclick: {
+                                                    let tid = tid.clone();
+                                                    let u = tournament_url.clone();
+                                                    move |_| {
+                                                        let mut ts = local_texts();
+                                                        if let Some(t) = ts.iter_mut().find(|t| t.id == tid) {
+                                                            t.text = text_draft();
+                                                            t.size = text_size_draft();
                                                         }
-                                                    },
-                                                    "Save"
-                                                }
-                                                button {
-                                                    class: "btn btn-outline-secondary btn-sm",
-                                                    onclick: {
-                                                        let tid = tid.clone();
-                                                        let u = tournament_url.clone();
-                                                        move |_| {
-                                                            let pend = pending_create();
-                                                            if pend.as_ref().map(|(k, i)| k == "text" && i == &tid).unwrap_or(false) {
-                                                                pending_create.set(None);
-                                                                cancel_pending_create(
-                                                                    pend, local_texts, local_labeled, local_images, dirty,
-                                                                    u.clone(), local_matches, saving, canvas_size,
-                                                                );
-                                                            }
-                                                            active_modal.set(ActiveModal::None);
-                                                            focus_bracket_root();
+                                                        local_texts.set(ts);
+                                                        dirty.set(true);
+                                                        // First save commits creation — cancel no longer deletes.
+                                                        if pending_create().as_ref().map(|(k, i)| k == "text" && i == &tid).unwrap_or(false) {
+                                                            pending_create.set(None);
                                                         }
-                                                    },
-                                                    "Cancel"
-                                                }
+                                                        active_modal.set(ActiveModal::None);
+                                                        persist_all(
+                                                                u.clone(),
+                                                                local_matches(),
+                                                                local_texts(),
+                                                                local_labeled(),
+                                                                local_images(),
+                                                                true,
+                                                                local_matches,
+                                                                local_texts,
+                                                                local_labeled,
+                                                                local_images,
+                                                                dirty,
+                                                                saving,
+                                                                canvas_size,
+                                                            );
+                                                        focus_bracket_root();
+                                                    }
+                                                },
+                                                "Save"
+                                            }
+                                            button {
+                                                r#type: "button", class: "btn btn-outline-secondary btn-sm", disabled: saving(),
+                                                onclick: move |_| close_editor_modal.call(()),
+                                                "Cancel"
                                             }
                                         }
                                     }
@@ -4131,129 +4118,99 @@ fn BracketContent(url: String) -> Element {
                                 let lid = id.clone();
                                 let is_create = pending_create().as_ref().map(|(k, i)| k == "labeled" && i == &lid).unwrap_or(false);
                                 rsx! {
-                                    div { class: "bracket-add-modal-backdrop",
-                                        onclick: move |_| { /* ignore backdrop — use Cancel */ },
-                                        div { class: "bracket-add-modal",
-                                            onclick: move |ev: Event<MouseData>| ev.stop_propagation(),
-                                            div { class: "bracket-add-modal-header",
-                                                h5 { class: "mb-0", if is_create { "New Team Label" } else { "Edit Team Label" } }
-                                                button {
-                                                    class: "btn-close",
-                                                    onclick: {
-                                                        let lid = lid.clone();
-                                                        let u = tournament_url.clone();
-                                                        move |_| {
-                                                            let pend = pending_create();
-                                                            if pend.as_ref().map(|(k, i)| k == "labeled" && i == &lid).unwrap_or(false) {
-                                                                pending_create.set(None);
-                                                                cancel_pending_create(
-                                                                    pend, local_texts, local_labeled, local_images, dirty,
-                                                                    u.clone(), local_matches, saving, canvas_size,
-                                                                );
-                                                            }
-                                                            active_modal.set(ActiveModal::None);
-                                                            focus_bracket_root();
-                                                        }
+                                    Modal {
+                                        id: "bracket-team-label-dialog",
+                                        labelled_by: "bracket-team-label-title",
+                                        return_focus_id: Some("bracket-keyboard-focus".to_string()),
+                                        initial_focus_id: Some("bracket-team-label".to_string()),
+                                        dismiss_on_backdrop: false,
+                                        dismissible: !saving(),
+                                        on_close: close_editor_modal,
+                                        div { class: "modal-header",
+                                            h2 { id: "bracket-team-label-title", class: "modal-title h5", tabindex: "-1", if is_create { "New Team Label" } else { "Edit Team Label" } }
+                                            button {
+                                                r#type: "button", class: "btn-close", aria_label: "Close dialog", disabled: saving(),
+                                                onclick: move |_| close_editor_modal.call(()),
+                                            }
+                                        }
+                                        div { class: "modal-body px-3 py-2",
+                                            div { class: "mb-2",
+                                                label { r#for: "bracket-team-label", class: "form-label", "Label" }
+                                                input { id: "bracket-team-label",
+                                                    class: "form-control",
+                                                    r#type: "text",
+                                                    maxlength: "50",
+                                                    value: "{label_draft}",
+                                                    placeholder: "e.g. Winner SF1",
+                                                    oninput: move |e| {
+                                                        let v = e.value();
+                                                        let trimmed: String = v.chars().take(50).collect();
+                                                        label_draft.set(trimmed);
                                                     },
                                                 }
+                                                div { class: "form-text", "Shown until the team is known (max 50 chars)." }
                                             }
-                                            div { class: "bracket-add-modal-body px-3 py-2",
-                                                div { class: "mb-2",
-                                                    label { class: "form-label", "Label" }
-                                                    input {
-                                                        class: "form-control",
-                                                        r#type: "text",
-                                                        maxlength: "50",
-                                                        value: "{label_draft}",
-                                                        placeholder: "e.g. Winner SF1",
-                                                        oninput: move |e| {
-                                                            let v = e.value();
-                                                            let trimmed: String = v.chars().take(50).collect();
-                                                            label_draft.set(trimmed);
-                                                        },
-                                                        onmounted: move |ev| {
-                                                            spawn(async move { let _ = ev.data().set_focus(true).await; });
-                                                        },
+                                            TeamSelectionField {
+                                                label: "Team".to_string(),
+                                                team_options: team_options.clone(),
+                                                tags: tags.clone(),
+                                                matches: setup_matches.clone(),
+                                                value: team_draft(),
+                                                on_change: move |s| team_draft.set(s),
+                                                multiple: false,
+                                                placeholder: "Team, Match::winner, tag::Name".to_string(),
+                                                help_text: Some("Explicit team, match winner/loser, or tag".to_string()),
+                                                wrapper_class: Some("mb-2 bracket-team-token".to_string()),
+                                            }
+                                        }
+                                        div { class: "modal-footer",
+                                            button {
+                                                r#type: "button", class: "btn btn-primary btn-sm",
+                                                onclick: {
+                                                    let lid = lid.clone();
+                                                    let u = tournament_url.clone();
+                                                    move |_| {
+                                                        let mut ls = local_labeled();
+                                                        if let Some(t) = ls.iter_mut().find(|t| t.id == lid) {
+                                                            t.label = label_draft().chars().take(50).collect();
+                                                            t.team = team_draft();
+                                                            // Reset display optimistically; server refresh fills resolved fields.
+                                                            t.display_text = t.team.clone();
+                                                            t.resolved = false;
+                                                            if is_net(&t.kind) && parse_match_ref(&t.team).is_none() {
+                                                                t.kind = "LABEL".into();
+                                                            }
+                                                        }
+                                                        local_labeled.set(ls);
+                                                        dirty.set(true);
+                                                        if pending_create().as_ref().map(|(k, i)| k == "labeled" && i == &lid).unwrap_or(false) {
+                                                            pending_create.set(None);
+                                                        }
+                                                        active_modal.set(ActiveModal::None);
+                                                        persist_all(
+                                                                u.clone(),
+                                                                local_matches(),
+                                                                local_texts(),
+                                                                local_labeled(),
+                                                                local_images(),
+                                                                true,
+                                                                local_matches,
+                                                                local_texts,
+                                                                local_labeled,
+                                                                local_images,
+                                                                dirty,
+                                                                saving,
+                                                                canvas_size,
+                                                            );
+                                                        focus_bracket_root();
                                                     }
-                                                    div { class: "form-text", "Shown until the team is known (max 50 chars)." }
-                                                }
-                                                TeamSelectionField {
-                                                    label: "Team".to_string(),
-                                                    team_options: team_options.clone(),
-                                                    tags: tags.clone(),
-                                                    matches: setup_matches.clone(),
-                                                    value: team_draft(),
-                                                    on_change: move |s| team_draft.set(s),
-                                                    multiple: false,
-                                                    placeholder: "Team, Match::winner, tag::Name".to_string(),
-                                                    help_text: Some("Explicit team, match winner/loser, or tag".to_string()),
-                                                    wrapper_class: Some("mb-2 bracket-team-token".to_string()),
-                                                }
+                                                },
+                                                "Save"
                                             }
-                                            div { class: "bracket-add-modal-footer",
-                                                button {
-                                                    class: "btn btn-primary btn-sm",
-                                                    onclick: {
-                                                        let lid = lid.clone();
-                                                        let u = tournament_url.clone();
-                                                        move |_| {
-                                                            let mut ls = local_labeled();
-                                                            if let Some(t) = ls.iter_mut().find(|t| t.id == lid) {
-                                                                t.label = label_draft().chars().take(50).collect();
-                                                                t.team = team_draft();
-                                                                // Reset display optimistically; server refresh fills resolved fields.
-                                                                t.display_text = t.team.clone();
-                                                                t.resolved = false;
-                                                                if is_net(&t.kind) && parse_match_ref(&t.team).is_none() {
-                                                                    t.kind = "LABEL".into();
-                                                                }
-                                                            }
-                                                            local_labeled.set(ls);
-                                                            dirty.set(true);
-                                                            if pending_create().as_ref().map(|(k, i)| k == "labeled" && i == &lid).unwrap_or(false) {
-                                                                pending_create.set(None);
-                                                            }
-                                                            active_modal.set(ActiveModal::None);
-                                                            persist_all(
-                                                                    u.clone(),
-                                                                    local_matches(),
-                                                                    local_texts(),
-                                                                    local_labeled(),
-                                                                    local_images(),
-                                                                    true,
-                                                                    local_matches,
-                                                                    local_texts,
-                                                                    local_labeled,
-                                                                    local_images,
-                                                                    dirty,
-                                                                    saving,
-                                                                    canvas_size,
-                                                                );
-                                                            focus_bracket_root();
-                                                        }
-                                                    },
-                                                    "Save"
-                                                }
-                                                button {
-                                                    class: "btn btn-outline-secondary btn-sm",
-                                                    onclick: {
-                                                        let lid = lid.clone();
-                                                        let u = tournament_url.clone();
-                                                        move |_| {
-                                                            let pend = pending_create();
-                                                            if pend.as_ref().map(|(k, i)| k == "labeled" && i == &lid).unwrap_or(false) {
-                                                                pending_create.set(None);
-                                                                cancel_pending_create(
-                                                                    pend, local_texts, local_labeled, local_images, dirty,
-                                                                    u.clone(), local_matches, saving, canvas_size,
-                                                                );
-                                                            }
-                                                            active_modal.set(ActiveModal::None);
-                                                            focus_bracket_root();
-                                                        }
-                                                    },
-                                                    "Cancel"
-                                                }
+                                            button {
+                                                r#type: "button", class: "btn btn-outline-secondary btn-sm", disabled: saving(),
+                                                onclick: move |_| close_editor_modal.call(()),
+                                                "Cancel"
                                             }
                                         }
                                     }
@@ -4262,155 +4219,167 @@ fn BracketContent(url: String) -> Element {
                         }
 
                         if active_modal() == ActiveModal::AddImage && edit_mode() {
-                            div { class: "bracket-add-modal-backdrop",
-                                onclick: move |_| { active_modal.set(ActiveModal::None); focus_bracket_root(); },
-                                div { class: "bracket-add-modal",
-                                    onclick: move |ev: Event<MouseData>| ev.stop_propagation(),
-                                    div { class: "bracket-add-modal-header",
-                                        h5 { class: "mb-0", "Add Image" }
-                                        button { class: "btn-close", onclick: move |_| { active_modal.set(ActiveModal::None); focus_bracket_root(); } }
-                                    }
-                                    div { class: "bracket-add-modal-body px-3 py-2",
-                                        p { class: "text-muted small", "Upload an image under 10 MB." }
-                                        input {
-                                            class: "form-control",
-                                            r#type: "file",
-                                            accept: "image/*",
-                                            onchange: {
-                                                let u = tournament_url.clone();
-                                                move |evt| {
-                                                    #[cfg(target_arch = "wasm32")]
-                                                    {
-                                                        use dioxus::html::HasFileData;
-                                                        let files = evt.files();
-                                                        if let Some(file) = files.into_iter().next() {
-                                                            let u = u.clone();
-                                                            let n = local_images().len() as f64;
-                                                            let stagger = next_add_stagger(&local_matches(), &local_texts(), &local_labeled(), &local_images());
-                                                            let (ax, ay) = view_add_position(zoom(), pan(), stagger);
-                                                            active_modal.set(ActiveModal::None);
-                                                            if !saving.begin(dirty()) { return; }
-                                                            spawn(async move {
-                                                                let filename = file.name();
-                                                                match file.read_bytes().await {
-                                                                    Ok(bytes) => {
-                                                                        if bytes.len() > 10 * 1024 * 1024 {
-                                                                            #[cfg(target_arch = "wasm32")]
-                                                                            saving.fail("Image must be under 10 MB");
-                                                                            saving.set(false);
-                                                                            return;
+                            Modal {
+                                id: "bracket-add-image-dialog",
+                                labelled_by: "bracket-add-image-title",
+                                return_focus_id: Some("bracket-keyboard-focus".to_string()),
+                                dismissible: !saving(),
+                                on_close: close_editor_modal,
+                                div { class: "modal-header",
+                                    h2 { id: "bracket-add-image-title", class: "modal-title h5", tabindex: "-1", "Add Image" }
+                                    button { r#type: "button", class: "btn-close", aria_label: "Close dialog", disabled: saving(), onclick: move |_| close_editor_modal.call(()) }
+                                }
+                                div { class: "modal-body px-3 py-2",
+                                    label { r#for: "bracket-image-file", class: "form-label", "Image file" }
+                                    p { id: "bracket-image-help", class: "text-muted small", "Upload an image under 10 MB." }
+                                    input { id: "bracket-image-file", aria_describedby: "bracket-image-help",
+                                        class: "form-control",
+                                        r#type: "file",
+                                        accept: "image/*",
+                                        onchange: {
+                                            let u = tournament_url.clone();
+                                            move |evt| {
+                                                #[cfg(target_arch = "wasm32")]
+                                                {
+                                                    use dioxus::html::HasFileData;
+                                                    let files = evt.files();
+                                                    if let Some(file) = files.into_iter().next() {
+                                                        let u = u.clone();
+                                                        let n = local_images().len() as f64;
+                                                        let stagger = next_add_stagger(&local_matches(), &local_texts(), &local_labeled(), &local_images());
+                                                        let (ax, ay) = view_add_position(zoom(), pan(), stagger);
+                                                        active_modal.set(ActiveModal::None);
+                                                        if !saving.begin(dirty()) { return; }
+                                                        spawn(async move {
+                                                            let filename = file.name();
+                                                            match file.read_bytes().await {
+                                                                Ok(bytes) => {
+                                                                    if bytes.len() > 10 * 1024 * 1024 {
+                                                                        #[cfg(target_arch = "wasm32")]
+                                                                        saving.fail("Image must be under 10 MB");
+                                                                        saving.set(false);
+                                                                        return;
+                                                                    }
+                                                                    match api::upload_bracket_image_bytes(&u, n as u32, &filename, bytes).await {
+                                                                        Ok(path) => {
+                                                                            match api::add_bracket_image_element(
+                                                                                &u, &path, ax, ay, 240.0, 160.0,
+                                                                            ).await { Ok(resp) => {
+                                                                                apply_layout(resp, local_matches, local_texts, local_labeled, local_images, dirty, canvas_size);
+                                                                            }, Err(message) => saving.fail(message), }
                                                                         }
-                                                                        match api::upload_bracket_image_bytes(&u, n as u32, &filename, bytes).await {
-                                                                            Ok(path) => {
-                                                                                match api::add_bracket_image_element(
-                                                                                    &u, &path, ax, ay, 240.0, 160.0,
-                                                                                ).await { Ok(resp) => {
-                                                                                    apply_layout(resp, local_matches, local_texts, local_labeled, local_images, dirty, canvas_size);
-                                                                                }, Err(message) => saving.fail(message), }
-                                                                            }
-                                                                            Err(e) => {
-                                                                                saving.fail(e);
-                                                                            }
+                                                                        Err(e) => {
+                                                                            saving.fail(e);
                                                                         }
                                                                     }
-                                                                    Err(message) => saving.fail(message.to_string()),
                                                                 }
-                                                                saving.set(false);
-                                                                focus_bracket_root();
-                                                            });
-                                                        }
+                                                                Err(message) => saving.fail(message.to_string()),
+                                                            }
+                                                            saving.set(false);
+                                                            focus_bracket_root();
+                                                        });
                                                     }
-                                                    #[cfg(not(target_arch = "wasm32"))]
-                                                    { let _ = (&evt, &u); }
                                                 }
-                                            },
-                                        }
+                                                #[cfg(not(target_arch = "wasm32"))]
+                                                { let _ = (&evt, &u); }
+                                            }
+                                        },
                                     }
-                                    div { class: "bracket-add-modal-footer",
-                                        button {
-                                            class: "btn btn-outline-secondary btn-sm",
-                                            onclick: move |_| { active_modal.set(ActiveModal::None); focus_bracket_root(); },
-                                            "Close"
-                                        }
+                                }
+                                div { class: "modal-footer",
+                                    button {
+                                        r#type: "button", class: "btn btn-outline-secondary btn-sm", disabled: saving(),
+                                        onclick: move |_| close_editor_modal.call(()),
+                                        "Close"
                                     }
                                 }
                             }
                         }
 
                         if active_modal() == ActiveModal::LegacyManage && is_to {
-                            div { class: "bracket-add-modal-backdrop",
-                                onclick: move |_| { active_modal.set(ActiveModal::None); focus_bracket_root(); },
-                                div { class: "bracket-add-modal", style: "max-width: 560px;",
-                                    onclick: move |ev: Event<MouseData>| ev.stop_propagation(),
-                                    div { class: "bracket-add-modal-header",
-                                        h5 { class: "mb-0", "Legacy brackets" }
-                                        button {
-                                            class: "btn-close",
-                                            onclick: move |_| { active_modal.set(ActiveModal::None); focus_bracket_root(); }
-                                        }
+                            Modal {
+                                id: "bracket-legacy-dialog",
+                                labelled_by: "bracket-legacy-title",
+                                return_focus_id: Some("bracket-keyboard-focus".to_string()),
+                                dismissible: !saving(),
+                                on_close: close_editor_modal,
+                                div { class: "modal-header",
+                                    h2 { id: "bracket-legacy-title", class: "modal-title h5", tabindex: "-1", "Legacy brackets" }
+                                    button {
+                                        r#type: "button", class: "btn-close", aria_label: "Close dialog", disabled: saving(),
+                                        onclick: move |_| close_editor_modal.call(())
                                     }
-                                    div { class: "bracket-add-modal-body px-3 py-2",
-                                        p { class: "small text-muted mb-2",
-                                            "These image-overlay brackets are from the old setup. Delete them once you no longer need them."
-                                        }
-                                        if legacy_snap.is_empty() {
-                                            p { class: "text-muted mb-0", "No legacy brackets configured." }
-                                        } else {
-                                            ul { class: "list-group list-group-flush",
-                                                for (idx, bracket) in legacy_snap.iter().enumerate() {
-                                                    {
-                                                        let bname = if bracket.name.is_empty() {
-                                                            format!("Bracket {}", idx + 1)
-                                                        } else {
-                                                            bracket.name.clone()
-                                                        };
-                                                        let bimg = bracket.image.clone();
-                                                        let idx_u = idx;
-                                                        let u = tournament_url.clone();
-                                                        rsx! {
-                                                            li {
-                                                                class: "list-group-item d-flex align-items-center justify-content-between gap-2 px-0",
-                                                                key: "{idx_u}-{bname}",
-                                                                div { class: "d-flex align-items-center gap-2 min-w-0",
-                                                                    img {
-                                                                        src: "{backend}/static/{bimg}",
-                                                                        alt: "{bname}",
-                                                                        style: "width: 64px; height: 40px; object-fit: cover; border-radius: 4px; background: var(--ui-surface-muted);"
-                                                                    }
-                                                                    div { class: "text-truncate",
-                                                                        strong { "{bname}" }
-                                                                        div { class: "small text-muted text-truncate", "{bimg}" }
-                                                                    }
+                                }
+                                div { class: "modal-body px-3 py-2",
+                                    if let Some(message) = saving.error() {
+                                        p { class: "alert alert-danger", role: "alert", "{message}" }
+                                        p { class: "small text-muted", "Close this dialog and check the saved bracket before trying again." }
+                                    }
+                                    if saving() { p { role: "status", "Updating legacy brackets…" } }
+                                    p { class: "small text-muted mb-2",
+                                        "These image-overlay brackets are from the old setup. Delete them once you no longer need them."
+                                    }
+                                    if legacy_snap.is_empty() {
+                                        p { class: "text-muted mb-0", "No legacy brackets configured." }
+                                    } else {
+                                        ul { class: "list-group list-group-flush",
+                                            for (idx, bracket) in legacy_snap.iter().enumerate() {
+                                                {
+                                                    let bname = if bracket.name.is_empty() {
+                                                        format!("Bracket {}", idx + 1)
+                                                    } else {
+                                                        bracket.name.clone()
+                                                    };
+                                                    let bimg = bracket.image.clone();
+                                                    let idx_u = idx;
+                                                    let u = tournament_url.clone();
+                                                    rsx! {
+                                                        li {
+                                                            class: "list-group-item bracket-legacy-row px-0",
+                                                            key: "{idx_u}-{bname}",
+                                                            div { class: "bracket-legacy-identity",
+                                                                img {
+                                                                    src: "{backend}/static/{bimg}",
+                                                                    alt: "{bname}",
+                                                                    style: "width: 64px; height: 40px; object-fit: cover; border-radius: 4px; background: var(--ui-surface-muted);"
                                                                 }
-                                                                div { class: "d-flex gap-1 flex-shrink-0",
+                                                                div { class: "bracket-legacy-copy",
+                                                                    strong { "{bname}" }
+                                                                    div { class: "small text-muted", "{bimg}" }
+                                                                }
+                                                            }
+                                                            div { class: "bracket-legacy-actions",
+                                                                if saving() {
+                                                                    span { class: "btn btn-sm btn-outline-primary disabled", aria_disabled: "true", "View" }
+                                                                } else {
                                                                     Link {
                                                                         to: Route::LegacyBracket { url: tournament_url.clone() },
                                                                         class: "btn btn-sm btn-outline-primary",
                                                                         "View"
                                                                     }
-                                                                    button {
-                                                                        class: "btn btn-sm btn-outline-danger",
-                                                                        disabled: saving(),
-                                                                        onclick: move |_| {
-                                                                            let u = u.clone();
-                                                                            if !saving.begin(dirty()) { return; }
-                                                                            spawn(async move {
-                                                                                match api::delete_legacy_bracket(&u, idx_u).await {
-                                                                                    Ok(resp) => {
-                                                                                        legacy_brackets.set(resp.legacy_brackets.clone());
-                                                                                        if resp.legacy_brackets.is_empty() {
-                                                                                            active_modal.set(ActiveModal::None);
-                                                                                        }
-                                                                                    }
-                                                                                    Err(e) => {
-                                                                                        saving.fail(e);
+                                                                }
+                                                                button {
+                                                                    class: "btn btn-sm btn-outline-danger",
+                                                                    disabled: saving() || saving.error().is_some(),
+                                                                    onclick: move |_| {
+                                                                        let u = u.clone();
+                                                                        if !saving.begin(dirty()) { return; }
+                                                                        spawn(async move {
+                                                                            match api::delete_legacy_bracket(&u, idx_u).await {
+                                                                                Ok(resp) => {
+                                                                                    legacy_brackets.set(resp.legacy_brackets.clone());
+                                                                                    if resp.legacy_brackets.is_empty() {
+                                                                                        active_modal.set(ActiveModal::None);
                                                                                     }
                                                                                 }
-                                                                                saving.set(false);
-                                                                            });
-                                                                        },
-                                                                        "Delete"
-                                                                    }
+                                                                                Err(e) => {
+                                                                                    saving.fail(e);
+                                                                                }
+                                                                            }
+                                                                            saving.set(false);
+                                                                        });
+                                                                    },
+                                                                    "Delete"
                                                                 }
                                                             }
                                                         }
@@ -4419,38 +4388,38 @@ fn BracketContent(url: String) -> Element {
                                             }
                                         }
                                     }
-                                    div { class: "bracket-add-modal-footer",
-                                        if !legacy_snap.is_empty() {
-                                            button {
-                                                class: "btn btn-sm btn-danger me-auto",
-                                                disabled: saving(),
-                                                onclick: {
-                                                    let u = tournament_url.clone();
-                                                    move |_| {
-                                                        let u = u.clone();
-                                                        if !saving.begin(dirty()) { return; }
-                                                        spawn(async move {
-                                                            match api::clear_legacy_brackets(&u).await {
-                                                                Ok(resp) => {
-                                                                    legacy_brackets.set(resp.legacy_brackets.clone());
-                                                                    active_modal.set(ActiveModal::None);
-                                                                }
-                                                                Err(e) => {
-                                                                    saving.fail(e);
-                                                                }
-                                                            }
-                                                            saving.set(false);
-                                                        });
-                                                    }
-                                                },
-                                                "Delete all"
-                                            }
-                                        }
+                                }
+                                div { class: "modal-footer",
+                                    if !legacy_snap.is_empty() {
                                         button {
-                                            class: "btn btn-outline-secondary btn-sm",
-                                            onclick: move |_| { active_modal.set(ActiveModal::None); focus_bracket_root(); },
-                                            "Close"
+                                            class: "btn btn-sm btn-danger me-auto",
+                                            disabled: saving() || saving.error().is_some(),
+                                            onclick: {
+                                                let u = tournament_url.clone();
+                                                move |_| {
+                                                    let u = u.clone();
+                                                    if !saving.begin(dirty()) { return; }
+                                                    spawn(async move {
+                                                        match api::clear_legacy_brackets(&u).await {
+                                                            Ok(resp) => {
+                                                                legacy_brackets.set(resp.legacy_brackets.clone());
+                                                                active_modal.set(ActiveModal::None);
+                                                            }
+                                                            Err(e) => {
+                                                                saving.fail(e);
+                                                            }
+                                                        }
+                                                        saving.set(false);
+                                                    });
+                                                }
+                                            },
+                                            "Delete all"
                                         }
+                                    }
+                                    button {
+                                        r#type: "button", class: "btn btn-outline-secondary btn-sm", disabled: saving(),
+                                        onclick: move |_| close_editor_modal.call(()),
+                                        "Close"
                                     }
                                 }
                             }
@@ -4678,5 +4647,24 @@ mod recovery_tests {
         b = a.clone();
         b.placements[0]["team1"] = serde_json::json!("NET");
         assert!(a != b);
+    }
+}
+
+#[cfg(test)]
+mod modal_dismissal_tests {
+    use super::{dismisses_provisional_node, ActiveModal};
+
+    #[test]
+    fn only_matching_provisional_editor_rolls_back_creation() {
+        let text = ActiveModal::EditText { id: "new-text".into() };
+        let label = ActiveModal::EditLabeledTeam { id: "new-label".into() };
+        let pending_text = ("text".into(), "new-text".into());
+        let pending_label = ("labeled".into(), "new-label".into());
+        assert!(dismisses_provisional_node(&text, Some(&pending_text)));
+        assert!(dismisses_provisional_node(&label, Some(&pending_label)));
+        assert!(!dismisses_provisional_node(&text, None));
+        assert!(!dismisses_provisional_node(&text, Some(&pending_label)));
+        assert!(!dismisses_provisional_node(&ActiveModal::EditText { id: "saved-text".into() }, Some(&pending_text)));
+        assert!(!dismisses_provisional_node(&ActiveModal::AddImage, Some(&pending_text)));
     }
 }

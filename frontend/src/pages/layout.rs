@@ -247,6 +247,7 @@ pub fn Layout() -> Element {
         style { {include_str!("operator.css")} }
         style { {include_str!("edit_forms.css")} }
         div {
+            id: "app-layout",
             class: "arctos-app",
             "data-palette": palette, "data-bs-theme": color_scheme,
             onkeydown: move |event| {
@@ -259,6 +260,7 @@ pub fn Layout() -> Element {
                     focus_control(trigger);
                 }
             },
+            crate::viewport::ViewportMetrics {}
             a { class: "skip-link", href: "#page-content", "Skip to content" }
             header { class: "app-header",
                 div { class: "app-header-inner",

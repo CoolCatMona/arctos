@@ -1,4 +1,5 @@
 use crate::api;
+use crate::form_validation::{described_by, field_message, focus_after_render, FieldError};
 use crate::pages::layout::use_auth_invalidate;
 use dioxus::prelude::*;
 
@@ -65,6 +66,8 @@ pub fn Login() -> Element {
     let mut username = use_signal(|| String::new());
     let mut password = use_signal(|| String::new());
     let mut err = use_signal(|| None::<String>);
+    let mut field_error = use_signal(|| None::<FieldError>);
+    use_effect(move || { if err().is_some() { focus_after_render("login-error"); } });
     let mut busy = use_signal(|| false);
     let navigator = use_navigator();
     let auth_invalidate = use_auth_invalidate();
@@ -92,6 +95,7 @@ pub fn Login() -> Element {
                     div { class: "card-body",
                         if let Some(e) = err.read().as_ref() {
                             div {
+                                id: "login-error", tabindex: "-1",
                                 class: "alert alert-danger d-flex align-items-center mb-3",
                                 role: "alert",
                                 span {
@@ -105,6 +109,7 @@ pub fn Login() -> Element {
                             }
                         }
                         form {
+                            oninput: move |_| { err.set(None); field_error.set(None); },
                             onsubmit: move |ev| {
                                 ev.prevent_default();
                                 if busy() {
@@ -113,7 +118,10 @@ pub fn Login() -> Element {
                                 let u = username().trim().to_string();
                                 let p = password().clone();
                                 if u.is_empty() || p.is_empty() {
-                                    err.set(Some("Username and password required".into()));
+                                    let feedback = if u.is_empty() { FieldError::new("username", "Enter your username.") }
+                                        else { FieldError::new("password", "Enter your password.") };
+                                    focus_after_render(feedback.field_id.clone());
+                                    field_error.set(Some(feedback));
                                     return;
                                 }
                                 err.set(None);
@@ -145,6 +153,8 @@ pub fn Login() -> Element {
                                     r#type: "text",
                                     class: "form-control",
                                     id: "username",
+                                    aria_invalid: field_message(&field_error(), "username").is_some(),
+                                    aria_describedby: described_by(&field_error(), "username", "username-help"),
                                     name: "username",
                                     autocomplete: "username",
                                     autocapitalize: "none",
@@ -154,7 +164,8 @@ pub fn Login() -> Element {
                                     oninput: move |ev| username.set(ev.value().clone()),
                                     required: true,
                                 }
-                                div { class: "form-text",
+                                if let Some(message) = field_message(&field_error(), "username") { p { id: "username-error", class: "text-danger small mt-1", "{message}" } }
+                                div { id: "username-help", class: "form-text",
                                     "Use your player or team username. Google accounts can sign in below."
                                 }
                             }
@@ -164,6 +175,8 @@ pub fn Login() -> Element {
                                     r#type: "password",
                                     class: "form-control",
                                     id: "password",
+                                    aria_invalid: field_message(&field_error(), "password").is_some(),
+                                    aria_describedby: described_by(&field_error(), "password", ""),
                                     name: "password",
                                     autocomplete: "current-password",
                                     disabled: busy(),
@@ -171,6 +184,7 @@ pub fn Login() -> Element {
                                     oninput: move |ev| password.set(ev.value().clone()),
                                     required: true,
                                 }
+                                if let Some(message) = field_message(&field_error(), "password") { p { id: "password-error", class: "text-danger small mt-1", "{message}" } }
                             }
                             div { class: "d-grid",
                                 button {
@@ -222,10 +236,8 @@ pub fn Login() -> Element {
                         }
                         hr {}
                         div { class: "text-center",
-                            p {
-                                "Don't have an account? "
-                                a { href: "{registration_url}", "Create an account" }
-                            }
+                            p { class: "mb-0", "Don't have an account?" }
+                            a { class: "auth-switch-link", href: "{registration_url}", "Create an account" }
                         }
 
                     }

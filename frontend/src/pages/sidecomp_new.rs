@@ -99,13 +99,13 @@ pub fn SideCompNew(url: String) -> Element {
                     div { class: "mb-3",
                         label { class: "form-label", r#for: "sidecomp-description", "Description" }
                         textarea {
-                            id: "sidecomp-description",
+                            id: "sidecomp-description", aria_describedby: "sidecomp-description-help",
                             class: "form-control",
                             rows: "4",
                             value: "{description}",
                             oninput: move |evt| description.set(evt.value()),
                         }
-                        div { class: "form-text", "Optional. Shown on the side competition page." }
+                        div { id: "sidecomp-description-help", class: "form-text", "Optional. Shown on the side competition page." }
                     }
                     details { class: "settings-advanced", id: "sidecomp-advanced",
                         summary { "Advanced options" small {

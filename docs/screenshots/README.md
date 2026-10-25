@@ -139,3 +139,56 @@ query reloads, Back/Forward and pagination, actual rendered Help anchors, inline
 field focus, and native-dialog Escape/return focus. Requested 320×568 layouts and
 a desktop directory were also inspected. These captures do not establish full
 assistive-technology, physical-device, integration or participant testing.
+
+
+## Remaining forms, dialogs and mobile geometry — 2026-10-24
+
+These are browser captures of the optimized Rust/Dioxus application using the
+existing snapshot-backed local demo. Requested viewports are 390×844 CSS pixels,
+except the named 844×390 landscape and 320×568 small-phone views. The account
+creation capture is a full page. They show Chromium at these sizes, **not Safari
+or an iPhone simulator**. Explicit inset fixtures were checked separately and
+are not presented here as device screenshots.
+
+A loopback proxy blocked mutations while exercising failure, pending and synthetic
+success states. Injury notes, penalties, script variables and bracket records used
+for those tests are fictional response fixtures. No account, private record,
+registration, schedule, score or bracket was changed by these captures. Native
+file pickers, keyboards, Photos access, audio latency and Safari toolbar behavior
+still require Apple-device verification.
+
+| File | State and purpose |
+| --- | --- |
+| `forms-login-form-mobile.png` | Sign-in fields and a single, comfortably sized account-switch link. |
+| `forms-register-form-mobile.png` | Full account form with labeled inputs, hints and the matching sign-in link. |
+| `forms-account-setup-retry-mobile.png` | Account setup read failure offers Retry without exposing an empty editable record. |
+| `forms-account-profile-validation-mobile.png` | Focused display-name error with the newer username result retained. |
+| `forms-injury-load-retry-mobile.png` | Fictional injury record read failure offers Retry; no editable blank record. |
+| `forms-injury-save-recovery-mobile.png` | Rejected fictional injury save retains the note, date and privacy setting. |
+| `forms-league-event-validation-mobile.png` | League event creation keeps the URL draft and identifies the invalid name. |
+| `forms-event-delete-mobile.png` | Native event deletion confirmation starts focus on Cancel. |
+| `forms-event-delete-recovery-mobile.png` | Rejected event deletion preserves the typed URL and focuses feedback. |
+| `forms-league-delete-mobile.png` | League deletion uses the same confirmation structure. |
+| `forms-dialog-actions-landscape.png` | Scrolled short-height dialog shows reachable bottom actions; title is above the scroll position. |
+| `forms-match-start-explanation-mobile.png` | Match-start explanation in a shared native dialog. |
+| `forms-match-setup-retry-mobile.png` | Force Start setup failure leaves Cancel and a read-only Retry available. |
+| `forms-force-start-mobile.png` | Loaded Force Start form with named team and referee fields. |
+| `forms-force-start-recovery-mobile.png` | Rejected Force Start retains choices and displays feedback beside its actions. |
+| `forms-profile-penalty-dialog-mobile.png` | Player penalty description uses a named native dialog; description is fictional. |
+| `forms-match-penalty-dialog-mobile.png` | The same penalty-description behavior on a match; description is fictional. |
+| `forms-schedule-fields-mobile.png` | Field management in a native dialog with an explicit add-field form. |
+| `forms-schedule-fields-recovery-mobile.png` | Rejected field creation preserves the entered field name. |
+| `forms-schedule-tags-recovery-mobile.png` | Rejected tag creation preserves the entered tag name. |
+| `forms-schedule-warnings-retry-mobile.png` | Warnings read failure settles into a retryable state instead of remaining loading. |
+| `forms-schedule-refresh-recovery-mobile.png` | Open script drafts survive failed setup refresh; edits remain locked until Retry succeeds. |
+| `forms-schedule-import-recovery-mobile.png` | Failed TOML import keeps the file picker available for an explicit retry. |
+| `forms-schedule-import-warning-mobile.png` | Synthetic successful-import warning; no stored schedule was changed. |
+| `forms-schedule-expression-help-mobile.png` | Scrollable expression help can close without dismissing the underlying match editor. |
+| `forms-bracket-match-dialog-mobile.png` | Searchable match picker with contained scrolling and a reachable Close action. |
+| `forms-bracket-image-dialog-mobile.png` | Bracket image dialog with a labeled file picker and visible limit. |
+| `forms-bracket-text-dialog-mobile.png` | Provisional text editor; cancellation rolls back only its fictional new node. |
+| `forms-bracket-team-dialog-mobile.png` | Provisional team-label editor with associated labels and help. |
+| `forms-bracket-legacy-recovery-mobile.png` | Readable legacy-bracket failure and wrapping phone rows; all records are fictional fixtures. |
+| `forms-calibration-dialog-mobile.png` | Calibration shares the dialog layout while retaining snapshot restoration on Cancel. |
+| `forms-side-event-keypad-small-phone.png` | 320×568 scorer with every keypad row visible. |
+| `forms-side-event-keypad-landscape.png` | 844×390 scorer scrolled to its reachable last row. |
