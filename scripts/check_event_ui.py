@@ -13,9 +13,10 @@ import asyncio
 from dataclasses import dataclass
 import re
 import sys
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
-from playwright.async_api import Page, Route, TimeoutError as PlaywrightTimeoutError, async_playwright, expect
+from playwright.async_api import Locator, Page, Request, Route, TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import async_playwright, expect
 
 from check_appearance_ui import PALETTES, check_contrast, choose, close_menu, preference
 from check_mobile_ui import DEMO_USER, LAYOUT_DIAGNOSTICS, TIMEOUT_MS, SmokeCheck, api_json, arguments
@@ -76,7 +77,8 @@ async def phone_targets(page: Page) -> None:
     """Check actual visible controls, including roster and event navigation links."""
     failures = await page.locator(
         ".event-hero-actions .btn, .event-detail-page .btn, .event-route-tab, "
-        ".event-section .roster-name, .event-section .event-series-list a, .event-side-list > li > a"
+        ".event-section .roster-name, .event-roster-toggle, .event-roster-player-link, "
+        ".event-section .event-series-list a, .event-side-list > li > a"
     ).evaluate_all("""els => els.flatMap(el => {
         const r = el.getBoundingClientRect();
         if (!r.width || !r.height) return [];
@@ -97,6 +99,153 @@ async def phone_targets(page: Page) -> None:
     assert nav["left"] >= -1 and nav["right"] <= layout["width"] + 1, nav
     assert len(set(nav["rows"])) == 1, f"Route navigation wrapped to multiple rows: {nav}"
     assert nav["content"] <= nav["width"] + 1 or nav["overflow"] in ("auto", "scroll"), nav
+
+
+def roster_endpoint(event: EventPage, payload: dict, team: dict) -> str:
+    if event.prefix == "league":
+        scope = "league:" + payload["league"]["league_url"]
+    else:
+        tournament = payload["tournament"]
+        league = tournament.get("league")
+        scope = "league:" + league["league_url"] if league else tournament["url"]
+    return f"/_api/teams/{quote(team['team_id'], safe='')}/players?{urlencode({'event': scope})}"
+
+
+async def roster_players(region: Locator, players: list) -> None:
+    await expect(region).to_be_visible()
+    await expect(region.locator(".event-roster-player-link")).to_have_count(len(players))
+    await expect(region.locator(".card")).to_have_count(0)
+    if not players:
+        await expect(region.get_by_text("No players registered yet.", exact=True)).to_be_visible()
+    for item in players:
+        registration = item["registration"]
+        player = item.get("player") or {}
+        link = region.locator(f'a.event-roster-player-link[href="/players/{registration["player"]}"]')
+        await expect(link).to_be_visible()
+        await expect(link).to_contain_text(player["name"] if player else registration["player"])
+        if (registration.get("jersey_name") or "").strip():
+            await expect(link).to_contain_text(registration["jersey_name"])
+        if (registration.get("jersey_number") or "").strip():
+            await expect(link).to_contain_text("#" + registration["jersey_number"])
+
+
+async def event_rosters(check: SmokeCheck, page: Page, event: EventPage, payload: dict) -> None:
+    """Read real public rosters, including league membership on league-event pages."""
+    requests: list[str] = []
+
+    def record_request(request: Request) -> None:
+        if request.method == "GET" and re.fullmatch(r"/_api/teams/[^/]+/players", urlsplit(request.url).path):
+            requests.append(request.url)
+
+    page.on("request", record_request)
+    try:
+        await page.goto(check.base_url + event.path + "?tab=teams", wait_until="domcontentloaded")
+        await selected_panel(page, event, "teams")
+        panel = page.locator(f"#{event.prefix}-section-teams")
+        teams = payload["teams_with_counts"]
+        assert teams, f"{event.name} demo needs a team to exercise roster disclosure"
+        await expect(panel.locator(".event-roster-toggle")).to_have_count(len(teams))
+        assert not requests, f"Collapsed rosters fetched players: {requests}"
+        for index, team in enumerate(teams):
+            endpoint = roster_endpoint(event, payload, team)
+            players = await api_json(page.context, check.base_url, endpoint)
+            assert len(players) == team["player_count"], f"{event.name} roster count disagrees for {team['team_id']}"
+            name = team["pseudonym"] if team.get("pseudonym") is not None else team["team_name"]
+            row = panel.locator(".event-team-summary").filter(has=page.locator(f'a[href="/teams/{team["team_id"]}"]'))
+            toggle = row.get_by_role("button", name=f"View players for {name}", exact=True)
+            await expect(toggle).to_have_attribute("type", "button")
+            await expect(toggle).to_have_attribute("aria-expanded", "false")
+            await expect(toggle).to_contain_text("View players")
+            region_id = await toggle.get_attribute("aria-controls")
+            assert region_id, "Roster disclosure must identify its controlled region"
+            region = panel.locator(f'.event-team-players[id="{region_id}"]')
+            await expect(region).not_to_be_visible()
+            await toggle.focus()
+            await page.keyboard.press("Enter")
+            toggle = row.locator(".event-roster-toggle")
+            await expect(toggle).to_have_attribute("aria-expanded", "true")
+            await expect(toggle).to_have_accessible_name(f"Hide players for {name}")
+            await expect(toggle).to_contain_text("Hide players")
+            await roster_players(region, players)
+            await expect(panel.locator('.event-roster-toggle[aria-expanded="true"]')).to_have_count(index + 1)
+            if index == 0:
+                await toggle.focus()
+                await page.keyboard.press("Space")
+                await expect(toggle).to_have_attribute("aria-expanded", "false")
+                await expect(region).not_to_be_visible()
+                await page.keyboard.press("Enter")
+                await roster_players(region, players)
+                await expect(toggle).to_have_attribute("aria-expanded", "true")
+            await page.evaluate(
+                "() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))"
+            )
+            matches = [url for url in requests if urlsplit(url).path == urlsplit(endpoint).path]
+            assert len(matches) == 1, f"Roster should load once across close/reopen: {matches}"
+            assert parse_qs(urlsplit(matches[0]).query) == parse_qs(urlsplit(endpoint).query), matches[0]
+        await phone_targets(page)
+    finally:
+        page.remove_listener("request", record_request)
+
+
+async def roster_recovery(check: SmokeCheck, page: Page, event: EventPage, payload: dict) -> None:
+    team = payload["teams_with_counts"][0]
+    endpoint = roster_endpoint(event, payload, team)
+    players = await api_json(page.context, check.base_url, endpoint)
+    url = check.base_url + endpoint
+    pattern = re.compile(re.escape(url) + "$", re.IGNORECASE)
+    requested = asyncio.Event()
+    release = asyncio.Event()
+    attempts = 0
+
+    async def fail_once(route: Route) -> None:
+        nonlocal attempts
+        if route.request.method != "GET":
+            await route.fallback()
+            return
+        attempts += 1
+        if attempts == 1:
+            requested.set()
+            await release.wait()
+            await route.fulfill(status=503, json={"error": "Roster temporarily unavailable"})
+        else:
+            await route.fallback()
+
+    await page.route(pattern, fail_once)
+    try:
+        await page.goto(check.base_url + event.path + "?tab=teams", wait_until="domcontentloaded")
+        await selected_panel(page, event, "teams")
+        row = page.locator(".event-team-summary").filter(has=page.locator(f'a[href="/teams/{team["team_id"]}"]'))
+        toggle = row.locator(".event-roster-toggle")
+        await toggle.click()
+        region_id = await toggle.get_attribute("aria-controls")
+        region = page.locator(f'.event-team-players[id="{region_id}"]')
+        await expect(region.get_by_text("Loading players…", exact=True)).to_be_visible()
+        await asyncio.wait_for(requested.wait(), TIMEOUT_MS / 1000)
+        await toggle.click()
+        await expect(toggle).to_have_attribute("aria-expanded", "false")
+        await expect(region).not_to_be_visible()
+        await toggle.click()
+        await expect(region.get_by_text("Loading players…", exact=True)).to_be_visible()
+        assert attempts == 1, "Reopening a pending roster duplicated its request"
+        async with page.expect_response(lambda response: response.url == url and response.status == 503):
+            release.set()
+        await expect(region.get_by_text("Players could not be loaded.", exact=True)).to_be_visible()
+        # Exclude only this explicitly asserted failure from the shared HTTP-error check.
+        check.network_errors.remove(f"HTTP 503 {url}")
+        name = team["pseudonym"] if team.get("pseudonym") is not None else team["team_name"]
+        retry = region.get_by_role("button", name=f"Retry loading players for {name}", exact=True)
+        await expect(retry).to_have_text("Retry")
+        await retry.focus()
+        await page.keyboard.press("Enter")
+        await expect(toggle).to_be_focused()
+        await roster_players(region, players)
+        await expect(retry).not_to_be_visible()
+        await expect(toggle).to_be_focused()
+        await expect(toggle).to_have_attribute("aria-expanded", "true")
+        assert attempts == 2, f"Retry should issue one fresh roster read, got {attempts}"
+    finally:
+        release.set()
+        await page.unroute(pattern, fail_once)
 
 
 async def event_content(page: Page, event: EventPage, payload: dict, side_events: list) -> None:
@@ -201,6 +350,18 @@ async def event_themes(check: SmokeCheck, page: Page) -> None:
                     for tab in ("info", "events" if event.prefix == "league" else "sidecomps", "teams"):
                         await page.locator(f"#{event.prefix}-tab-{tab}").click()
                         await selected_panel(page, event, tab)
+                        if tab == "teams":
+                            toggle = page.locator(".event-roster-toggle").first
+                            if await toggle.count() and await toggle.get_attribute("aria-expanded") != "true":
+                                await toggle.click()
+                            if await toggle.count():
+                                region_id = await toggle.get_attribute("aria-controls")
+                                region = page.locator(f'.event-team-players[id="{region_id}"]')
+                                await expect(region).to_be_visible()
+                                await expect(region.get_by_text("Loading players…", exact=True)).not_to_be_visible()
+                                await expect(
+                                    region.get_by_text("Players could not be loaded.", exact=True)
+                                ).not_to_be_visible()
                         await page.mouse.move(0, 0)
                         await phone_targets(page)
                         await check_contrast(
@@ -210,6 +371,7 @@ async def event_themes(check: SmokeCheck, page: Page) -> None:
                             ".event-section:visible h2, .event-section:visible h5, "
                             ".event-section:visible dt, .event-section:visible dd, "
                             ".event-section:visible p, .event-section:visible strong, "
+                            ".event-roster-toggle, .event-roster-player-link, .event-roster-jersey, "
                             ".event-section:visible .text-muted, .event-section:visible .badge",
                         )
                     await check.check_layout(page, f"{event.name}-{palette}-{mode}", width)
@@ -349,6 +511,13 @@ async def run(args) -> int:
                 await check.workflow(
                     page, f"{event.name}-navigation", 360, lambda: event_navigation(check, page, event, payload, sides)
                 )
+                await check.workflow(
+                    page, f"{event.name}-rosters", 360, lambda: event_rosters(check, page, event, payload)
+                )
+                if event.name == "tournament":
+                    await check.workflow(
+                        page, "roster-recovery", 360, lambda: roster_recovery(check, page, event, payload)
+                    )
             await check.workflow(page, "event-themes", 360, lambda: event_themes(check, page))
             await check.workflow(page, "profile-counts", 320, lambda: profile_counts(check, page))
             await check.workflow(page, "event-desktop", 1280, lambda: desktop(check, page))

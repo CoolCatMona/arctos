@@ -276,6 +276,8 @@ pub fn TournamentHomeContent(
                     }
             EventTeamsList {
                 teams: d.teams_with_counts.clone(),
+                event_scope: league.map(|l| format!("league:{}", l.league_url)).unwrap_or_else(|| url.clone()),
+                revision: refresh(),
                 card_title: "Registered teams".to_string(),
                 show_registered_at: true,
                 max_team_size_roster: d.tournament.max_team_size_roster,

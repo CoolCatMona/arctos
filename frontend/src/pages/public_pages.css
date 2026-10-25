@@ -122,6 +122,25 @@
 .arctos-app .roster-identity { display: flex; align-items: center; min-width: 0; }
 .arctos-app .roster-name { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; overflow-wrap: anywhere; }
 .arctos-app .roster-count { font-weight: 650; }
+.arctos-app .event-roster-avatar { width: 32px; height: 32px; flex: 0 0 32px; margin-right: 8px; border-radius: 50%; object-fit: cover; }
+.arctos-app .event-roster-avatar-placeholder { display: grid; place-items: center; background: var(--ui-surface-hover); color: var(--ui-muted); font-size: .875rem; }
+.arctos-app .event-team-action { width: 1%; text-align: right; white-space: nowrap; }
+.arctos-app .event-roster-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px; border: 0; border-radius: 6px; background: transparent; color: var(--ui-link); font: inherit; font-size: .875rem; font-weight: 600; white-space: nowrap; }
+.arctos-app .event-roster-toggle:hover { background: var(--ui-surface-hover); }
+.arctos-app .event-roster-toggle i { font-size: .75rem; }
+.arctos-app .event-team-players-row[hidden] { display: none !important; }
+.arctos-app .data-section .event-teams-table > tbody > .event-team-players-row > td { padding: 0; background: var(--ui-surface-muted); }
+.arctos-app .event-team-players { padding: 4px 24px; }
+.arctos-app .event-roster-players { margin: 0; padding: 0; list-style: none; }
+.arctos-app .event-roster-players > li + li { border-top: 1px solid var(--ui-border); }
+.arctos-app .event-roster-player-link { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 8px 0; color: var(--ui-text); text-decoration: none; }
+.arctos-app .event-roster-player-link:hover { color: var(--ui-link); }
+.arctos-app .event-roster-player-link .event-roster-avatar { margin-right: 0; }
+.arctos-app .event-roster-player-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.arctos-app .event-roster-jersey { display: flex; align-items: baseline; justify-content: flex-end; flex-wrap: wrap; gap: 2px 8px; max-width: 45%; color: var(--ui-muted); text-align: right; font-size: .8125rem; overflow-wrap: anywhere; }
+.arctos-app .event-roster-jersey-number { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.arctos-app .event-roster-message { margin: 0; padding: 12px 0; color: var(--ui-muted); font-size: .875rem; }
+.arctos-app .event-roster-retry { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
 .arctos-app .roster-table .roster-actions { white-space: normal; }
 .arctos-app .roster-table .roster-actions .btn-group { display: flex; flex-wrap: wrap; gap: 6px; }
 .arctos-app .roster-table .roster-actions .btn-group .btn { border-radius: 8px; margin: 0; }
@@ -143,6 +162,14 @@
   .arctos-app .data-section .roster-table td:first-child { grid-column: 1 / -1; font-size: .9375rem; }
   .arctos-app .data-section .roster-table .roster-actions { grid-column: 1 / -1; padding-top: 6px; }
   .arctos-app .data-section .roster-table .roster-actions::before { display: none; }
+  .arctos-app .data-section .event-teams-table .event-team-summary { grid-template-columns: minmax(0, 1fr) auto; }
+  .arctos-app .data-section .event-teams-table .event-team-summary > td:first-child { grid-column: 1; }
+  .arctos-app .data-section .event-teams-table .event-team-count { grid-column: 1 / -1; grid-row: 2; }
+  .arctos-app .data-section .event-teams-table .event-team-action { grid-column: 2; grid-row: 1; justify-self: end; align-self: center; width: auto; }
+  .arctos-app .data-section .event-teams-table .event-team-date { grid-row: 3; }
+  .arctos-app .data-section .event-teams-table .event-team-players-row { display: block; padding: 0; }
+  .arctos-app .data-section .event-teams-table > tbody > .event-team-players-row > td { padding: 0; }
+  .arctos-app .event-team-players { padding: 4px 16px; }
 }
 
 /* Public registration counts share a compact treatment on profiles and directories. */

@@ -249,6 +249,8 @@ pub fn LeagueHomeContent(
                     }
             EventTeamsList {
                 teams: d.teams_with_counts.clone(),
+                event_scope: format!("league:{}", d.league.league_url),
+                revision: refresh(),
                 card_title: "Registered teams".to_string(),
                 show_registered_at: true,
                 max_team_size_roster: d.league.max_team_size_roster,
