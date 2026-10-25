@@ -57,9 +57,9 @@ pub fn Index() -> Element {
 
     rsx! {
         PageIntro { page_key: "events", title: "Events", focus_target: "event-discovery",
-            "A tournament brings teams together for a series of "
+            "Find "
             a { href: "https://en.wikipedia.org/wiki/Jugger", "jugger" }
-            " matches. Find an upcoming event or look back at past results."
+            " tournaments and results."
         }
         section { id: "event-discovery", class: "arctos-discovery", aria_label: "Find an event", tabindex: "-1",
             div { class: "arctos-discovery-toolbar",
