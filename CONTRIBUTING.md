@@ -20,9 +20,8 @@ browser/device details. Remove private information from screenshots and logs.
    validation performed, and any remaining limitations. Include migration and
    deployment steps when required.
 
-Documentation and pull requests must be understandable without private
-conversations or unpublished references. Use conventional commit subjects,
-for example `fix: retain registration draft after a failed save`.
+Use conventional commit subjects, for example
+`fix: retain registration draft after a failed save`.
 
 CI runs backend tests and coverage, Python lint/format checks, frontend unit
 tests, and the WebAssembly compile check. Changes affecting interactions also
