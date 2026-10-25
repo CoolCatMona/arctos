@@ -140,8 +140,9 @@ uv run python scripts/check_profile_ui.py --screenshots /tmp/arctos-profiles
 
 Browser response fixtures exercise UI behavior; backend tests separately verify
 that real services enforce permissions and persist or roll back changes.
-Screenshot examples are in [docs/screenshots](docs/screenshots/README.md).
-They are visual references, not an exhaustive test record.
+Save screenshot output outside the checkout and attach relevant images directly
+to the pull request. Include the viewport size and state shown. Screenshots are
+visual references, not an exhaustive test record.
 
 ### Manual checks and device limits
 
