@@ -94,8 +94,8 @@ HTTPS hostname accepted by Google for its callback; a desktop loopback URL
 points at the phone itself. The callback must pass through the same proxy
 as the initial login request so its state and session cookies are preserved.
 
-When `GOOGLE_REDIRECT_URI` is unset, callbacks retain the existing behavior
-of deriving their URL from the incoming request host. If the same server
+When `GOOGLE_REDIRECT_URI` is unset, callback URLs are derived from the
+incoming request host. If the same server
 is reachable on multiple public domains, add each domain's
 `/_api/auth/google/callback` URL to the authorized redirect URIs in Google
 Cloud Console. Forwarded host headers are not trusted to choose this URL.

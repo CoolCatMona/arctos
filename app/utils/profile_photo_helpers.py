@@ -76,7 +76,8 @@ def _remove_owned_photo(path: str | None, account_type: str, entity_id: str) -> 
         if not referenced:
             candidate.unlink(missing_ok=True)
     except SQLAlchemyError:
-        db.session.rollback()
+        # Keep the file when its reference cannot be checked. Request teardown
+        # will dispose of this session; cleanup must not mask the save result.
         current_app.logger.warning("Could not check old profile photo references for %s %s", account_type, entity_id)
     except (OSError, PhotoUploadError):
         current_app.logger.warning("Could not remove an old profile photo for %s %s", account_type, entity_id)
@@ -99,11 +100,16 @@ def replace_profile_photo(entity, account_type: str, data: bytes) -> str:
         entity.profile_photo = relative
         db.session.commit()
     except Exception as error:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            current_app.logger.exception("Could not roll back profile photo save")
         if created:
             _remove_owned_photo(relative, account_type, entity_id)
         current_app.logger.exception("Could not save profile photo")
-        raise PhotoUploadError("Your photo could not be saved. Please try again.", 500) from error
+        raise PhotoUploadError(
+            "The photo save could not be confirmed. Check the saved image before trying again.", 500
+        ) from error
     _remove_owned_photo(previous, account_type, entity_id)
     return relative
 

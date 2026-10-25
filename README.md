@@ -7,8 +7,6 @@
 
 Centralized online results and event management for Jugger.
 
-Or, *what the fog site always wanted to be*
-
 See [CONTRIBUTING](CONTRIBUTING.md) for how to get involved.
 
 ## New here?
@@ -44,13 +42,15 @@ their code.
 
 - **Frontend.** Single-page app written in Rust with [Dioxus],
   compiled to WebAssembly. nginx serves the SPA at `/`.
-- **Backend.** Python 3.12 [Flask] app run under gunicorn. Serves only
-  JSON. The SPA uses routes under `/_api/`; `/api/` (no underscore) is
+- **Backend.** Python 3.12 [Flask] app run under gunicorn. Serves
+  the application API, authentication callbacks, and static files. The SPA uses
+  routes under `/_api/`; `/api/` (no underscore) is
   the public, OAuth-authenticated API for third-party apps, documented
   in [`docs/developers.md`](docs/developers.md).
 - **Database.** A single SQLite file (`tournament.db`). WAL mode is
   enabled so background workers and HTTP handlers can share the file
-  without blocking each other. Foreign keys are enforced via
+  with fewer read/write conflicts. SQLite still allows only one writer at a
+  time. Foreign keys are enforced via
   `PRAGMA foreign_keys = ON` on every new connection - without that
   pragma SQLite ignores `FOREIGN KEY` declarations entirely.
 - **Schema migrations.** Managed by [Alembic]. See
@@ -115,7 +115,8 @@ just setup-frontend
 ```
 
 `setup-frontend` installs the WebAssembly target and Dioxus CLI 0.7.10 if it
-is missing. If Rust was just installed, open a new terminal or run
+is missing or a different version is installed. If Rust was just installed,
+open a new terminal or run
 `source "$HOME/.cargo/env"` first.
 
 ### Try the interface with sample events
@@ -130,33 +131,16 @@ just demo       # sample Flask backend, http://127.0.0.1:5006
 just frontend   # Dioxus app, http://127.0.0.1:8080
 ```
 
-Open **http://127.0.0.1:8080**. Use `demo-organizer`, `demo-player`, or `demo-team` with the password
-`arctos-demo-only` (also printed at startup). It includes public events, league registration, rosters, live and
-completed matches, and side competitions. Two scoring examples each have 16 entrants: **Open Dueling — Practice** starts without results, while **Dueling Standings — Practice** has sample wins and losses. Both remain active so `demo-organizer` can enter or correct results. Demo records live only in
-`instance/demo.db`; rerunning preserves changes and never touches
-`instance/tournament.db`. These are local test accounts, not production users.
+Open **http://127.0.0.1:8080**. Sign in as `demo-organizer`, `demo-player`, or
+`demo-team` with password `arctos-demo-only` (also printed at startup). The demo
+includes events, a league, rosters, matches, and side competitions for exploring
+the workflows. It uses `instance/demo.db`, preserves changes on restart, and
+never writes to `instance/tournament.db`.
 
-Existing databases need migrations `0023_profile_banners`, `0024_event_banners`, and `0025_player_profile_details` for uploaded banners and player pronouns/pompfen. Run `uv sync --group test`, back up each working database, and apply pending migrations before restarting the updated backend. Existing demo copies are preserved by `scripts.dev_demo`, so they are not automatically migrated on restart. Point Alembic at each working copy explicitly:
-
-```bash
-SQLALCHEMY_DATABASE_URI=sqlite:////absolute/path/to/arctos/instance/snapshot-demo/demo.db uv run alembic upgrade head
-```
-
-Use `instance/demo.db` instead for the ordinary demo, never the original snapshot source. See [the migration notes](migrations/README.md#profile-and-event-banners) for schema verification and stamping of unversioned databases. Fresh demos already include the current columns.
-
-Profile owners can preview text, avatars, and covers from Edit profile, then save
-all changes together. Player bios and team descriptions support Markdown,
-including headings, lists, bold text, and links, in both previews and public profiles.
-Cancel discards the draft. Tournament and league organizers
-can edit covers from Settings. Image controls support dragging or tapping to position, zoom, keyboard
-positioning, and resetting the position on the image. The server accepts
-still JPEG, PNG, and WebP images up to 8 MiB and removes embedded metadata.
-Keep `static/uploads` alongside database backups: image files are stored there,
-while the database stores their paths.
-
-Player, team, tournament, and league detail headers stay visible. Only the
-top-level Events, Leagues, Players, Teams, and Stones introductions can be
-collapsed with the chevron at their top-right and restored in Appearance settings.
+Before using an existing database, back it up and apply pending migrations.
+See [migration and image-storage notes](migrations/README.md#profile-and-event-banners).
+Existing demo databases are preserved on restart; they are not automatically
+migrated. Fresh demos use the current models.
 
 To preview an existing versioned SQLite snapshot, run the backend with:
 
@@ -174,15 +158,19 @@ unversioned database. Add `--seed-only` to prepare the copy without starting
 the server. Uploaded media is not copied by this command; make its existing
 `static/uploads` files available separately.
 
-For a populated event to practice organizing, run this after preparing and migrating the working demo:
+For a populated event to practice organizing, run this after preparing and
+migrating the working demo:
 
 ```bash
 uv run python -m scripts.dev_practice --database instance/snapshot-demo/demo.db
 ```
 
-This adds **Practice Open — Demo** at `/demo-practice`, owned by `demo-organizer`: six teams with six players each, two fields, six completed matches, a ready match, a paused live match, and a later scheduled match. Its active dueling side event has 24 entrants, with sample wins/losses for twelve and no scores yet for twelve. The command prints direct Start, Run, Enter results, and Manage results links. Use `--database instance/demo.db` for the ordinary demo.
-
-The practice command makes only additive changes, rolls back the whole addition on failure, and does not run app startup or scheduling updates on other events. Repeating it preserves edits, scores, passwords, and deletions; use a fresh `--slug demo-practice-2` for another independent example. Colliding IDs are rejected rather than reused. Existing accounts and `demo-open` stay unchanged; the original snapshot is never an input to this command.
+This adds an organizer-owned practice event with teams, rosters, fields,
+completed and runnable matches, and an active dueling side event. The command
+prints links to its tools. It preserves edits on later runs; use a new
+`--slug demo-practice-2` for an independent example. Use
+`--database instance/demo.db` for the ordinary demo. See
+[scripts/README.md](scripts/README.md#local-demo-data) for database restrictions.
 
 For a phone on your local network, start the frontend with
 `just frontend --addr 0.0.0.0`, then open your computer's LAN address on port
@@ -232,7 +220,8 @@ gunicorn using `.env`; it defaults to TLS on port 8081. Use
 
 | Goal | Command |
 |------|---------|
-| Run all tests | `just test` |
+| Run backend tests | `just test` |
+| Run frontend unit tests | `just frontend-test` |
 | Lint | `just lint` |
 | Format | `just format` |
 | Apply migrations | `just db-migrate-safe` |
@@ -242,17 +231,17 @@ gunicorn using `.env`; it defaults to TLS on port 8081. Use
 
 Coverage is configured under `[tool.coverage.*]` in `pyproject.toml`
 with a `fail_under = 30` floor and branch coverage enabled. See
-[`TESTING.md`](TESTING.md#coverage) for the current report and how the
-threshold is meant to move.
+[`TESTING.md`](TESTING.md#coverage) for coverage commands and how to interpret the report.
 
 ## Conventions
 
-- **SPA routes live under `/_api/`.** The frontend always hits
-  `/_api/...`; only the public API (`/api/`, bearer tokens) lives
-  elsewhere.
-- **Routes return JSON, not redirects.** Success is `200`; validation
-  failure is `400`; unauthenticated is `401`. Don't assert on redirect
-  codes in tests.
+- **Application API routes live under `/_api/`.** Browser page routes are
+  declared in `frontend/src/main.rs`. The public API for third-party clients
+  lives under `/api/` and uses bearer tokens.
+- **Check each endpoint's response contract.** Application APIs generally
+  return JSON; validation, authentication, permissions, missing records, and
+  conflicts have distinct HTTP statuses. OAuth callbacks use redirects, and
+  file/media endpoints may return a body other than JSON.
 - **`Result` / `Option` for errors as values.** Services return
   `Result[T, ArctosError]`. The `.Q()` method (Rust's `?`) propagates
   errors when used inside `@allow_Q`-decorated functions. See
@@ -280,8 +269,8 @@ Take `POST /_api/<tournament_url>/register-team`:
 1. **Frontend** (`frontend/src/`) builds a form, POSTs via `reqwest`
    with credentials.
 2. **nginx** (in production) proxies anything starting with `/_api/`
-   or `/api/` to gunicorn; everything else is the SPA. In dev with
-   `ARCTOS_CORS_DEV=1` the browser hits Flask directly.
+   or `/api/` to gunicorn and serves static/media paths separately. The Dioxus
+   development proxy also forwards API and static requests to Flask.
 3. **Flask** routes the request to
    `app/routes/registration.py::register_team_for_tournament`.
 4. The route does a thin auth/shape check, then calls
@@ -289,7 +278,7 @@ Take `POST /_api/<tournament_url>/register-team`:
    `app/services/registration_service.py`.
 5. The service returns a `Result[T, ArctosError]`. Routes
    pattern-match on the result and return JSON `{success, ...}` with
-   HTTP 200/400.
+   the endpoint's success or error status.
 6. The service mutates `TeamRegistration` rows via SQLAlchemy. ORM
    models live in `app/models/`. `db.session.commit()` writes to
    SQLite.

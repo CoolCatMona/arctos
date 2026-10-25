@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone, Copy, PartialEq)]
-pub enum BannerAccountKind { Player, Team, Tournament, League }
+pub enum BannerAccountKind { Tournament, League }
 
 #[derive(Clone, PartialEq)]
 struct SelectedImage { url: String, width: f64, height: f64, mime: String }
@@ -54,42 +54,24 @@ fn focus_after_render(id: &str) {
     }
 }
 
-async fn upload(kind: BannerAccountKind, avatar: bool, id: &str, bytes: bytes::Bytes) -> Result<String, String> {
-    match (kind, avatar) {
-        (BannerAccountKind::Player, true) => api::upload_player_profile_photo(id, bytes).await,
-        (BannerAccountKind::Team, true) => api::upload_team_profile_photo(id, bytes).await,
-        (BannerAccountKind::Player, false) => api::upload_player_banner_photo(id, bytes).await,
-        (BannerAccountKind::Team, false) => api::upload_team_banner_photo(id, bytes).await,
-        (BannerAccountKind::Tournament, false) => api::upload_tournament_banner_photo(id, bytes).await,
-        (BannerAccountKind::League, false) => api::upload_league_banner_photo(id, bytes).await,
-        _ => Err("This image cannot be changed here.".into()),
+async fn upload(kind: BannerAccountKind, id: &str, bytes: bytes::Bytes) -> Result<String, String> {
+    match kind {
+        BannerAccountKind::Tournament => api::upload_tournament_banner_photo(id, bytes).await,
+        BannerAccountKind::League => api::upload_league_banner_photo(id, bytes).await,
     }
 }
 
-async fn remove(kind: BannerAccountKind, avatar: bool, id: &str) -> Result<(), String> {
-    match (kind, avatar) {
-        (BannerAccountKind::Player, true) => api::delete_player_profile_photo(id).await,
-        (BannerAccountKind::Team, true) => api::delete_team_profile_photo(id).await,
-        (BannerAccountKind::Player, false) => api::delete_player_banner_photo(id).await,
-        (BannerAccountKind::Team, false) => api::delete_team_banner_photo(id).await,
-        (BannerAccountKind::Tournament, false) => api::delete_tournament_banner_photo(id).await,
-        (BannerAccountKind::League, false) => api::delete_league_banner_photo(id).await,
-        _ => Err("This image cannot be changed here.".into()),
+async fn remove(kind: BannerAccountKind, id: &str) -> Result<(), String> {
+    match kind {
+        BannerAccountKind::Tournament => api::delete_tournament_banner_photo(id).await,
+        BannerAccountKind::League => api::delete_league_banner_photo(id).await,
     }
 }
 
+/// Event and league banners save independently of their settings forms.
+/// Profile images instead use the atomic profile editor's local image drafts.
 #[component]
-pub fn BannerUpload(kind: BannerAccountKind, account_id: String, photo: Signal<Option<String>>, busy: Signal<bool>) -> Element {
-    rsx! { ImageUpload { kind, account_id, photo, busy, avatar: false } }
-}
-
-#[component]
-pub fn PhotoUpload(kind: BannerAccountKind, account_id: String, photo: Signal<Option<String>>, busy: Signal<bool>) -> Element {
-    rsx! { ImageUpload { kind, account_id, photo, busy, avatar: true } }
-}
-
-#[component]
-fn ImageUpload(kind: BannerAccountKind, account_id: String, mut photo: Signal<Option<String>>, mut busy: Signal<bool>, avatar: bool) -> Element {
+pub fn BannerUpload(kind: BannerAccountKind, account_id: String, mut photo: Signal<Option<String>>, mut busy: Signal<bool>) -> Element {
     let mut working = use_signal(|| false);
     let mut selection = use_signal(|| None::<SelectedImage>);
     let mut error = use_signal(|| None::<String>);
@@ -106,12 +88,10 @@ fn ImageUpload(kind: BannerAccountKind, account_id: String, mut photo: Signal<Op
     let escape_urls = urls.clone();
     let save_urls = urls.clone();
     let upload_id = account_id.clone();
-    let label = if avatar { "Profile photo" } else { "Banner image" };
-    let noun = if avatar { "photo" } else { "banner" };
-    let input_id = if avatar { "profile-photo-file" } else { "profile-banner-file" };
-    let remove_id = if avatar { "profile-photo-remove" } else { "profile-banner-remove" };
-    let crop_id = if avatar { "image-crop-avatar" } else { "image-crop-banner" };
-    let aspect = if avatar { 1.0 } else { 3.0 };
+    let input_id = "profile-banner-file";
+    let remove_id = "profile-banner-remove";
+    let crop_id = "image-crop-banner";
+    let aspect = 3.0;
     let preview_style = selection().map(|image| {
         let crop = crop_rect(image.width, image.height, aspect, zoom(), horizontal(), vertical());
         format!("width:{}%;height:{}%;left:{}%;top:{}%;", image.width / crop.width * 100.0,
@@ -119,7 +99,7 @@ fn ImageUpload(kind: BannerAccountKind, account_id: String, mut photo: Signal<Op
     }).unwrap_or_default();
     rsx! {
         style { {include_str!("image_upload.css")} }
-        section { class: "image-upload", aria_label: label,
+        section { class: "image-upload", aria_label: "Banner image",
             onkeydown: move |event| {
                 if event.key() == Key::Escape && selection().is_some() && !working() {
                     event.prevent_default(); event.stop_propagation();
@@ -127,16 +107,11 @@ fn ImageUpload(kind: BannerAccountKind, account_id: String, mut photo: Signal<Op
                     focus_after_render(input_id);
                 }
             },
-            label { class: "form-label", r#for: input_id, "{label}" }
-            p { class: "form-text", "JPEG, PNG, or WebP, up to 8 MB. "
-                if avatar { "Choose a square crop for your profile photo." }
-                else { "Choose a wide crop for your banner." }
-            }
-            if matches!(kind, BannerAccountKind::Tournament | BannerAccountKind::League) {
-                p { class: "form-text", "Banner changes save separately from settings. Save banner and Remove banner take effect immediately." }
-            }
+            label { class: "form-label", r#for: input_id, "Banner image" }
+            p { class: "form-text", "JPEG, PNG, or WebP, up to 8 MB. Choose a wide crop for your banner." }
+            p { class: "form-text", "Banner changes save separately from settings. Save banner and Remove banner take effect immediately." }
             if let Some(path) = photo() {
-                img { class: if avatar { "photo-upload-preview" } else { "banner-upload-preview" }, src: "{api::base_url()}/static/{path}", alt: "Current {noun}" }
+                img { class: "banner-upload-preview", src: "{api::base_url()}/static/{path}", alt: "Current banner" }
             }
             if let Some(message) = error() { p { class: "text-danger", role: "alert", "{message}" } }
             div { class: "image-upload-actions",
@@ -145,7 +120,6 @@ fn ImageUpload(kind: BannerAccountKind, account_id: String, mut photo: Signal<Op
                         if busy() { return; }
                         #[cfg(target_arch = "wasm32")]
                         {
-                            use dioxus::html::HasFileData;
                             if let Some(file) = event.files().into_iter().next() {
                                 clear_file_input(input_id); drag.set(None); error.set(None); status.set(String::new());
                                 let content_type = file.content_type().unwrap_or_default();
@@ -188,14 +162,14 @@ fn ImageUpload(kind: BannerAccountKind, account_id: String, mut photo: Signal<Op
                             busy.set(true); working.set(true); error.set(None); status.set(String::new());
                             let id = account_id.clone();
                             spawn(async move {
-                                match remove(kind, avatar, &id).await {
-                                    Ok(()) => { photo.set(None); status.set(format!("{} removed.", if avatar { "Photo" } else { "Banner" })); }
+                                match remove(kind, &id).await {
+                                    Ok(()) => { photo.set(None); status.set("Banner removed.".into()); }
                                     Err(message) => error.set(Some(message)),
                                 }
                                 working.set(false); busy.set(false);
                             });
                         },
-                        "Remove {noun}"
+                        "Remove banner"
                     }
                 }
             }
@@ -204,8 +178,8 @@ fn ImageUpload(kind: BannerAccountKind, account_id: String, mut photo: Signal<Op
                     p { class: "form-text", id: "{crop_id}-help", "Drag or tap to position."
                         span { class: "visually-hidden", " You can also focus the image and use arrow keys. Reset position centers the image without changing zoom." }
                     }
-                    div { class: if avatar { "image-crop-frame is-avatar" } else { "image-crop-frame" },
-                    div { id: crop_id, class: if avatar { "image-crop-viewport is-avatar" } else { "image-crop-viewport" },
+                    div { class: "image-crop-frame",
+                    div { id: crop_id, class: "image-crop-viewport",
                         style: "aspect-ratio:{aspect};", tabindex: "0", role: "group", aria_label: "Crop preview", aria_describedby: "{crop_id}-help",
                         onkeydown: move |event| {
                             if working() { return; }
@@ -292,15 +266,15 @@ fn ImageUpload(kind: BannerAccountKind, account_id: String, mut photo: Signal<Op
                                     let id = upload_id.clone(); let owned = save_urls.clone();
                                     let crop = crop_rect(image.width, image.height, aspect, zoom(), horizontal(), vertical());
                                     spawn(async move {
-                                        let result = match super::image_crop::encode_crop(&image.url, crop, avatar, &image.mime).await {
-                                            Ok(bytes) => upload(kind, avatar, &id, bytes).await,
+                                        let result = match super::image_crop::encode_crop(&image.url, crop, false, &image.mime).await {
+                                            Ok(bytes) => upload(kind, &id, bytes).await,
                                             Err(message) => Err(message),
                                         };
                                         working.set(false);
                                         match result {
                                             Ok(path) => {
                                                 photo.set(Some(path)); selection.set(None); drag.set(None); clear_url(&owned); busy.set(false);
-                                                status.set(format!("{} updated.", if avatar { "Photo" } else { "Banner" }));
+                                                status.set("Banner updated.".into());
                                                 focus_after_render(input_id);
                                             }
                                             Err(message) => error.set(Some(message)),
@@ -308,7 +282,7 @@ fn ImageUpload(kind: BannerAccountKind, account_id: String, mut photo: Signal<Op
                                     });
                                 }
                             },
-                            if working() { "Saving…" } else { "Save {noun}" }
+                            if working() { "Saving…" } else { "Save banner" }
                         }
                     }
                 }

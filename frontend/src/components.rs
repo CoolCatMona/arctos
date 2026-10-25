@@ -37,7 +37,7 @@ mod team_token_input;
 
 pub use ass_entry::AssEntry;
 pub use appearance_menu::AppearanceMenu;
-pub use banner_upload::{BannerUpload, BannerAccountKind, PhotoUpload};
+pub use banner_upload::{BannerUpload, BannerAccountKind};
 pub use page_intro::PageIntro;
 pub use profile_header::ProfileHeader;
 pub use profile_bio::ProfileBio;
@@ -65,7 +65,7 @@ pub use sidecomp_weapon_modal::{
     SideCompWeaponModal, ALL_POMPFEN,
 };
 pub use team_label::{TeamLabel, TeamLabelStyle, TeamSlot};
-pub use team_token_input::{all_tokens_known, resolve_value_to_team_ids, TeamSelectionField, TeamTokenInput};
+pub use team_token_input::{all_tokens_known, resolve_value_to_team_ids, TeamSelectionField};
 
 mod registration_status;
 mod registration_badges;

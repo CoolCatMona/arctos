@@ -140,7 +140,7 @@ frontend-test:
     set -euo pipefail
     [ ! -f "$HOME/.cargo/env" ] || . "$HOME/.cargo/env"
     host="$(rustc -vV | sed -n 's/^host: //p')"
-    cd frontend && cargo test --target "$host"
+    cd frontend && cargo test --locked --target "$host"
 
 # ── Database ──────────────────────────────────────────────────────────────────
 

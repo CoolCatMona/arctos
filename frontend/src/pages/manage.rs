@@ -4,7 +4,6 @@ use crate::components::{PaymentStatusBadge, RegistrationStatusBadge, WaiverStatu
 use crate::types::{
     PlayerListItem, RegisterPlayerAsToResponse, RegisterTeamAsToResponse, TeamListItem,
 };
-use crate::Route;
 use dioxus::prelude::*;
 use wasm_bindgen::JsCast;
 

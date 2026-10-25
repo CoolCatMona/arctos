@@ -24,8 +24,7 @@ the public profile; the player can still view and edit them.
 
 Active injuries, including private ones, are shown to authorized match
 referees during match setup at events the player is registered for. Marking
-an injury healed removes it from this active-injury information. Changing
-the default for new injuries does not change existing records.
+an injury healed removes it from this active-injury information. The visibility setting on an existing injury changes only when it is edited.
 
 In either case, injury (description, date, and status) may be
 published anonymously. This could be in the form of statistics or
@@ -43,7 +42,7 @@ attached, we will never group injuries by user, etc.).
  - are visible to head refs when starting, running, or viewing a match in 
    the same tournament in which they were logged
  - may be shown in aggregate statistics, but timestamp will be rounded
-   to the day, and no information about author or target will not be
+   to the day, and no information about the author or target will be
    shown besides the target type (team or player)
    
  The [user docs](docs.md#penalties) have more information on the types
@@ -57,10 +56,7 @@ attached, we will never group injuries by user, etc.).
 
 ## Encryption/sysadmin disclaimer
 
-All of this being said, none of the data dealt with by Arctos is
-actually encrypted for server side operations - as described in the
-second paragraph of the privacy policy, anyone with server access
-could view private information with some minimal technical knowledge
-(though authentication data is actually secure). The server itself is
-very secure, but you do have to trust the sysadmins to not leak
-information (to be clear, they will not).
+Arctos does not provide end-to-end encryption. Administrators with database or server access can
+inspect stored records, including private records. Passwords are stored as
+hashes; this does not make other account data inaccessible to administrators.
+See the [privacy policy](privacy-policy.md) for how the service handles data.

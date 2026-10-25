@@ -85,7 +85,7 @@ def _has_data(path: Path) -> bool:
     """Inspect an existing SQLite file read-only, including non-Arctos tables."""
     if not path.exists() or path.stat().st_size == 0:
         return False
-    with sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True) as connection:
+    with closing(sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True)) as connection:
         names = connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
         ).fetchall()

@@ -15,7 +15,7 @@ pub fn use_account() -> Resource<Result<User, AccountError>> {
 pub fn AccountCheckNotice() -> Element {
     let mut account = use_account();
     let unavailable = matches!(account.read().as_ref(), Some(Err(AccountError::Unavailable)));
-    let pending = !account.finished();
+    let pending = *account.state().read() == UseResourceState::Pending;
     if !unavailable {
         return rsx! {};
     }

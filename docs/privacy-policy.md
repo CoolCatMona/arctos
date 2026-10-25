@@ -47,7 +47,7 @@ plaintext password.
 We use your display name and username to personalize your experience
 with Arctos and to identify you across devices and sessions.
 
-### What information Arctos does not collect
+### Injury information and other sensitive data
 
 Players can choose to record injury information. New injury records are
 private by default, but active injuries remain available to authorized

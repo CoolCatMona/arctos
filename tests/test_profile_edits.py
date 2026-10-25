@@ -7,6 +7,7 @@ from uuid import UUID
 
 from PIL import Image
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.datastructures import MultiDict
 
 from app.utils import profile_edit_helpers as edits
@@ -186,29 +187,14 @@ def test_invalid_edit_preserves_text_and_both_files(client, owner, storage, case
 
 
 @pytest.mark.parametrize("action", ["replace", "remove"])
-@pytest.mark.parametrize("rollback_fails", [False, True])
-def test_commit_failure_rolls_back_every_field_and_cleans_only_new_files(
-    client, owner, storage, monkeypatch, action, rollback_fails
-):
+def test_commit_failure_rolls_back_every_field_and_cleans_only_new_files(client, owner, storage, monkeypatch, action):
     existing_profile(client, owner)
     before_state, before_files = state(owner[1]), files(storage)
 
     def fail_commit():
         raise RuntimeError("simulated database failure")
 
-    def fail_query(*_args, **_kwargs):
-        raise RuntimeError("database is unavailable for cleanup queries")
-
-    rollback = db.session.rollback
-
-    def rollback_with_disconnect():
-        rollback()
-        raise RuntimeError("connection failure during rollback")
-
     monkeypatch.setattr(db.session, "commit", fail_commit)
-    monkeypatch.setattr(db.session, "query", fail_query)
-    if rollback_fails:
-        monkeypatch.setattr(db.session, "rollback", rollback_with_disconnect)
     changes = (
         {"photo": image_bytes("RGBA"), "banner": image_bytes("RGBA")}
         if action == "replace"
@@ -217,6 +203,36 @@ def test_commit_failure_rolls_back_every_field_and_cleans_only_new_files(
     response = save(client, owner, profile={"name": "Not saved", "location": None}, **changes)
     assert response.status_code == 500 and response.get_json()["error"]
     assert state(owner[1]) == before_state and files(storage) == before_files
+
+
+@pytest.mark.parametrize("database_unavailable", [False, True])
+def test_lost_commit_acknowledgement_preserves_saved_images(client, owner, storage, monkeypatch, database_unavailable):
+    existing_profile(client, owner)
+    commit, rollback = db.session.commit, db.session.rollback
+
+    def commit_without_reply():
+        commit()
+        raise RuntimeError("connection lost after commit")
+
+    def failed_query(*_args, **_kwargs):
+        raise SQLAlchemyError("database unavailable during recovery")
+
+    def rollback_without_reply():
+        rollback()
+        raise SQLAlchemyError("database unavailable during rollback")
+
+    monkeypatch.setattr(db.session, "commit", commit_without_reply)
+    if database_unavailable:
+        monkeypatch.setattr(db.session, "query", failed_query)
+        monkeypatch.setattr(db.session, "rollback", rollback_without_reply)
+    response = save(
+        client, owner, profile={"name": "Saved name"}, photo=image_bytes("RGBA"), banner=image_bytes("RGBA")
+    )
+    assert response.status_code == 500 and "could not be confirmed" in response.json["error"]
+    account = owner[1]
+    assert account.name == "Saved name"
+    assert (storage / account.profile_photo).is_file()
+    assert (storage / account.banner_photo).is_file()
 
 
 @pytest.mark.parametrize("multipart", [True, False])

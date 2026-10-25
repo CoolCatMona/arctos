@@ -73,11 +73,6 @@
 .arctos-app .event-terms-link { display: inline-flex; gap: .6rem; align-items: center; min-height: 44px; margin-top: .5rem; }
 .arctos-app .event-section > .row { margin-top: 0 !important; }
 .arctos-app .event-section > .row + .row { margin-top: 1.25rem !important; }
-.arctos-app .event-organizer-card { border-top: 1px solid var(--ui-border); padding-top: 1.5rem; }
-.arctos-app .event-organizer-card > .card-header { padding: 0; margin-bottom: 1rem; border: 0; background: transparent; }
-.arctos-app .event-organizer-card > .card-body { padding: 0; }
-.arctos-app .event-organizer-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
-.arctos-app .event-organizer-actions .btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 44px; }
 .arctos-app .event-side-list { margin: 0; }
 .arctos-app .event-side-list > li { flex-wrap: wrap; }
 .arctos-app .event-side-list > li > a { min-width: 0; flex-basis: 65%; }
@@ -100,7 +95,6 @@
   .arctos-app .event-route-tabs { gap: .4rem; padding-inline: 16px; scroll-padding-inline: 16px; }
   .arctos-app .event-route-tab { min-height: 52px; font-size: .9rem; }
   .arctos-app .event-detail-content { padding: 20px 16px 2rem; }
-  .arctos-app .event-organizer-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
 }
 
 

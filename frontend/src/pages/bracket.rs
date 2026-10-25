@@ -4241,7 +4241,6 @@ fn BracketContent(url: String) -> Element {
                                             move |evt| {
                                                 #[cfg(target_arch = "wasm32")]
                                                 {
-                                                    use dioxus::html::HasFileData;
                                                     let files = evt.files();
                                                     if let Some(file) = files.into_iter().next() {
                                                         let u = u.clone();
@@ -4637,16 +4636,6 @@ mod recovery_tests {
         assert!(!state.can_acknowledge(1, &layout(1), &layout(2)));
         state.enqueue(layout(2));
         assert!(!state.can_acknowledge(1, &layout(1), &layout(1)));
-    }
-    #[test]
-    fn snapshot_includes_text_deletion_and_port_changes() {
-        let a = layout(1);
-        let mut b = a.clone();
-        b.texts.push(serde_json::json!({"id": "t", "text": "New"}));
-        assert!(a != b);
-        b = a.clone();
-        b.placements[0]["team1"] = serde_json::json!("NET");
-        assert!(a != b);
     }
 }
 

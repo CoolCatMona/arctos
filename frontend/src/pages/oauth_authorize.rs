@@ -43,6 +43,23 @@ fn navigate_away(url: &str) {
 #[component]
 pub fn OAuthAuthorize() -> Element {
     let query = use_signal(|| crate::initial_query("/oauth/authorize").unwrap_or_default());
+    let navigator = use_navigator();
+    let mut restore_query = use_signal(|| true);
+    use_effect(move || {
+        if !*restore_query.peek() { return; }
+        restore_query.set(false);
+        let original = query.peek().clone();
+        let router = dioxus::router::router();
+        let current_url = router.full_route_string();
+        let current_query = current_url.split('#').next().unwrap_or(&current_url)
+            .split_once('?').map(|(_, query)| query).unwrap_or("");
+        // The router strips this route's undeclared query during startup.
+        // Keep the exact authorization request in history so reload can resume it.
+        if !original.is_empty() && current_query.is_empty()
+            && matches!(router.current::<crate::Route>(), crate::Route::OAuthAuthorize {}) {
+            navigator.replace(format!("/oauth/authorize?{original}"));
+        }
+    });
     let mut error = use_signal(|| None::<String>);
     let mut deciding = use_signal(|| false);
 
@@ -75,6 +92,7 @@ pub fn OAuthAuthorize() -> Element {
     };
 
     let redirect_uri = query_param(&query(), "redirect_uri");
+    let checking_request = *request.state().read() == UseResourceState::Pending;
 
     let body = match &*request.read() {
         _ if is_framed() => rsx! {
@@ -90,7 +108,7 @@ pub fn OAuthAuthorize() -> Element {
                 strong { "This sign-in request can't be completed. " }
                 "{message}"
             }
-            button { r#type: "button", class: "btn btn-outline-secondary", disabled: !request.finished(),
+            button { r#type: "button", class: "btn btn-outline-secondary", disabled: checking_request,
                 onclick: move |_| { if request.finished() { request.restart(); } }, "Retry sign-in request" }
         },
         Some(Some(Ok(OAuthAuthorizationRequest::Redirect { redirect }))) => {

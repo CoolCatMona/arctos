@@ -7,9 +7,6 @@
 .arctos-app .operator-signature-pad canvas { display: block; }
 /* The counter and primary controls stay together on narrow phones. */
 .arctos-app .stones-page { max-width: 680px; padding: 0; }
-.arctos-app .stones-heading { text-align: center; margin: 1rem 0 1.5rem; }
-.arctos-app .stones-heading h1 { margin-bottom: .5rem; }
-.arctos-app .stones-heading p { color: var(--ui-muted); margin: 0; }
 .arctos-app .stones-player-card > .card-body { padding: 1.5rem; }
 .arctos-app .stones-counter-panel { text-align: center; }
 .arctos-app .stones-counter-panel h2 { margin-bottom: .5rem; }

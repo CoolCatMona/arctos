@@ -117,7 +117,7 @@ async def controls(check, page, stones) -> None:
     await expect(preview).to_be_enabled()
     await expect(count).to_have_text("0")
     await page.get_by_role("button", name="Calibrate manually", exact=True).click()
-    dialog = page.get_by_role("dialog", name="Calibrate stone timing")
+    dialog = page.get_by_role("dialog", name="Calibrate — Step 1 of 2: Audio offset", exact=True)
     await expect(dialog).to_be_visible()
     await dialog.get_by_role("button", name="Cancel", exact=True).click()
     await expect(dialog).to_be_hidden()

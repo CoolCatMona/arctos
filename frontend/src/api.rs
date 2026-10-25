@@ -2508,159 +2508,7 @@ pub async fn save_profile_edit(
     }
 }
 
-pub async fn update_player_profile(
-    player_id: &str,
-    req: &UpdatePlayerProfileRequest,
-) -> Result<(), String> {
-    let c = client();
-    let r = with_credentials(
-        c.put(format!("{}/_api/players/{}", base(), player_id))
-            .json(req),
-    )
-    .send()
-    .await
-    .map_err(|e| e.to_string())?;
-
-    let data: Value = response_json(r).await?;
-    if data.get("success").and_then(|v| v.as_bool()) == Some(true) {
-        Ok(())
-    } else {
-        Err(data
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Unknown error")
-            .to_string())
-    }
-}
-
-pub async fn update_team_profile(
-    team_id: &str,
-    req: &UpdateTeamProfileRequest,
-) -> Result<(), String> {
-    let c = client();
-    let r = with_credentials(
-        c.put(format!("{}/_api/teams/{}", base(), team_id))
-            .json(req),
-    )
-    .send()
-    .await
-    .map_err(|e| e.to_string())?;
-
-    let data: Value = response_json(r).await?;
-    if data.get("success").and_then(|v| v.as_bool()) == Some(true) {
-        Ok(())
-    } else {
-        Err(data
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Unknown error")
-            .to_string())
-    }
-}
-
-/// Upload player profile photo. Overwrites previous; backend uses predictable path.
-pub async fn upload_player_profile_photo(
-    player_id: &str,
-    bytes: bytes::Bytes,
-) -> Result<String, String> {
-    let c = client();
-    let r = with_credentials(
-        c.post(format!(
-            "{}/_api/players/{}/profile-photo",
-            base(),
-            player_id
-        ))
-        .body(bytes),
-    )
-    .send()
-    .await
-    .map_err(|e| e.to_string())?;
-    let data: Value = response_json(r).await?;
-    if data.get("success").and_then(|v| v.as_bool()) == Some(true) {
-        data.get("path")
-            .and_then(|v| v.as_str())
-            .map(String::from)
-            .ok_or_else(|| "No path in response".to_string())
-    } else {
-        Err(data
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Upload failed")
-            .to_string())
-    }
-}
-
-/// Remove player profile photo.
-pub async fn delete_player_profile_photo(player_id: &str) -> Result<(), String> {
-    let c = client();
-    let r = with_credentials(c.delete(format!(
-        "{}/_api/players/{}/profile-photo",
-        base(),
-        player_id
-    )))
-    .send()
-    .await
-    .map_err(|e| e.to_string())?;
-    let data: Value = response_json(r).await?;
-    if data.get("success").and_then(|v| v.as_bool()) == Some(true) {
-        Ok(())
-    } else {
-        Err(data
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Failed to remove photo")
-            .to_string())
-    }
-}
-
-/// Upload team profile photo. Overwrites previous; backend uses predictable path.
-pub async fn upload_team_profile_photo(
-    team_id: &str,
-    bytes: bytes::Bytes,
-) -> Result<String, String> {
-    let c = client();
-    let r = with_credentials(
-        c.post(format!("{}/_api/teams/{}/profile-photo", base(), team_id))
-            .body(bytes),
-    )
-    .send()
-    .await
-    .map_err(|e| e.to_string())?;
-    let data: Value = response_json(r).await?;
-    if data.get("success").and_then(|v| v.as_bool()) == Some(true) {
-        data.get("path")
-            .and_then(|v| v.as_str())
-            .map(String::from)
-            .ok_or_else(|| "No path in response".to_string())
-    } else {
-        Err(data
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Upload failed")
-            .to_string())
-    }
-}
-
-/// Remove team profile photo.
-pub async fn delete_team_profile_photo(team_id: &str) -> Result<(), String> {
-    let c = client();
-    let r = with_credentials(c.delete(format!("{}/_api/teams/{}/profile-photo", base(), team_id)))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    let data: Value = response_json(r).await?;
-    if data.get("success").and_then(|v| v.as_bool()) == Some(true) {
-        Ok(())
-    } else {
-        Err(data
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Failed to remove photo")
-            .to_string())
-    }
-}
-
-async fn upload_profile_banner(kind: &str, id: &str, bytes: bytes::Bytes) -> Result<String, String> {
+async fn upload_event_banner(kind: &str, id: &str, bytes: bytes::Bytes) -> Result<String, String> {
     let response = with_credentials(client().post(format!(
         "{}/_api/{}/{}/banner-photo", base(), kind, urlencoding::encode(id)
     )).body(bytes)).send().await.map_err(|error| error.to_string())?;
@@ -2673,7 +2521,7 @@ async fn upload_profile_banner(kind: &str, id: &str, bytes: bytes::Bytes) -> Res
     }
 }
 
-async fn delete_profile_banner(kind: &str, id: &str) -> Result<(), String> {
+async fn delete_event_banner(kind: &str, id: &str) -> Result<(), String> {
     let response = with_credentials(client().delete(format!(
         "{}/_api/{}/{}/banner-photo", base(), kind, urlencoding::encode(id)
     ))).send().await.map_err(|error| error.to_string())?;
@@ -2683,22 +2531,6 @@ async fn delete_profile_banner(kind: &str, id: &str) -> Result<(), String> {
     } else {
         Err(data.get("error").and_then(Value::as_str).unwrap_or("Could not remove banner").to_string())
     }
-}
-
-pub async fn upload_player_banner_photo(id: &str, bytes: bytes::Bytes) -> Result<String, String> {
-    upload_profile_banner("players", id, bytes).await
-}
-
-pub async fn delete_player_banner_photo(id: &str) -> Result<(), String> {
-    delete_profile_banner("players", id).await
-}
-
-pub async fn upload_team_banner_photo(id: &str, bytes: bytes::Bytes) -> Result<String, String> {
-    upload_profile_banner("teams", id, bytes).await
-}
-
-pub async fn delete_team_banner_photo(id: &str) -> Result<(), String> {
-    delete_profile_banner("teams", id).await
 }
 
 pub async fn get_my_player_registration(
@@ -3950,17 +3782,17 @@ pub async fn disconnect_app(client_id: &str) -> Result<(), String> {
 }
 
 pub async fn upload_tournament_banner_photo(id: &str, bytes: bytes::Bytes) -> Result<String, String> {
-    upload_profile_banner("tournaments", id, bytes).await
+    upload_event_banner("tournaments", id, bytes).await
 }
 
 pub async fn delete_tournament_banner_photo(id: &str) -> Result<(), String> {
-    delete_profile_banner("tournaments", id).await
+    delete_event_banner("tournaments", id).await
 }
 
 pub async fn upload_league_banner_photo(id: &str, bytes: bytes::Bytes) -> Result<String, String> {
-    upload_profile_banner("leagues", id, bytes).await
+    upload_event_banner("leagues", id, bytes).await
 }
 
 pub async fn delete_league_banner_photo(id: &str) -> Result<(), String> {
-    delete_profile_banner("leagues", id).await
+    delete_event_banner("leagues", id).await
 }

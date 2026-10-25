@@ -1,413 +1,174 @@
 # Testing
 
-## Setup
+Choose checks for the behavior being changed. Backend tests verify domain rules,
+permissions, data integrity, and API contracts. Rust tests verify pure frontend
+logic. Browser checks verify interactions that need a rendered application.
+A screenshot or passing compile check is not a substitute for those tests.
 
-Install dependencies including the test group:
+## Setup and commands
 
 ```bash
 uv sync --group test
+just test                     # backend pytest suite
+just test -k registration     # focused backend tests
+just frontend-test            # Rust tests on the host target
+just lint
+uv run ruff format --check .
 ```
 
-## Running Tests
+`just unit` and `just integration` select the corresponding pytest markers.
+You can pass pytest flags to `just test`, such as `-n 4` to limit parallel workers
+or `--tb=long` for full tracebacks. The commands are defined in `justfile`;
+pytest defaults and markers are in `pyproject.toml`.
+
+Check the browser build target separately:
 
 ```bash
-just test          # full suite
-just unit          # unit tests only (fast, no DB)
-just integration   # integration tests only
+cd frontend
+cargo check --locked --target wasm32-unknown-unknown
 ```
 
-Without `just`:
+CI runs backend tests with coverage, Python lint/format checks, frontend unit
+tests, and the WebAssembly compile check. Browser suites require running servers
+and are separate from ordinary pytest.
 
-```bash
-uv run pytest tests/
-uv run pytest tests/ -m unit
-uv run pytest tests/ -m integration
-```
+## Writing useful tests
 
-Useful flags:
+Test outcomes and failure boundaries, rather than reproducing the implementation
+or asserting incidental markup. Useful cases include:
 
-```bash
-just test -k "registration"   # filter by name
-just test --tb=long           # full tracebacks
-```
+- An unauthorized account cannot read or change another account's data.
+- Invalid input leaves existing data unchanged and gives a usable error.
+- A failed save retains its draft; an uncertain write is reconciled before retry.
+- A transaction cannot leave half an update committed.
+- A delayed response cannot replace a newer query or draft.
+- A keyboard/touch interaction reaches the same action as a pointer click.
+
+Use a focused regression test for a bug when practical. Cosmetic and wording
+changes normally need review, not a new unit test. Run the relevant tests first;
+repeat broad suites when the scope or a failure warrants it.
+
+### Backend fixtures
+
+Shared fixtures live in `tests/conftest.py`; helpers are in `tests/utils.py`.
+See [tests/README.md](tests/README.md) for test organization.
+
+| Fixture/helper | Purpose |
+| --- | --- |
+| `app` | Session-scoped Flask app with a temporary SQLite database |
+| `test_db` | Recreates tables for each test and keeps its app context open |
+| `client` | Flask test client using that database |
+| `tournament`, `player`, `team` | Basic domain records |
+| `team_registration`, `head_ref_player` | Registration and referee setup |
+| `make_registrable_config()` | Registration settings with closed defaults |
+| `login_as(client, user)` | Authenticated test session without a login request |
+
+Fixtures that depend on `test_db` can use the session directly. Avoid opening
+and closing an extra app context inside a fixture, which can detach the objects
+it returns. Tests with multiple sessions or explicit transactions should manage
+their lifetimes deliberately.
+
+Standalone tournaments need a `RegistrableConfig`; league events inherit their
+league's config. Use the shared helper instead of duplicating model defaults.
+Assert the actual endpoint contract: API errors may be 400, 401, 403, 404, or 409,
+and OAuth callbacks use redirects. Not every `/_api/` response is JSON.
+
+Image and profile tests should cover ownership, accepted media, size/pixel limits,
+metadata removal, atomic text/image updates, and cleanup on failure. Migration
+and demo tests should use temporary databases and verify that source snapshots
+and existing destination data are preserved. They must not depend on a personal
+snapshot or production database.
 
 ## Coverage
 
-Run the suite with coverage:
-
 ```bash
-just coverage
-just coverage -k "registration"   # filtered coverage run
+just coverage                         # report without the project-wide floor
+just coverage -k registration         # useful for focused investigation
+just coverage --cov-report=html       # writes htmlcov/index.html
+just coverage-check                   # CI-style floor
 ```
 
-`just coverage` disables the project-wide coverage floor so filtered
-runs can report useful local numbers without failing because they only
-exercise part of the app.
-
-Run the CI-style coverage gate:
-
-```bash
-just coverage-check
-```
-
-Without `just`:
-
-```bash
-uv run pytest tests/ --cov=app --cov-report=term-missing --cov-fail-under=0
-uv run pytest tests/ --cov=app --cov-report=term-missing --cov-fail-under=0 -k "registration"
-```
-
-Generate an HTML report (lands in `htmlcov/`, gitignored):
-
-```bash
-just coverage --cov-report=html
-open htmlcov/index.html                  # or xdg-open on Linux
-```
-
-Coverage settings live under `[tool.coverage.*]` in `pyproject.toml`:
-
-- **Source** is `app/` (tests, scripts, and migrations are not measured).
-- **Branch coverage** is on, so untested `else` branches count as misses.
-- **`fail_under = 30`** is a soft floor that catches significant
-  regressions without blocking small fluctuations. CI enforces it with
-  `just coverage-check`. Use the generated report for current branch coverage;
-  raise the floor when overall coverage grows.
-
-## Structure
-
-```
-tests/
-├── conftest.py          # shared fixtures (app, test_db, client, tournament, player, team, …)
-├── utils.py             # helpers: make_registrable_config(), login_as()
-├── test_basic.py
-├── test_dependencies.py
-├── test_match_start.py
-├── test_matches_api.py
-├── test_permissions.py
-├── test_registration_flow.py
-├── test_registration_reregister.py
-├── test_tournament_service.py
-├── test_update_tags_recompute.py
-└── unit/
-    ├── test_services_unit.py
-    └── test_tag_resolution.py
-```
-
-## Markers
-
-| Marker        | Meaning                          |
-|---------------|----------------------------------|
-| `unit`        | Pure logic, no database or HTTP  |
-| `integration` | Hits the SQLite test DB via HTTP |
-| `slow`        | Long-running tests               |
-
-Mark a test:
-
-```python
-@pytest.mark.unit
-def test_something():
-    ...
-```
-
-## Key Fixtures
-
-All fixtures are defined in `tests/conftest.py`.
-- See [scope](https://docs.pytest.org/en/6.2.x/fixture.html#scope-sharing-fixtures-across-classes-modules-packages-or-session)
-
-
-| Fixture             | Scope    | Description                                      |
-|---------------------|----------|--------------------------------------------------|
-| `app`               | session  | Flask app wired to a temporary SQLite file       |
-| `test_db`           | function | Drops and recreates all tables before each test  |
-| `client`            | function | `FlaskLoginClient` test client                   |
-| `tournament`        | function | Published tournament with two fields             |
-| `player`            | function | A `Player` row with password set                 |
-| `team`              | function | A `Team` row with password set                   |
-| `team_registration` | function | Confirmed, paid `TeamRegistration`               |
-| `head_ref_player`   | function | Player whose ID is in `head_refs_allowed_list`   |
-
-`test_db` keeps the app context open for the entire test, so ORM objects created by other fixtures stay attached to the session without needing extra `with app.app_context()` blocks.
-
-## Utilities
-
-**`make_registrable_config(**kwargs)`** — creates a `RegistrableConfig` with safe defaults (all registration closed). Pass keyword arguments to override specific fields.
-
-**`login_as(client, user)`** — injects Flask-Login session keys so a user is considered authenticated without going through the login endpoint.
-
-## Configuration
-
-pytest options live in `pyproject.toml` under `[tool.pytest.ini_options]`.
-
----
-
-## Best Practices
-
-For general pytest guidance see the [official how-to guides](https://docs.pytest.org/en/stable/how-to/index.html). Project-specific rules are below.
-
-**Mark every test** with `@pytest.mark.unit` or `@pytest.mark.integration` so it can be run in isolation.
-
-**Use shared fixtures** from `tests/conftest.py` (`test_db`, `client`, `tournament`, `player`, `team`, …). Only write a new fixture when something genuinely test-specific is needed.
-
-**One app context per test, owned by `test_db`** — `test_db` opens an app context that lives for the whole test. Fixtures that depend on `test_db` should write directly to the session; don't push a second `with app.app_context()` inside them.
-
-```python
-# good
-@pytest.fixture
-def my_thing(test_db):
-    obj = MyModel(...)
-    db.session.add(obj)
-    db.session.commit()
-    db.session.refresh(obj)
-    return obj
-
-# bad — second context closes before the test body runs
-@pytest.fixture
-def my_thing(app, test_db):
-    with app.app_context():
-        ...
-```
-
-**Reading DB state after HTTP calls** — the test client handles requests in its own context. Wrap post-request queries in `with app.app_context()`:
-
-```python
-resp = client.post("/_api/...")
-assert resp.status_code == 200
-
-with app.app_context():
-    row = MyModel.query.filter_by(...).first()
-    assert row.status == "CONFIRMED"
-```
-
-**API endpoints return JSON, not redirects** — all `/_api/` routes return `200` on success and `400` on validation failure. Don't assert for `302`.
-
-**Creating tournaments** — `Tournament` requires a `registrable_config_id`. Use `make_registrable_config()`:
-
-```python
-from tests.utils import make_registrable_config
-
-cfg = make_registrable_config(registration_open=True, team_registration_open=True)
-t = Tournament(url="my-event", ..., registrable_config_id=cfg.id)
-```
-
-**Don't use `db.session.begin()`** — `test_db` already manages the transaction. Call `db.session.add()` / `db.session.commit()` directly.
-
-## Images, migrations, and demo snapshots
-
-Image tests exercise raw-byte avatar and banner uploads independently of the
-browser crop editor. They cover file and decoded-pixel limits, still-image
-validation, metadata removal, typed account ownership and organizer access,
-failed writes, unique image URLs, and conservative cleanup of existing files.
-`tests/unit/test_markdown.py` checks supported formatting, existing documentation,
-and removal of unsafe HTML, attributes, and URL schemes through the shared renderer.
-`tests/test_profile_edits.py` covers atomic multipart text/avatar/cover updates,
-existing JSON clients, malformed and conflicting fields, model limits, partial
-image failures, and cleanup after database or rollback failures.
-Migration tests verify the nullable banner columns introduced by revisions
-`0023_profile_banners` and `0024_event_banners` without replacing existing rows.
-
-The snapshot launcher has a focused test suite:
-
-```bash
-uv run pytest tests/unit/test_dev_demo.py -n 4
-```
-
-It constructs temporary databases; no personal snapshot is needed. Checks
-include migration from a known older revision, byte-for-byte preservation of
-the source and existing demo, additive fixtures, password/edit preservation,
-reserved IDs across both account types, committed WAL data, unknown-revision
-rejection, failed preparation cleanup, and atomic publication without
-overwriting a concurrently created destination. `--seed-only` is checked
-without starting Flask. See [the local demo instructions](README.md#try-the-interface-with-sample-events)
-for the optional snapshot launcher.
-
-Pure Rust tests run separately with `just frontend-test`; this includes image
-header validation and crop geometry as well as counters, time sync, and UI
-state helpers.
-
+Coverage measures `app/`, including branches, with a configured minimum of 30%.
+A filtered run does not represent project coverage, so `just coverage` disables
+the floor for that run. Use the report to locate untested behavior; do not add
+low-value assertions solely to increase the percentage.
 
 ## Mobile browser verification
 
-The redesign has a repeatable Chromium smoke check against the isolated demo.
-It does not run as part of ordinary backend pytest, because it needs a built
-WASM frontend and a running server.
+Start an isolated demo and the frontend in separate terminals:
 
 ```bash
 just demo
-# In another terminal:
 just frontend
-# In a third terminal:
+```
+
+Install Chromium and run a browser check from the repository root:
+
+```bash
 uv run playwright install chromium
 uv run python scripts/check_mobile_ui.py --screenshots /tmp/arctos-ui
 ```
 
-Alternatively, point `--browser-executable` at an existing Chrome/Chromium
-binary. Use `--base-url http://127.0.0.1:8443` if the frontend uses a different
-port. The script requires the demo-only marker endpoint, rejects non-local
-origins, and blocks mutations except demo login and read-only Markdown
-rendering. It checks phones (360px and 390px), tablet (768px), and desktop
-(1280px), including discovery, account forms, tournament/league pages,
-profiles, schedules, operator/registration tools, and side competitions.
-It also checks search/date filters, top-level introduction dismissal/restoration and persistence,
-profile tabs and settings disclosures, unsaved injury-edit retention, keyboard roster
-expansion, validation input retention, phone-sized
-point controls, modern browser input patterns, and a simulated failed match
-finalization without changing a real match. Phone runs exercise bracket
-dragging, pointer capture, cancellation, and panning against a browser-only
-fixture; no layout is saved to the backend.
+Playwright is installed with the application dependencies because scoreboard
+rendering also uses it. Pass
+`--browser-executable /path/to/chromium` to use an installed browser, or
+`--base-url http://127.0.0.1:8080` to select the frontend URL. The runners require
+a local origin and the demo-only marker endpoint. They block real data writes,
+except demo login and read-only Markdown rendering, and intercept responses for
+write/error scenarios. Do not remove those guards to test against a real site.
 
-Run `uv run python scripts/check_mobile_ui.py --workflow registration-and-schedule`
-for registration destinations, league-event redirects, and schedule availability.
-These checks use browser-only responses to cover unpublished schedules and
-unregistered accounts without changing demo records.
+Run the smallest relevant suite. Each accepts the same base-URL, browser, and
+screenshot options; use `--help` for its supported filters.
 
-Run `uv run python scripts/check_mobile_ui.py --workflow discovery-controls`
-for Events/Leagues navigation, narrow-screen discovery toolbars, contextual
-Organize menus, and keyboard dismissal. League fixtures cover Active/Past date
-boundaries, counts, and search. Creation checks verify guest login destinations,
-retained input after errors, and successful navigation to draft Settings.
-Creation responses are intercepted in the browser; no draft is saved.
+| Script in `scripts/` | Main purpose |
+| --- | --- |
+| `check_mobile_ui.py` | Common routes, discovery, registration, live controls, and recovery |
+| `check_appearance_ui.py` | Theme/mode preferences, persistence, menus, and contrast |
+| `check_event_ui.py` | Event navigation, rosters, registration destinations, and schedule access |
+| `check_registration_ui.py` | Contextual registration actions for guest/player/team accounts |
+| `check_results_ui.py` | Standings, ties, ribbon inclusion, sorting, and match expansion |
+| `check_profile_ui.py` | Profile sections, draft persistence, Markdown, and staged image edits |
+| `check_event_tools_ui.py` | Organizer tools, settings, shared headers, and retained input |
+| `check_stones_ui.py` | Playback state, mute/preview, audio caching, and calibration controls |
 
-Check appearance preferences separately with the same running demo:
+For example:
 
 ```bash
-uv run python scripts/check_appearance_ui.py --screenshots /tmp/arctos-appearance
-```
-
-This covers all three themes in light and dark modes, distinct page/card
-backgrounds, text contrast, mobile menu sizing, guest/player/team menu access,
-keyboard controls, unsaved form preservation, saved-theme migration, browser
-persistence, live system-mode changes, cross-tab updates, and unavailable
-storage. Registration summaries are checked at narrow phone widths in each
-theme, including approval, payment, and waiver states. It accepts the same
-`--base-url` and
-`--browser-executable` options. OBS and exact-size render routes retain their
-independent presentation.
-
-Check event sections and profile counts with:
-
-```bash
-uv run python scripts/check_event_ui.py --screenshots /tmp/arctos-events
-```
-
-This checks tournament, league, and league-event tabs, keyboard navigation,
-registration and schedule destinations, roster details, and theme contrast at
-320px and 360px. Direct Schedule, Results, and Bracket views keep the shared
-banner visible; keyboard focus reveals offscreen navigation links without
-scrolling the page. Browser history preserves schedule filters. It compares
-player/team profile and directory counts with the
-API, including zero and nonzero values supplied through GET-only browser
-fixtures. Desktop views are checked at 1280px.
-
-Check contextual registration actions with:
-
-```bash
-uv run python scripts/check_registration_ui.py --screenshots /tmp/arctos-registration
-```
-
-GET-only browser fixtures cover guest, player, and team actions; open and closed
-registration; league registration destinations; and side-competition eligibility.
-The checks verify one relevant primary action, preserved edit/roster access,
-login return paths, and responsive placement and contrast across all themes.
-
-Check calculated tournament and league standings with:
-
-```bash
-uv run python scripts/check_results_ui.py --screenshots /tmp/arctos-results
-```
-
-GET-only fixtures cover tied ranks, unplayed teams, podium trophies, keyboard
-sorting without changing ranks, ribbon inclusion, expandable match details,
-empty results, and resizing after collapse. Layout and trophy contrast checks
-cover all three themes in light/dark and widths from 320px to 1280px.
-
-Check page banners, profile navigation, uploads, and organizer access with:
-
-```bash
+uv run python scripts/check_mobile_ui.py --workflow registration-and-schedule
 uv run python scripts/check_profile_ui.py --screenshots /tmp/arctos-profiles
 ```
 
-This covers independent dismissal/restoration of top-level introductions,
-legacy preferences, profile tabs and permission-sensitive panels, keyboard
-focus, and all themes at phone widths. Profile and event detail headers remain
-visible even when older preferences marked them hidden, and offer no dismiss
-or restore control. Profile geometry checks cover
-the 3:1 cover, overlapping avatar, left-aligned identity, 900px desktop column,
-and panels without card frames at 320px, 360px, and 1280px. Back/Forward checks
-preserve unsaved injury inputs and expanded team rosters. Player and team edits
-check player pronouns/pompfen, live Markdown previews, the phone Preview/Edit switch, private phone exclusion,
-validation while fields are hidden, and staged removal/cropping without writes.
-Intercepted multipart saves verify that text and both images travel together,
-duplicate submissions are blocked, failures retain drafts, and retry sends the
-same content. Markdown checks cover formatting, sanitization, delayed responses,
-empty drafts, and retry after a rendering failure. Crop checks cover keyboard, mouse, touch, tap-to-center, position reset,
-one shared Zoom control, exported PNG dimensions/pixels, and object URL cleanup.
-Tournament and league banner uploads retain separate checks for failure,
-success, removal, retained form input, and form blocking during a pending crop.
-Organizer menus are checked for guest/owner visibility, links, Escape, outside
-clicks, and narrow-screen layout. Upload tests do not write images or records to
-the demo backend. Backend tests separately exercise image validation, typed
-ownership, storage cleanup, and both database migrations. Pending image editors
-are cancelled on navigation and release their temporary object URLs.
+Browser response fixtures exercise UI behavior; backend tests separately verify
+that real services enforce permissions and persist or roll back changes.
+Screenshot examples are in [docs/screenshots](docs/screenshots/README.md).
+They are visual references, not an exhaustive test record.
 
-Check the shared headers and flat editing sections on event and league tools with:
+### Manual checks and device limits
 
-```bash
-uv run python scripts/check_event_tools_ui.py --screenshots /tmp/arctos-event-tools
-```
+For changed forms, check failed reads, invalid fields, delayed saves, and rejected
+writes. No editable blank record should appear after a failed load. Drafts must
+survive failures; feedback must identify the relevant field or service problem.
+Pending writes must prevent duplicate actions.
 
-This visits settings, registration, management, footage, rosters, schedule editing,
-and side competitions at 320px, 360px, and 1280px. It checks header composition,
-selected tabs, distinct event/side-competition menus, preserved drafts during
-header updates, and schedule editor dialogs without saving data.
+For dialogs, check initial focus, Tab/Shift+Tab, Escape, background taps, nested
+dialogs, and focus return. Confirm the intended Cancel behavior: a provisional
+bracket item is removed, a saved item is kept, and calibration restores its
+snapshot. Pending writes must not be dismissed. Refreshing schedule helpers
+must retain other edited rows and block writes after a failed refresh.
 
-Check the Stones controls against the same demo:
+Review phones at 320px and 390px, a short landscape viewport, and desktop.
+Tables should scroll within their own container. Long dialogs must reach every
+field and action. A virtual keyboard must not cover the only save/close control.
+Check themes, enlarged text, and keyboard focus as relevant to the change.
 
-```bash
-uv run python scripts/check_stones_ui.py --screenshots /tmp/arctos-stones
-```
+Chromium viewport emulation does not reproduce an iPhone. For an Apple-device
+issue, record the route, device model, iOS/browser version, orientation, and
+keyboard state. Check keyboard open/close and rotation, Safari toolbar changes,
+notches/safe areas, native dates/selects, Photos/Files selection, and crop gestures.
+Do not disable pinch zoom. CSS inset fixtures can verify arithmetic, but not
+physical-device behavior.
 
-This exercises Start, Pause, Reset, mute, sound previews, cached sounds while
-offline, custom-file validation, and calibration controls. It observes real
-Web Audio scheduling with Chromium output muted, including cancellation of a
-pending start. It also checks all themes at 320px and 360px. The script accepts
-the same browser and base-URL options as the other checks.
-
-Camera/audio device behavior and external Google/YouTube integrations still
-need real devices and configured credentials. Browser rendering alone cannot
-verify Bluetooth delay, actual recording, or third-party account flows.
-
-### Forms, dialogs and iPhone verification
-
-Check account setup, injury add/edit, league event creation, settings and schedule
-fields with loading, rejected reads, rejected writes and delayed responses.
-Failed reads must not expose an editable blank record. Failed writes must retain
-the draft and focus useful feedback. Labels, hints and custom errors must refer
-to the correct field. A delayed username check must not overwrite a newer draft.
-Intercept mutations when testing against the populated demo.
-
-Exercise match explanations/Force Start, penalty details, event/league deletion,
-all six schedule helpers, all five bracket editing/legacy dialogs and Stones
-calibration. Check initial focus, Tab/Shift+Tab containment, Escape, close buttons,
-background taps, nested dialogs and return focus. Pending writes must block a
-second request and dismissal. Verify that schedule refresh errors retain the
-open helper, disable further writes and offer a read-only retry; saving one row
-must not discard another row's draft. Cancelling a provisional bracket text or
-team label must remove only that provisional item. Cancelling calibration must
-restore its timing snapshot, including when a previous resync completes late.
-
-Test 320px and 390px portrait layouts and a short landscape viewport. Confirm
-that long dialogs can scroll to every field and action, profile toolbars release
-sticky positioning in short visible space, and the standalone side-event keypad
-does not clip its last row. Explicit inset/visual-height fixtures can check CSS
-arithmetic; they do not reproduce an iPhone keyboard, notch or browser toolbar.
-
-For an Apple-device report, record the route, iPhone model, iOS version, browser,
-orientation and whether the keyboard is open. On the affected device and current
-Safari, check both landscape orientations, text enlargement/pinch zoom, keyboard
-open/close/rotation, native dates/selects, image selection from Photos/Files,
-crop gestures and light/dark page edges. Inspect the focused field and dialog
-actions while Safari's toolbar expands or collapses. Test home-screen mode only
-if it is used. Do not infer Safari success from Chromium or Linux WebKit runs.
-The layout implementation follows [WebKit's safe-area guidance](https://webkit.org/blog/7929/designing-websites-for-iphone-x/)
-and the [VisualViewport API](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport);
-physical-device checks remain necessary for platform behavior.
+Google/YouTube flows require configured integrations. Audio hardware, Bluetooth
+latency, actual recording, screen readers, and native file pickers also require
+appropriate manual checks. A muted browser audio test cannot verify audible
+synchronization.

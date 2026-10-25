@@ -1,7 +1,7 @@
 [project]
 name = "arctos"
 version = "0.1.0"
-description = "Add your description here"
+description = "Registration, scheduling, and scoring for jugger tournaments and leagues."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -83,9 +83,8 @@ omit = [
 show_missing = true
 skip_covered = false
 precision = 1
-# Soft floor. Current actual is ~33% with branch coverage on; this gate
-# catches significant regressions without blocking small fluctuations.
-# Bump it when coverage rises.
+# Project-wide minimum used by the CI coverage check.
+# Focused test runs disable this floor through `just coverage`.
 fail_under = 30
 exclude_lines = [
     "pragma: no cover",

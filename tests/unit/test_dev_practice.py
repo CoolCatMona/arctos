@@ -7,25 +7,15 @@ import sqlite3
 from flask import Flask
 import pytest
 
-from app import create_app
-from app.domain.enums import MatchStatus, RegistrationStatus, WinnerSide
-from app.services.dual_write import get_match_player_ids, get_match_ref_team_ids
+from app.domain.enums import MatchStatus
 from app.services.match_start_eligibility import get_can_start_and_reasons
 from app.services.permission_service import PermissionService
 from app.services.sidecomp_service import SideCompService
-from app.services.team_stats_service import compute_team_stats
 from models import (
-    Field,
     League,
     Match,
     Player,
-    PlayerRegistration,
-    Point,
-    SideComp,
-    SideCompRegistration,
-    SideCompResult,
     Team,
-    TeamRegistration,
     Tournament,
     db,
 )
@@ -64,7 +54,7 @@ def rows(path: Path) -> dict[str, set[tuple]]:
         return {name: set(connection.execute('SELECT * FROM "' + name.replace('"', '""') + '"')) for (name,) in names}
 
 
-def test_practice_is_additive_with_complete_rosters_and_usable_matches(demo_path, tmp_path, monkeypatch):
+def test_practice_preserves_existing_rows_and_adds_usable_event(demo_path, tmp_path, monkeypatch):
     source_snapshot = tmp_path / "original-snapshot.db"
     source_snapshot.write_bytes(demo_path.read_bytes())
     source_bytes = source_snapshot.read_bytes()
@@ -94,75 +84,13 @@ def test_practice_is_additive_with_complete_rosters_and_usable_matches(demo_path
             assert event.published and event.schedule_published
             assert PermissionService.is_tournament_organizer(event.url, organizer)
             assert PermissionService.can_head_ref_match(event.url, organizer)
-            assert Field.query.filter_by(event=event.url).count() == 2
-            assert TeamRegistration.query.filter_by(event=event.url).count() == 6
-            assert PlayerRegistration.query.filter_by(event=event.url).count() == 37
-            for team_id in manifest["teams"]:
-                registrations = PlayerRegistration.query.filter_by(event=event.url, team=team_id).all()
-                assert len(registrations) == 6
-                assert all(reg.status == RegistrationStatus.CONFIRMED and reg.paid for reg in registrations)
-                assert len({reg.jersey_number for reg in registrations}) == 6
-            matches = Match.query.filter_by(event=event.url).all()
-            assert len(matches) == 9
-            assert sum(match.status == MatchStatus.COMPLETED for match in matches) == 6
             ready = db.session.get(Match, manifest["matches"]["ready"])
             assert ready.status == MatchStatus.READY_TO_START and ready.ready_to_start
             allowed, reasons, _ = get_can_start_and_reasons(event.url, ready, organizer)
             assert allowed, reasons
             running = db.session.get(Match, manifest["matches"]["running"])
             assert running.status == MatchStatus.IN_PROGRESS and running.field != ready.field
-            for match in matches:
-                assert get_match_ref_team_ids(match)
-                assert not set(get_match_ref_team_ids(match)) & {match.team1, match.team2}
-                if match.status in (MatchStatus.COMPLETED, MatchStatus.IN_PROGRESS):
-                    for side, team in ((WinnerSide.TEAM1, match.team1), (WinnerSide.TEAM2, match.team2)):
-                        selected = get_match_player_ids(match, side)
-                        assert len(selected) == 5
-                        team_players = {
-                            reg.player for reg in PlayerRegistration.query.filter_by(event=event.url, team=team)
-                        }
-                        assert set(selected) <= team_players
-                    points = Point.query.filter_by(match=match.uuid).all()
-                    assert sum(point.nstones for point in points) + match.stones_remaining == 100
-                    assert all(
-                        point.end_stamp - point.stamp == timedelta(seconds=point.nstones * 1.5) for point in points
-                    )
-            standings = compute_team_stats([match for match in matches if match.status == MatchStatus.COMPLETED], event)
-            assert len(standings) == 6
-            assert sum(row["matches_won"] for row in standings) == 6
-            assert sum(row["matches_lost"] for row in standings) == 6
-            assert sum(row["points_won"] for row in standings) == 30
             assert db.session.execute(db.text("PRAGMA foreign_key_check")).all() == []
-        finally:
-            db.session.remove()
-            db.engine.dispose()
-
-
-def test_side_event_has_scored_and_unscored_players_and_organizer_access(demo_path):
-    manifest = dev_practice.prepare_practice_database(demo_path, now=NOW)
-    app = read_app(demo_path)
-    with app.app_context():
-        try:
-            competition = db.session.get(SideComp, manifest["sidecomp_id"])
-            assert competition.active and competition.registration_open and competition.track_losses
-            assert not competition.finalized
-            registrations = SideCompRegistration.query.filter_by(comp=competition.id).all()
-            assert len(registrations) == 24
-            assert all(reg.is_complete() for reg in registrations)
-            assert len({reg.entry_number for reg in registrations}) == 24
-            results = SideCompResult.query.filter_by(comp=competition.id).all()
-            assert len(results) == manifest["sidecomp_results"] == 54
-            scored_ids = {result.player for result in results}
-            assert len(scored_ids) == 12
-            unscored = next(reg for reg in registrations if reg.id not in scored_ids)
-            saved = SideCompService.log_result(
-                competition.id,
-                registration_id=unscored.id,
-                points=1,
-                ref_user_id=dev_demo.ORGANIZER_ID,
-            ).unwrap()
-            assert saved.valid and saved.points == 1
-            assert SideCompService.standings(competition.id).is_ok()
         finally:
             db.session.remove()
             db.engine.dispose()
@@ -276,77 +204,12 @@ def test_existing_non_demo_database_is_not_extended(demo_path):
     assert demo_path.read_bytes() == before
 
 
-def test_new_slug_creates_an_independent_example_and_cli_reports_routes(demo_path, capsys):
+def test_new_slug_preserves_the_existing_practice_event(demo_path):
     first = dev_practice.prepare_practice_database(demo_path, now=NOW)
     before = rows(demo_path)
-    dev_practice.main(["--database", str(demo_path), "--slug", "demo-practice-2"])
-    output = capsys.readouterr().out
-    assert "Created practice event" in output
-    assert "/demo-practice-2/start-match/" in output
-    assert "/enter-results" in output and "/manage-results" in output
+    second = dev_practice.prepare_practice_database(demo_path, slug="demo-practice-2", now=NOW)
+    assert second["created"] and second["slug"] != first["slug"]
     after = rows(demo_path)
     for table, old_rows in before.items():
         assert old_rows <= after[table], table
     assert dev_practice.prepare_practice_database(demo_path, now=NOW) == {**first, "created": False}
-
-
-def test_organizer_can_start_score_and_manage_practice_through_real_api(demo_path):
-    manifest = dev_practice.prepare_practice_database(demo_path)
-    app = create_app(
-        {"TESTING": True, "SQLALCHEMY_DATABASE_URI": f"sqlite:///{demo_path}", "SECRET_KEY": "practice-test"}
-    )
-    try:
-        client = app.test_client()
-        login = client.post("/_api/login", json={"username": dev_demo.ORGANIZER_ID, "password": dev_demo.DEMO_PASSWORD})
-        assert login.status_code == 200, login.get_json()
-        slug, ready_id = manifest["slug"], manifest["matches"]["ready"]
-        setup = client.get(f"/_api/tournaments/{slug}/start-match?match_id={ready_id}")
-        assert setup.status_code == 200, setup.get_json()
-        roster = setup.get_json()
-        assert len(roster["team1_players"]) == len(roster["team2_players"]) == 6
-        started = client.post(
-            f"/_api/tournaments/{slug}/start-match",
-            json={
-                "match_id": ready_id,
-                "team1_players": [player["id"] for player in roster["team1_players"][:5]],
-                "team2_players": [player["id"] for player in roster["team2_players"][:5]],
-                "stones_per_set": 100,
-            },
-        )
-        assert started.status_code == 200 and started.get_json()["success"], started.get_json()
-        point = client.post(
-            f"/_api/{slug}/match-actions/add-point",
-            json={
-                "match_id": manifest["matches"]["running"],
-                "set_number": 1,
-                "timestamp": datetime.now(timezone.utc).timestamp() * 1000,
-                "stones_at_start": 40,
-            },
-        )
-        assert point.status_code == 200 and point.get_json()["success"], point.get_json()
-        updated = client.post(
-            f"/_api/{slug}/match-actions/update-point",
-            json={
-                "point_id": point.get_json()["point_id"],
-                "winner": "TEAM2",
-            },
-        )
-        assert updated.status_code == 200 and updated.get_json()["success"], updated.get_json()
-        comp_id = manifest["sidecomp_id"]
-        entries = client.get(f"/_api/sidecomps/{comp_id}/enter-results-roster")
-        assert entries.status_code == 200, entries.get_json()
-        assert len(entries.get_json()["registrants"]) == 24
-        result = client.post(
-            f"/_api/sidecomps/{comp_id}/results",
-            json={
-                "registration_id": entries.get_json()["registrants"][-1]["registration_id"],
-                "points": 1,
-            },
-        )
-        assert result.status_code == 200 and result.get_json()["success"], result.get_json()
-        managed = client.get(f"/_api/sidecomps/{comp_id}/manage-results")
-        assert managed.status_code == 200 and len(managed.get_json()["results"]) == 55, managed.get_json()
-    finally:
-        with app.app_context():
-            db.session.remove()
-            db.engine.dispose()

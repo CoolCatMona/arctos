@@ -9,7 +9,7 @@ player and team access, unsaved form retention, existing preferences, persistenc
 live System changes, explicit overrides, cross-tab changes/removal, blocked
 browser storage, personal registration statuses, representative custom surfaces,
 and overlay isolation.
-Shares the demo marker, loopback restriction, asset checks, and mutation guard
+Shares the demo marker, loopback restriction, layout checks, and mutation guard
 with check_mobile_ui.py. No server data is changed except signing into the demo.
 """
 
@@ -164,12 +164,9 @@ async def keyboard_and_persistence(check: SmokeCheck, page: Page) -> None:
     await close_menu(page)
     trigger = page.locator("#utility-trigger")
     await expect(trigger).to_have_attribute("aria-label", "More options")
-    # No dedicated theme control remains in the main header.
-    await expect(page.locator("#appearance-trigger")).to_have_count(0)
     await trigger.click()
     appearance = page.get_by_role("button", name="Appearance", exact=True)
     await expect(trigger).to_be_focused()
-    await expect(appearance.locator("i, svg, img")).to_have_count(0)
     assert not await appearance.evaluate("el => el.matches(':focus, :focus-visible')")
     await page.keyboard.press("Escape")
     await trigger.focus()
@@ -559,7 +556,6 @@ async def storage_disabled(check: SmokeCheck, browser) -> None:
         await page.goto(check.base_url, wait_until="domcontentloaded")
         await preference(page, "california", "light")
         await choose(page, "field", "dark")
-        await expect(page.locator(".appearance-note")).to_have_count(0)
         await preference(page, "field", "dark")
         await close_menu(page)
         await check.check_layout(page, "appearance-storage-unavailable", WIDTH)
@@ -602,8 +598,6 @@ async def run(args) -> int:
             await expect(page.get_by_role("radio", name="System mode", exact=True)).to_be_checked()
             await expect(page.get_by_role("radio", name="California Jugger theme", exact=True)).to_be_checked()
             await expect(page.locator('input[name="arctos-palette"]')).to_have_count(3)
-            await expect(page.locator(".theme-preview, .appearance-additional, .appearance-note")).to_have_count(0)
-            await expect(page.locator("#appearance-options")).not_to_contain_text("Warm sand")
             await close_menu(page)
             for name, action in (
                 ("palette-mode-matrix", lambda: palette_matrix(check, page)),

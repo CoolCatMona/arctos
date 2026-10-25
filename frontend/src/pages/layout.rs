@@ -178,6 +178,7 @@ pub fn Layout() -> Element {
         let _ = auth_version();
         async move { api::me().await }
     });
+    let checking_account = *user.state().read() == UseResourceState::Pending;
     provide_context(crate::auth::AccountContext(user));
     let mut account_open = use_signal(|| false);
     let mut utility_open = use_signal(|| false);
@@ -357,8 +358,8 @@ pub fn Layout() -> Element {
                             Link { to: Route::Login {}, class: "btn btn-outline-secondary app-login", "Log in" }
                         } else {
                             button { r#type: "button", class: "app-icon-button", disabled: true,
-                                aria_label: if user.finished() { "Account unavailable" } else { "Checking your account" },
-                                title: if user.finished() { "Account unavailable" } else { "Checking your account" },
+                                aria_label: if checking_account { "Checking your account" } else { "Account unavailable" },
+                                title: if checking_account { "Checking your account" } else { "Account unavailable" },
                                 i { class: "fa-regular fa-user", aria_hidden: "true" }
                             }
                         }

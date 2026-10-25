@@ -192,6 +192,21 @@ def test_partial_write_failure_keeps_previous_photo(client, owner, storage, monk
     assert [path.relative_to(storage).as_posix() for path in storage.rglob("*") if path.is_file()] == [original]
 
 
+def test_lost_commit_acknowledgement_preserves_saved_photo(client, owner, storage, monkeypatch):
+    kind, account = owner
+    login_as(client, account)
+    commit = db.session.commit
+
+    def commit_without_reply():
+        commit()
+        raise RuntimeError("connection lost after commit")
+
+    monkeypatch.setattr(db.session, "commit", commit_without_reply)
+    response = upload(client, kind, account)
+    assert response.status_code == 500 and "could not be confirmed" in response.json["error"]
+    assert (storage / account.profile_photo).is_file()
+
+
 def test_uuid_collision_does_not_overwrite_or_delete_existing_photo(client, owner, storage, monkeypatch):
     kind, account = owner
     login_as(client, account)

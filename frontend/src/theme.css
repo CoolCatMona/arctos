@@ -556,7 +556,6 @@
 .arctos-app .data-section .list-group-flush { margin: 0; }
 .arctos-app .data-section .list-group-flush:last-child { border-radius: 0 0 11px 11px; }
 .arctos-app .data-section .data-section-summary { color: var(--ui-muted); font-size: .875rem; border-bottom: 1px solid var(--ui-border); }
-.arctos-app .data-section-editor > .card-body { padding: 12px 16px; }
 /* Native disclosures keep secondary records and edits available on demand. */
 .arctos-app .section-disclosure { display: block; }
 .arctos-app .section-disclosure > summary.card-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-height: 52px; padding: 12px 16px; cursor: pointer; list-style: none; }
@@ -718,8 +717,6 @@
 .arctos-app .modal-header, .arctos-app .modal-footer { padding: 16px 24px; gap: 12px; border-color: var(--bs-border-color); }
 .arctos-app .modal-body { padding: 24px; }
 .arctos-app .modal-footer { flex-wrap: wrap; }
-.arctos-app .event-actions { padding-block: 8px; }
-.arctos-app .event-actions > .col-12 { gap: 8px; }
 /* Existing Bootstrap utility classes use the same app surfaces and status hues. */
 .arctos-app .bg-white, .arctos-app .text-bg-light { background-color: var(--ui-surface) !important; }
 .arctos-app .bg-light { background-color: var(--ui-surface-muted) !important; }
@@ -762,7 +759,6 @@
 .arctos-app .auth-card { overflow: hidden; }
 .arctos-app .auth-card .card-header { background: var(--ui-surface); padding-top: 28px; text-align: center; }
 .arctos-app .auth-switch-link { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding-inline: 4px; white-space: nowrap; }
-.arctos-app .auth-eyebrow { color: var(--ui-link); font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .arctos-app .account-type-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
 .arctos-app .account-type-option { border: 1px solid var(--ui-control-border); border-radius: 10px; background: var(--ui-surface); padding: 16px; color: var(--ui-text); text-decoration: none; display: flex; flex-direction: column; text-align: left; gap: 6px; }
 .arctos-app .account-type-option.is-selected, .arctos-app .account-type-option:hover { background: var(--ui-accent-soft); border-color: var(--ui-link); color: var(--ui-accent-text); }
@@ -784,8 +780,6 @@
 .arctos-app .markdown-content .danger { background: var(--ui-danger-soft); border-color: var(--ui-danger-border); }
 .arctos-app .app-footer { background: var(--ui-surface-muted); border-top: 1px solid var(--ui-border); color: var(--ui-muted); padding: 28px 0 max(24px, env(safe-area-inset-bottom)); font-size: .8125rem; }
 .arctos-app .footer-top, .arctos-app .footer-bottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
-.arctos-app .footer-brand { display: flex; align-items: center; gap: 10px; }
-.arctos-app .footer-brand .brand-mark { width: 28px; height: 28px; font-size: 13px; border-radius: 7px; }
 .arctos-app .footer-links { display: flex; flex-wrap: wrap; gap: 4px 18px; }
 .arctos-app .footer-links a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ui-muted); text-decoration: none; }
 .arctos-app .footer-links a:hover { text-decoration: underline; }
@@ -818,7 +812,6 @@
   .arctos-app .modal-content { max-height: calc(100vh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
   .arctos-app .modal-body, .arctos-app .modal-header, .arctos-app .modal-footer { padding: 16px; }
   .arctos-app .modal-footer > .btn { flex: 1; }
-  .arctos-app .event-actions .btn { flex: 1 1 auto; }
   .arctos-app .footer-top, .arctos-app .footer-bottom { align-items: flex-start; flex-direction: column; }
   .arctos-app .footer-links { gap: 0 20px; }
 }
@@ -841,5 +834,4 @@
   .arctos-app { --header-height: calc(124px + env(safe-area-inset-top, 0px)); }
   .arctos-app .app-nav-link { flex: 1 1 0; flex-direction: column; gap: 3px; min-width: 0; min-height: 50px; padding: 6px 2px; font-size: .75rem; }
   .arctos-app .app-nav-link i { font-size: .875rem; }
-  .arctos-app .league-events .list-group-item { display: flex; flex-direction: column; align-items: flex-start !important; gap: 6px; padding-inline: 0; }
 }

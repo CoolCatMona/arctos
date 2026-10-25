@@ -100,19 +100,47 @@ fn point_note_display(
     )
 }
 
-fn get_query_param(name: &str) -> Option<String> {
-    #[cfg(target_arch = "wasm32")]
-    {
-        let window = web_sys::window()?;
-        let search = window.location().search().ok()?;
-        let params = web_sys::UrlSearchParams::new_with_str(&search).ok()?;
-        params.get(name)
+/// Select only this event's match query. The router removes undeclared query
+/// fields during startup, so the first mount may use the captured raw query.
+fn match_selection(
+    path: &str,
+    current_url: &str,
+    startup: Option<&(String, String)>,
+) -> (Option<String>, Option<String>) {
+    let current_url = current_url.split('#').next().unwrap_or(current_url);
+    let (current_path, query) = current_url.split_once('?').unwrap_or((current_url, ""));
+    if current_path != path {
+        return (None, None);
     }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let _ = name;
-        None
+    let query = if query.is_empty() {
+        startup.filter(|(initial_path, _)| initial_path == path)
+            .map(|(_, query)| query.as_str()).unwrap_or("")
+    } else {
+        query
+    };
+    let mut id = None;
+    let mut name = None;
+    for pair in query.split('&') {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        let decode = |text: &str| {
+            let text = text.replace('+', " ");
+            urlencoding::decode(&text).map(|value| value.into_owned()).ok()
+        };
+        let value = decode(value).filter(|value| !value.is_empty());
+        match decode(key).as_deref() {
+            Some("id") => id = value,
+            Some("name") => name = value,
+            _ => {},
+        }
     }
+    (id, name)
+}
+
+fn take_initial_match_query(path: &str) -> Option<(String, String)> {
+    thread_local! { static CONSUMED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+    let query = crate::initial_query(path)?;
+    if CONSUMED.replace(true) { return None; }
+    Some((path.to_string(), query))
 }
 
 /// Seek the local video player to the given time in seconds (wasm only).
@@ -897,17 +925,21 @@ fn ForceStartModal(
 
 #[component]
 pub fn MatchPage(url: String) -> Element {
-    let match_id = get_query_param("id");
-    let match_name = get_query_param("name");
-    match_page_inner(url, match_id, match_name)
+    let path = format!("/{url}/match");
+    let startup = use_hook(|| take_initial_match_query(&path));
+    let current_url = dioxus::router::router().full_route_string();
+    let (match_id, match_name) = match_selection(&path, &current_url, startup.as_ref());
+    rsx! { MatchPageContent { key: "{url}/{match_id:?}/{match_name:?}", url, match_id, match_name } }
 }
 
 #[component]
 pub fn MatchPageById(url: String, match_id: String) -> Element {
-    match_page_inner(url, Some(match_id), None)
+    rsx! { MatchPageContent { key: "{url}/{match_id}", url, match_id: Some(match_id), match_name: None } }
 }
 
-fn match_page_inner(url: String, match_id: Option<String>, match_name: Option<String>) -> Element {
+#[component]
+fn MatchPageContent(url: String, match_id: Option<String>, match_name: Option<String>) -> Element {
+    let navigator = use_navigator();
     let url_for_resource = url.clone();
     let id_for_resource = match_id.clone();
     let name_for_resource = match_name.clone();
@@ -928,10 +960,23 @@ fn match_page_inner(url: String, match_id: Option<String>, match_name: Option<St
         }
     });
 
+    // Legacy query URLs must become bookmarkable after the router strips their
+    // query. Replace only while this event's legacy route still owns the page.
+    let canonical_event = url.clone();
+    use_effect(move || {
+        let Some(Ok(detail)) = data.read().as_ref().cloned() else { return; };
+        let current = dioxus::router::router().current::<Route>();
+        if matches!(current, Route::MatchPage { url } if url == canonical_event) {
+            navigator.replace(Route::MatchPageById {
+                url: canonical_event.clone(),
+                match_id: detail.match_data.uuid,
+            });
+        }
+    });
+
     // Polling for live match state updates
     let poll_tick = use_signal(|| 0u32);
     let url_for_poll = url.clone();
-    let match_id_for_poll = match_id.clone();
 
     #[cfg(target_arch = "wasm32")]
     let poll_interval = use_signal(|| None as Option<Interval>);
@@ -961,19 +1006,18 @@ fn match_page_inner(url: String, match_id: Option<String>, match_name: Option<St
     let state_signal = use_signal(|| None as Option<Result<Value, String>>);
     use_effect(move || {
         let u = url_for_poll.clone();
-        let id = match_id_for_poll.clone();
         let _tick = poll_tick();
         let mut state_signal = state_signal;
-        if let Some(id) = id {
-            if let Some(Ok(d)) = data.value().read().as_ref() {
-                if d.match_data.status == "IN_PROGRESS" {
-                    spawn(async move {
-                        match api::match_state(&u, &id).await {
-                            Ok(v) => state_signal.set(Some(Ok(v))),
-                            Err(e) => state_signal.set(Some(Err(e))),
-                        }
-                    });
-                }
+        if let Some(Ok(d)) = data.value().read().as_ref() {
+            if d.match_data.status == "IN_PROGRESS" {
+                // Name-based legacy links resolve to the same live match as ID links.
+                let id = d.match_data.uuid.clone();
+                spawn(async move {
+                    match api::match_state(&u, &id).await {
+                        Ok(v) => state_signal.set(Some(Ok(v))),
+                        Err(e) => state_signal.set(Some(Err(e))),
+                    }
+                });
             }
         }
     });
@@ -1030,7 +1074,6 @@ fn match_page_inner(url: String, match_id: Option<String>, match_name: Option<St
 
     let val = data.value();
     let base_url = api::base_url();
-    let navigator = use_navigator();
     let mut selected_camera_idx = use_signal(|| 0usize);
     let mut camera_dropdown_open = use_signal(|| false);
     let mut selected_point_index = use_signal(|| 0usize);
@@ -2618,5 +2661,30 @@ fn match_page_inner(url: String, match_id: Option<String>, match_name: Option<St
             p { "Loading…" }
         }
         }
+    }
+}
+
+#[cfg(test)]
+mod match_selection_tests {
+    use super::match_selection;
+
+    #[test]
+    fn legacy_links_recover_id_and_decode_names_without_splitting_encoded_delimiters() {
+        let startup = ("/cup/match".into(), "id=match-1".into());
+        assert_eq!(match_selection("/cup/match", "/cup/match", Some(&startup)),
+            (Some("match-1".into()), None));
+        assert_eq!(match_selection("/cup/match", "/cup/match?name=Pool+A%26B%2B+%23caf%C3%A9", None),
+            (None, Some("Pool A&B+ #café".into())));
+        assert_eq!(match_selection("/cup/match", "/cup/match?name=%FF", None), (None, None));
+    }
+
+    #[test]
+    fn match_queries_belong_to_the_current_event_and_live_query_wins() {
+        let startup = ("/first/match".into(), "id=old".into());
+        assert_eq!(match_selection("/second/match", "/second/match", Some(&startup)), (None, None));
+        assert_eq!(match_selection("/first/match", "/other/match?id=new", Some(&startup)), (None, None));
+        assert_eq!(match_selection("/first/match", "/first/match?id=new#points", Some(&startup)),
+            (Some("new".into()), None));
+        assert_eq!(match_selection("/first/match", "/first/match?id=", Some(&startup)), (None, None));
     }
 }

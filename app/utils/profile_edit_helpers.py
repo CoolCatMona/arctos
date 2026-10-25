@@ -126,6 +126,7 @@ def save_profile_edit(entity, account_type: str) -> None:
     previous = {field: getattr(entity, field) for field in _IMAGES}
     created: list[tuple[str, Path]] = []
     replacements = {}
+    commit_started = False
     try:
         for field, (pixels, extension) in normalized.items():
             directory: Path = (
@@ -150,18 +151,23 @@ def save_profile_edit(entity, account_type: str) -> None:
             setattr(entity, field, None)
         for field, path in replacements.items():
             setattr(entity, field, path)
+        commit_started = True
         db.session.commit()
     except Exception as error:
         try:
             db.session.rollback()
         except Exception:
-            # A disconnected database must not prevent filesystem cleanup.
             current_app.logger.exception("Could not roll back profile edit")
         for field, path in created:
-            # These exact files were created by this failed request. Unlike
-            # old legacy photos they need no reference query, so cleanup also
-            # works when the database is unavailable.
             try:
+                if commit_started:
+                    # The database may have committed before losing its reply.
+                    # Keep referenced files, or files whose status is unknown.
+                    cleanup = _remove_owned_photo if field == "profile_photo" else _remove_owned_banner
+                    cleanup(replacements[field], account_type, entity_id)
+                    continue
+                # A staging failure happened before any database commit, so
+                # these exact new files cannot be referenced by a saved edit.
                 directory = (
                     _profile_directory(account_type, entity_id)
                     if field == "profile_photo"
@@ -172,7 +178,9 @@ def save_profile_edit(entity, account_type: str) -> None:
             except (OSError, ProfileEditError):
                 current_app.logger.warning("Could not remove a staged profile image for %s %s", account_type, entity_id)
         current_app.logger.exception("Could not save profile edit")
-        raise ProfileEditError("Your profile could not be saved. Please try again.", 500) from error
+        raise ProfileEditError(
+            "The profile save could not be confirmed. Check your profile before trying again.", 500
+        ) from error
     for field in removals | replacements.keys():
         cleanup = _remove_owned_photo if field == "profile_photo" else _remove_owned_banner
         cleanup(previous[field], account_type, entity_id)

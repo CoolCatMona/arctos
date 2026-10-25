@@ -11,9 +11,11 @@ import warnings
 
 from flask import current_app, request
 from PIL import Image, ImageOps, UnidentifiedImageError
+from sqlalchemy import exists, or_
+from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from models import db
+from models import League, Player, Team, Tournament, db
 
 MAX_BANNER_BYTES = 8 * 1024 * 1024
 MAX_BANNER_DIMENSION = 8192
@@ -119,9 +121,19 @@ def _remove_owned_banner(path: str | None, account_type: str, entity_id: str) ->
     try:
         directory = _banner_directory(account_type, entity_id)
         candidate = directory / relative.name
-        if not candidate.is_symlink():
+        # A commit can succeed even if its acknowledgement is lost. Never
+        # remove an image still referenced by the database during recovery.
+        referenced = db.session.query(
+            or_(
+                exists().where(Player.banner_photo == path),
+                exists().where(Team.banner_photo == path),
+                exists().where(Tournament.banner_photo == path),
+                exists().where(League.banner_photo == path),
+            )
+        ).scalar()
+        if not candidate.is_symlink() and not referenced:
             candidate.unlink(missing_ok=True)
-    except (OSError, BannerUploadError):
+    except (OSError, SQLAlchemyError, BannerUploadError):
         current_app.logger.warning("Could not remove an old banner for %s %s", account_type, entity_id)
 
 
@@ -146,11 +158,16 @@ def replace_banner(entity, owner_type: str, owner_id: str, data: bytes) -> str:
         entity.banner_photo = relative
         db.session.commit()
     except Exception as error:
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            current_app.logger.exception("Could not roll back banner save")
         if created:
             _remove_owned_banner(relative, owner_type, owner_id)
         current_app.logger.exception("Could not save banner")
-        raise BannerUploadError("Your banner could not be saved. Please try again.", 500) from error
+        raise BannerUploadError(
+            "The banner save could not be confirmed. Check the saved image before trying again.", 500
+        ) from error
     # Keep the previous file until both the new file and database update succeed.
     _remove_owned_banner(previous, owner_type, owner_id)
     return relative

@@ -135,7 +135,7 @@ pub fn LegacyBracketDiagrams(url: String, brackets: Vec<BracketItem>) -> Element
                                                         }
                                                     } else if team_entry.is_reference {
                                                         a {
-                                                            href: "/{url}/match?name={match_ref}",
+                                                            href: format!("/{url}/match?name={}", urlencoding::encode(&match_ref)),
                                                             class: "text-decoration-none text-dark",
                                                             {team_info.display_text.replace("::", " ")}
                                                         }

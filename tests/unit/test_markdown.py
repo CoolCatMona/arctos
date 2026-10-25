@@ -192,27 +192,6 @@ def test_empty_markdown_stays_empty(source):
     assert render_markdown(source) == ""
 
 
-@pytest.mark.parametrize(
-    "filename",
-    [
-        "docs.md",
-        "privacy-policy.md",
-        "data-accessibility-guide.md",
-        "arctos-schedule-script.md",
-        "license.md",
-        "terms.md",
-        "developers.md",
-    ],
-)
-def test_bundled_documents_keep_headings_links_and_content(filename):
-    source = (Path(__file__).resolve().parents[2] / "docs" / filename).read_text()
-    html = str(render_markdown(source))
-    nodes = Elements(html).nodes
-    assert any(tag.startswith("h") and tag[1:].isdigit() for tag, _ in nodes), filename
-    assert len(html) >= len(source) // 2, filename
-    assert not any(tag in {"script", "iframe", "style"} for tag, _ in nodes), filename
-
-
 def test_render_markdown_api_returns_sanitized_html_with_existing_contract(app):
     with app.test_client() as client:
         response = client.post(

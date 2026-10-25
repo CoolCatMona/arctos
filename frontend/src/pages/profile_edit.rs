@@ -101,13 +101,14 @@ pub fn ProfileEditPage(account_id: String, team: bool) -> Element {
         },
         Some(Ok(_)) => {},
     }
+    let loading_profile = *data.state().read() == UseResourceState::Pending;
     let result = data.read();
     match &*result {
         None | Some(Ok(None)) => rsx! { p { role: "status", "Loading profile…" } },
         Some(Err(message)) => rsx! {
             h1 { "Edit profile" }
             p { role: "alert", "{message}" }
-            button { r#type: "button", class: "btn btn-outline-secondary", disabled: !data.finished(),
+            button { r#type: "button", class: "btn btn-outline-secondary", disabled: loading_profile,
                 onclick: move |_| { if data.finished() { data.restart(); } }, "Retry profile" }
         },
         Some(Ok(Some(data))) => rsx! { ProfileEditForm { key: "{team}-{account_id}", account_id, team, data: data.clone() } },

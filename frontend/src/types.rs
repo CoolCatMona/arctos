@@ -1411,23 +1411,6 @@ pub struct UpdateMatchRequest {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct UpdatePlayerProfileRequest {
-    pub name: Option<String>,
-    pub phone: Option<String>,
-    pub location: Option<String>,
-    pub bio: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct UpdateTeamProfileRequest {
-    pub name: Option<String>,
-    pub location: Option<String>,
-    pub email: Option<String>,
-    pub website: Option<String>,
-    pub about: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PlayerRegistrationData {
     pub id: u32,
     pub jersey_name: Option<String>,

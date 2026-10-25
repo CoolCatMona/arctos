@@ -1,7 +1,6 @@
 use crate::api;
 use crate::components::ToolPageHeader;
 use crate::components::{PaymentStatusBadge, RegistrationStatusBadge, WaiverStatusBadge};
-use crate::Route;
 use dioxus::prelude::*;
 use wasm_bindgen::JsCast;
 

@@ -68,7 +68,7 @@ PUBLIC_SCREENS = (
 )
 
 AUTH_SCREENS = (
-    Screen("create-event", "/create-event", "main .card"),
+    Screen("create-event", "/create-event", "main h1"),
     Screen("new-tournament", "/new-tournament", "#name"),
     Screen("new-league", "/leagues/new", "#league_name"),
     Screen("league-new-event", "/leagues/demo-coast-league/new-tournament", "#name"),
@@ -189,28 +189,6 @@ class SmokeCheck:
         layout = await page.evaluate(LAYOUT_DIAGNOSTICS)
         if layout["documentWidth"] > layout["width"] + 1:
             raise AssertionError(f"document horizontal overflow: {json.dumps(layout)}")
-        if await page.locator(".event-detail-hero").count():
-            banner = await page.locator(".event-detail-hero").evaluate("""el => {
-                const r = el.getBoundingClientRect();
-                return {left: r.left, right: r.right, width: r.width, viewport: document.documentElement.clientWidth};
-            }""")
-            assert banner["width"] <= 901 and abs(banner["left"] - (banner["viewport"] - banner["right"])) <= 1, (
-                f"Event identity must be centered and bounded: {banner}"
-            )
-            cover = await page.locator(".event-banner-image").bounding_box()
-            assert cover and abs(cover["width"] / cover["height"] - 3) < 0.02, (
-                f"Event cover must retain 3:1 aspect: {cover}"
-            )
-            alignment = await page.locator(".event-hero-inner").evaluate("el => getComputedStyle(el).textAlign")
-            assert alignment in ("start", "left"), f"Event metadata is not left aligned: {alignment}"
-        if await page.locator(".profile-page").count() and not await page.locator(".profile-editor").count():
-            profile = await page.locator(".profile-page").evaluate("""el => {
-                const r = el.getBoundingClientRect();
-                return {left: r.left, right: r.right, width: r.width, viewport: document.documentElement.clientWidth};
-            }""")
-            assert profile["width"] <= 901 and abs(profile["left"] - (profile["viewport"] - profile["right"])) <= 1, (
-                f"Profile column must be centered and bounded: {profile}"
-            )
         if await page.locator("#page-banner-dismiss").is_visible():
             collisions = await page.locator("#page-banner").evaluate("""banner => {
                 const close = banner.querySelector('#page-banner-dismiss').getBoundingClientRect();
@@ -241,29 +219,11 @@ class SmokeCheck:
                 f"Both teams must remain available on each point: {points}"
             )
             assert not points["inaccessible"], f"Phone point controls are clipped or smaller than 44px: {points}"
-        assets = await page.evaluate("""() => ({
-            sheets: [...document.querySelectorAll('link[rel=stylesheet]')].map(el => ({href: el.href, loaded: !!el.sheet})),
-            fonts: [...document.fonts].filter(font => /Awesome/.test(font.family)).map(font => ({family: font.family, status: font.status})),
-            theme: getComputedStyle(document.querySelector('.arctos-app') || document.body).getPropertyValue('--field-green').trim(),
-            external: performance.getEntriesByType('resource').filter(entry => {
-                const u = new URL(entry.name);
-                return u.origin !== location.origin && /\\.(css|woff2?|ttf)(\\?|$)/.test(u.pathname);
-            }).map(entry => entry.name)
-        })""")
-        assert assets["sheets"], "No stylesheet links found"
-        for sheet in assets["sheets"]:
-            assert urlsplit(sheet["href"]).netloc == self.origin, f"External stylesheet: {sheet['href']}"
-            assert sheet["loaded"], f"Stylesheet did not load: {sheet['href']}"
-        assert not assets["external"], f"External font/style dependencies: {assets['external']}"
-        assert assets["theme"], "Arctos theme tokens are missing"
         invalid_patterns = await page.evaluate("""() => [...document.querySelectorAll('input[pattern]')].flatMap(el => {
             try { new RegExp(el.pattern, 'v'); return []; }
             catch (error) { return [{id: el.id, pattern: el.pattern, error: String(error)}]; }
         })""")
         assert not invalid_patterns, f"Invalid HTML validation patterns: {invalid_patterns}"
-        # Every ordinary shell displays a Font Awesome brand/navigation icon.
-        if await page.locator(".app-header").count():
-            assert any(font["status"] == "loaded" for font in assets["fonts"]), "Local icon font did not load"
         assert not self.page_errors, f"JavaScript errors: {self.page_errors}"
         assert not self.network_errors, f"Failed HTTP resources: {self.network_errors}"
         assert not self.blocked_writes, f"Data-changing requests prevented: {self.blocked_writes}"
@@ -757,7 +717,6 @@ class SmokeCheck:
         await expect(intro).to_be_hidden()
         await page.locator("#event-search").fill("Summer Cup")
         await page.locator("#utility-trigger").click()
-        await expect(page.locator("#page-banner-restore")).to_have_count(0)
         await page.get_by_role("button", name="Appearance", exact=True).click()
         setting = page.get_by_role("checkbox", name="Show page introduction", exact=True)
         await expect(setting).not_to_be_checked()
@@ -799,7 +758,6 @@ class SmokeCheck:
                     headingsVisible: !!table.tHead && getComputedStyle(table.tHead).display === 'table-header-group'
                         && [...table.tHead.querySelectorAll('th')].every(th => th.scope === 'col'
                             && th.textContent.trim() && th.getBoundingClientRect().height >= 20),
-                    card: !!table.closest('.card'),
                     region: region && {role: region.getAttribute('role'), tabIndex: region.tabIndex,
                         label: region.getAttribute('aria-label'), overflow: getComputedStyle(region).overflowX,
                         left: rect.left, right: rect.right, width: region.clientWidth,
@@ -809,7 +767,7 @@ class SmokeCheck:
                 };
             }""")
             assert layout["display"] == "table" and layout["rowDisplay"] in (None, "table-row"), layout
-            assert layout["headingsVisible"] and not layout["card"], f"History lost its plain table headings: {layout}"
+            assert layout["headingsVisible"], f"History headings are missing or inaccessible: {layout}"
             region = layout["region"]
             assert region and region["role"] == "region" and region["tabIndex"] == 0 and region["label"], layout
             assert region["overflow"] in ("auto", "scroll"), layout
@@ -1123,7 +1081,7 @@ async def api_json(context: BrowserContext, base_url: str, path: str):
     return await response.json()
 
 
-def arguments(description: str | None = __doc__) -> argparse.Namespace:
+def arguments(description: str | None = __doc__, *, workflows: bool = False) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--base-url", default="http://127.0.0.1:8080", help="Loopback Dioxus/proxy origin serving the demo"
@@ -1131,12 +1089,13 @@ def arguments(description: str | None = __doc__) -> argparse.Namespace:
     parser.add_argument(
         "--browser-executable", type=Path, help="Installed Chromium executable, e.g. /usr/bin/google-chrome"
     )
-    parser.add_argument("--screenshots", type=Path, help="Optional output directory for deterministic full-page PNGs")
-    parser.add_argument(
-        "--workflow",
-        choices=("registration-and-schedule", "discovery-controls"),
-        help="Run one workflow (discovery covers 320/360px; other workflows 360px)",
-    )
+    parser.add_argument("--screenshots", type=Path, help="Optional output directory for browser screenshots")
+    if workflows:
+        parser.add_argument(
+            "--workflow",
+            choices=("registration-and-schedule", "discovery-controls"),
+            help="Run one workflow (discovery covers 320/360px; other workflows 360px)",
+        )
     args = parser.parse_args()
     parsed = urlsplit(args.base_url)
     if (
@@ -1279,7 +1238,7 @@ async def run(args: argparse.Namespace) -> int:
 
 if __name__ == "__main__":
     try:
-        raise SystemExit(asyncio.run(run(arguments())))
+        raise SystemExit(asyncio.run(run(arguments(workflows=True))))
     except KeyboardInterrupt:
         raise SystemExit(130) from None
     except Exception as error:

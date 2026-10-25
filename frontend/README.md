@@ -1,302 +1,170 @@
-# `frontend/` - the Dioxus SPA
+# Rust frontend
 
-A single-page application written in Rust using
-[Dioxus](https://dioxuslabs.com/) and compiled to WebAssembly. nginx
-serves the built bundle at `/`; the SPA calls the Flask backend at
-`/_api/...`.
+Arctos is a [Dioxus](https://dioxuslabs.com/) single-page application compiled to
+WebAssembly. The browser calls the Flask API under `/_api/`. In production,
+nginx serves the frontend and proxies API requests; see the
+[deployment guide](../docs/DEPLOY.md).
 
-## Layout
-
-The crate is a standard Dioxus + WASM project (`Cargo.toml`,
-`Dioxus.toml`, `rust-toolchain.toml`, `index.html` shell). All
-application code lives under `src/`:
-
-- `main.rs` - router definition and bootstrap.
-- `api.rs` - reqwest-based wrapper for every `/_api/` endpoint.
-- `types.rs` - serde structs mirroring API responses.
-- `pages/` - one file per route (mirrors the SPA's URL structure).
-- `components/` - shared widget library.
-- `time_format.rs`, `stones_filter.rs` - smaller cross-cutting modules;
-  see each file's top comment.
-
-## Running
+## Run locally
 
 From the repository root:
 
 ```bash
 uv sync --group test
 just setup-frontend
-just demo                    # isolated sample backend on 127.0.0.1:5006
-# In a second terminal:
-just frontend                # frontend on 127.0.0.1:8080
+just demo
 ```
 
-Use `just dev` instead of `just demo` for your normal local database. To
-preview a versioned snapshot, start the backend with:
+In another terminal, run `just frontend`, then open `http://127.0.0.1:8080`.
+Use `just dev` instead of `just demo` for your configured local database.
+The [root README](../README.md#running-the-app-locally) explains demo accounts,
+snapshot copies, migrations, and phone access.
+
+`Dioxus.toml` proxies `/_api/`, `/api/`, and `/static/` to Flask on port 5006.
+Keep the browser and API on this shared origin for normal development.
+`ARCTOS_API_BASE` is an optional **build-time** override for an intentionally
+separate backend; it also requires compatible CORS and cookie settings.
+
+For a production bundle:
 
 ```bash
-uv run python -m scripts.dev_demo --snapshot /absolute/path/to/snapshot.db
+cd frontend
+dx bundle --release
 ```
 
-It creates a separate migrated copy at `instance/snapshot-demo/demo.db`, adds
-demo accounts without replacing existing records, and preserves the working
-copy across restarts. The source and ordinary demo database stay untouched.
-Dioxus proxies API and static requests to Flask, so requests and cookies use
-the same origin. For phone testing on your LAN:
-`just frontend --addr 0.0.0.0`, then open the computer's LAN address at port
-8080. Recording requires a browser secure context (localhost or HTTPS).
+Deploy the output path reported by Dioxus. The project does not need a Node
+build or a CSS/font CDN. Bundled dependencies and licenses are in
+[`assets/vendor/`](assets/vendor/README.md).
 
-For production, `cd frontend && dx bundle --release`; follow the build output
-path reported by Dioxus and the repository deployment guide.
+## Code map
 
-## Design system
+| File or directory | Responsibility |
+| --- | --- |
+| `src/main.rs` | Route declarations and application startup |
+| `src/api.rs` | HTTP requests, credentials, and response errors |
+| `src/types.rs` | Shared API response and request types |
+| `src/auth.rs` | Shared account loading and retry state |
+| `src/pages/` | Route views and their styles |
+| `src/components/` | Reusable controls, headers, tables, dialogs, and image editors |
+| `src/theme.css` | Semantic colors, Bootstrap mappings, navigation, and common controls |
+| `src/appearance.rs` | Theme/mode preferences and browser listeners |
+| `src/viewport.rs` | Measured header and available viewport height |
+| `src/time_format.rs` | Display formatting for dates and timestamps |
+| `src/time_sync.rs`, `src/pages/stones.rs` | Clock synchronization and playback counter logic |
 
-Open Appearance from More, alongside Help and About. The separate account menu
-contains profile, developer apps, and logout actions. Choose
-Light, Dark, or System and one of three themes: California Jugger, Field, or
-Neutral. Themes coordinate page backgrounds, cards, navigation, and controls.
-California Jugger and System are the defaults. Saved `field-chalk` preferences
-use Field; removed or unknown themes fall back to California Jugger without
-changing the saved display mode. Preferences apply across routes and browser
-tabs. When storage is blocked, changes still work for the current visit.
+## Routes and data
 
-Events and Leagues sit beside each other in the primary navigation. Their
-date filters lead the discovery toolbar; a quieter Organize disclosure offers
-creation for the current page only. Any signed-in account can create a private
-draft, then continue directly to its Settings page. Organizers can find their
-unpublished leagues in the directory; other visitors see only public leagues.
-League date ranges and event counts use published rounds. A league moves to
-Past after its last round's final day; leagues without dated rounds stay Active.
+Use the `Route` enum in `src/main.rs` as the source of truth. Some routes have
+query variants for filters or sections; preserve those parameters and browser
+Back/Forward behavior when adding navigation. Event sections use real links,
+with `aria-current="page"` on the current destination.
 
-More and Organize keep focus on their trigger when opened. Tab reaches their
-native links, and Escape closes the disclosure and returns focus. Appearance
-is an unselected text entry in More, with no icon. These controls follow the
-[W3C disclosure navigation pattern](https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/examples/disclosure-navigation-hybrid/).
+League events register through their league. A direct event registration URL
+redirects to the league registration page before displaying a form. The
+backend's `can_view_schedule` flag controls schedule access. The tab remains
+named **Schedule**; it is disabled without access, and authorized organizers
+can open an unpublished schedule. Editing is a separate route.
 
-`src/theme.css` styles the shared shell and existing Bootstrap components on
-all routes. `src/pages/public_pages.css` contains event/discovery layouts;
-`src/pages/operator.css` contains match and stones refinements. Colors, focus,
-touch spacing, safe areas, forms, cards, tables, and dialogs share the same
-mobile-first system. Use the `--ui-*` semantic color variables for app surfaces,
-text, and accents; use `--ui-link` for text and focus indicators, and
-`--ui-accent` with `--ui-accent-contrast` for filled actions. Status colors
-retain their meaning across palettes.
+Pages use functions in `src/api.rs` rather than constructing requests directly.
+The wrapper includes session credentials. Update the matching Rust type when a
+backend response changes. Keep authentication failure distinct from a temporary
+account-service failure: `auth::use_account()` exposes that distinction and
+Layout provides the shared retry notice.
 
-Personal registration summaries use icons and outlined badges for pending
-approval, unpaid registrations, and missing or outdated waivers. Keep status
-labels explicit: team approval and recorded payment are independent states.
+## UI conventions
 
-Player and team profiles and directory cards show a shared “Past events” count.
-The API counts unique published events with confirmed registrations after their
-end date, using the start date when no end is set. League registrations expand
-to eligible rounds without counting the league itself. This is a registration
-history statistic, not verified attendance; upcoming and cancelled
-registrations are excluded.
+The normal app wrapper owns the theme through `data-palette` and
+`data-bs-theme`. California Jugger, Field, and Neutral each support Light, Dark,
+and System mode. Preferences are local to the browser and synchronize across
+its tabs. OBS and fixed-size output routes keep their own presentation.
 
-Event and league detail pages share `EventHeader`, `EventAbout`, and `EventTabs`.
-The header follows the profile layout: a 3:1 cover above left-aligned identity,
-metadata, registration, and a compact Organizer tools menu. Registration appears
-beside the identity on desktop and fills the content width below it on phones.
-Embedded tools and side competitions omit parent registration controls, leaving
-the current form or side competition as the action target. Organizers can upload a banner
-image from Settings; profile owners can do the same from Edit profile.
-Navigation tabs link to information, rosters, schedules, results, brackets,
-league rounds, and side events using real URLs. The selected link uses
-`aria-current="page"`; unpublished schedules remain disabled for visitors who
-lack preview permission. Native links
-preserve keyboard access, bookmarks, and browser history
-([W3C link guidance](https://www.w3.org/WAI/ARIA/apg/patterns/link/)).
+Use semantic color variables rather than hardcoded brand colors:
 
-Use `data-section` for compact table and list spacing. Editing forms use flat
-`edit-section` sections with headings and dividers instead of card frames.
-Historical records remain tables with visible column headers and contained
-horizontal scrolling on narrow screens. Use native `details.section-disclosure` for secondary records
-and settings, with a labeled summary and a count where useful. Keep current
-event information and essential actions visible. Collapsing a section keeps its
-form state intact. Only the top-level Events, Leagues, Players, Teams, and
-Stones introductions have a collapse chevron at their top-right.
-Appearance settings offer “Show page introduction” on those pages. Their visibility is saved independently per page,
-separately from appearance preferences. Player, team, tournament, and league
-detail headers always remain visible, with no dismiss or restore control.
-Older saved hidden-header preferences for individual profiles or events are
-ignored.
+- `--ui-bg`, `--ui-surface`, and `--ui-border` for containers.
+- `--ui-text` and `--ui-muted` for copy.
+- `--ui-link` for links and focus indicators.
+- `--ui-accent` with `--ui-accent-contrast` for filled actions.
+- Status tokens for success, warning, and error states.
 
-Player and team profiles use a centered column up to 900px wide, with a 3:1
-cover, an overlapping circular avatar, then left-aligned name, handle,
-location, and past-event count. Information, tournament history, and authorized
-infractions, injuries, or notes occupy flat panels below the URL navigation.
-Profile panels use content and dividers rather than card frames. Switching
-tabs keeps unsaved injury inputs and roster expansion intact, including browser
-Back/Forward; server permissions still determine which records are visible.
+Keep primary actions visible, give icon buttons accessible names, and use
+44px touch targets. Use ordinary links for navigation and buttons for actions.
+More and Organize are disclosures with normal link tab order; Appearance is a
+settings dialog. Only the top-level Events, Leagues, Players, Teams, and Stones
+introductions can be collapsed. The current page's Appearance setting restores
+its introduction. Detail headers remain visible.
 
-Organizer settings use checkboxes for saved choices such as registration
-availability. Head referee permissions and secondary side competition rules
-are under Advanced options, with the current policy or restrictions visible in
-the summary. Penalty types use one full-width disclosure, closed initially;
-organizer lists start expanded.
+Use flat `edit-section` groups for forms and native `details` for secondary
+settings. Label each input and associate hints/errors with it. Keep drafts
+mounted during saves and errors. Explain disabled actions near the control,
+and distinguish a validation error from a failed service request.
 
-Edit profile shows the cover and avatar where they appear on the public profile.
-Camera controls select or remove an image. Drag or tap the image to position it and use
-one Zoom control. Arrow keys also adjust position; Reset position centers the image
-without changing the zoom. Profiles, avatars, and event covers share these controls. Player bios and team descriptions use the same Markdown renderer as event
-information, with explicit formatting guidance beside the field. The preview
-tracks the current draft and falls back to escaped text if rendering fails.
-The desktop preview updates beside the fields; on phones, Preview
-profile switches between the full preview and fields without losing changes.
-The profile's Save action stores text and both images together in one multipart
-request. Cancel leaves the stored profile unchanged, and failed saves retain all
-drafts for retry. Account settings are in a separate disclosure below the editor.
-Tournament and league Settings retain their individual banner crop and save controls;
-form submission waits until those pending image edits are saved or cancelled.
+Historical records use native tables with visible column headings and a named,
+focusable scroll container on narrow screens. Compact dates, numbers, and
+status cells use the shared table classes; long names and notes must still wrap.
+Do not apply global no-wrap rules to every cell.
 
-Uploads accept still JPEG, PNG, or WebP up to 8 MiB, 8192 pixels per side, and
-24 megapixels. File headers are checked before browser decoding. The editor
-exports covers up to 1500×500 and avatars up to 512×512. The server separately
-validates and normalizes images, caps uncropped uploads at 2400×1600 for banners
-and 1024×1024 for avatars, and removes embedded metadata. Images are stored as
-files; the database holds only their paths. Fresh filenames avoid stale caches,
-and old files are removed only after a successful replacement. Avatar cleanup
-also preserves legacy files still referenced by another account. Banners and
-avatars have separate paths and controls; changing one does not replace the
-other.
+Use `components::Modal` for blocking dialogs. Supply a unique ID and visible
+labelled heading, an appropriate initial focus target, and a return-focus target
+when the opener can disappear. Pending writes must guard their handlers and
+set `dismissible: false`. Use `dismiss_on_backdrop: false` when a background tap
+should not dismiss an editor. Docked schedule editors and anchored menus are
+separate patterns, not dialogs.
 
-The Stones page keeps playback controls beside the local stone count. Pause
-retains the count; Reset stops playback and clears it without changing clock
-calibration. The count follows the synchronized 1.5-second beat grid and
-continues past each 100-stone progress block. Sound previews play one clip
-without advancing the count. Built-in audio is cached for the current visit;
-custom MP3s must be shorter than one stone. Manual calibration and sync
-diagnostics remain available below the main controls.
+`viewport.rs` measures the normal header and unzoomed visual viewport, with
+listener cleanup on unmount. CSS fallbacks and safe-area insets keep dialogs
+scrollable in short space. Do not disable browser zoom. Actual virtual keyboard
+and Safari behavior still require device checks.
 
-These choices follow [NN/g's progressive disclosure guidance](https://www.nngroup.com/articles/progressive-disclosure/):
-keep frequent tasks visible and reveal secondary details on request. Icon
-buttons need accessible names and predictable focus behavior
-([W3C button pattern](https://www.w3.org/WAI/ARIA/apg/patterns/button/)).
-Use 44px touch targets, even for visually small controls
-([W3C target-size guidance](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html)).
+## Profiles and images
 
-`src/appearance.rs` owns browser preferences and system-mode listeners;
-`src/components/appearance_menu.rs` and its adjacent stylesheet provide the
-controls. The app wrapper
-sets `data-palette` and Bootstrap's `data-bs-theme` without changing the
-document's global theme. Keep canvas node/port geometry in the dedicated bracket
-and schedule stylesheets. Scoreboard/OBS and exact-size offline frame routes
-remain outside the app theme. Styles and icons are vendored under
-`assets/vendor/` with licenses; no CSS/font CDN or Node build is needed.
+Profiles show a 3:1 cover, overlapping avatar, identity, and URL-based sections.
+Changing sections keeps mounted injury drafts and roster expansion state;
+server permissions determine which records are available. Past-event counts
+represent confirmed registration history in published events, not verified
+attendance.
 
-## Routing
+Profile editing stages text, avatar, and cover changes locally. Save sends one
+multipart request; failed saves retain the draft. Preview renders Markdown
+through the shared backend sanitizer and shows escaped text while formatting is
+unavailable. Player phone numbers are excluded from the public preview.
 
-Routes are declared in [`src/main.rs`](src/main.rs) as a single
-`Route` enum with `#[route("...")]` attributes. A representative slice:
+Image editors support drag/tap positioning, arrow keys, Zoom, and Reset position.
+Reset centers the pan without changing zoom. Profile images save with the
+profile; tournament and league banner controls save independently in Settings.
+The settings form waits for a pending image edit to be saved or cancelled.
 
-```rust
-#[route("/")]                          Index {}
-#[route("/login")]                     Login {}
-#[route("/leagues/:league_url")]       LeagueHome { league_url: String }
-#[route("/:url")]                      TournamentHome { url: String }
-#[route("/:url/schedule")]             Schedule { url: String }
-#[route("/:url/manage")]               Manage { url: String }
-#[route("/:url/run-match")]            RunMatch { url: String }
-#[route("/:url/finalize-match")]       FinalizeMatch { url: String }
+The server validates still JPEG, PNG, and WebP uploads, limits file size and
+pixel dimensions, and removes metadata. Files live under `static/uploads`;
+models store relative paths. See [migration and storage notes](../migrations/README.md#profile-and-event-banners)
+before deploying against an existing database.
+
+## Specialist tools
+
+Keep bracket and schedule geometry in their dedicated modules/stylesheets.
+Do not alter saved coordinates or dependency semantics for a visual change.
+The Stones counter uses the synchronized 1.5-second beat grid. Pause retains
+its count, Reset stops playback and clears it, and a sound preview does not
+advance it. Calibration cancellation restores the saved timing snapshot.
+
+`manage_footage.rs` lists, filters, opens, and removes footage records.
+The match page plays linked footage and seeks to recorded points. Upload/link
+endpoints are implemented in `app/routes/tournaments/footage.py`; do not assume
+that every API capability has a management-page button.
+
+## Checks and troubleshooting
+
+Run `just frontend-test` for host-side Rust tests. Check the browser target with:
+
+```bash
+cd frontend
+cargo check --locked --target wasm32-unknown-unknown
 ```
 
-Note the order - the catch-all `/:url` for tournaments comes after all
-the more specific paths. Adding a new top-level page means adding a
-new route entry and a matching file in `src/pages/`.
+See [TESTING.md](../TESTING.md#mobile-browser-verification) for browser checks
+and device coverage limits. Choose checks for the changed behavior instead of
+repeating every browser suite after a cosmetic edit.
 
-League events use the league registration page. Direct event registration URLs
-replace their history entry with that page before rendering a form. Schedule
-links use the backend's `can_view_schedule` flag; authorized viewers see
-“Preview schedule” before publication, while other visitors see an unavailable
-control. Organizer schedule editing remains separate.
-
-## Talking to the backend
-
-[`src/api.rs`](src/api.rs) wraps `reqwest` with credentials and base
-URL handling. There's one public `pub async fn` per backend endpoint
-(e.g. `login`, `tournaments`, `start_match`, `finalize_match`,
-`update_tournament_settings`, ...). Pages call them directly:
-
-```rust
-use crate::api;
-
-let user = api::login(&username, &password).await?;
-let detail = api::tournament_detail(&tournament_url).await?;
-```
-
-Every call goes through the `with_credentials` wrapper, which on
-`wasm32` calls `fetch_credentials_include()` so the session cookie is
-sent.
-
-Two important details:
-
-- **Base URL.** Uses `window.location.origin` in browser builds. The Dioxus
-  development proxy forwards `/_api/`, `/api/`, and `/static/` to Flask on
-  `127.0.0.1:5006`. An explicit `ARCTOS_API_BASE` build-time environment
-  variable overrides this for separate-host deployments.
-- **Credentials.** Without `fetch_credentials_include()`, all `/_api/`
-  calls would 401.
-
-## Types
-
-`src/types.rs` holds serde structs that mirror Flask's JSON responses.
-When you add or change a backend response shape, update the matching
-struct here. Shapes only used in one page can live in that page's file.
-
-## Footage
-
-Tournament organizers attach match footage via the Manage Footage page
-(`src/pages/manage_footage.rs`) and the backend footage API
-(`app/routes/tournaments/footage.py`): either a YouTube link or a chunked
-file upload that the server pushes to YouTube. Jump-to-point uses
-`camera_timepoints` on the match page iframe player.
-
-## Conventions
-
-- One file per page in `src/pages/` (matches the route enum).
-- Reusable widgets go in `src/components/`.
-- API calls go through `src/api.rs`, not direct `reqwest` calls in pages.
-- Format with `cargo fmt` before committing.
-- The Rust toolchain is pinned in `rust-toolchain.toml` (channel `stable`).
-
-Use `components::Modal` for blocking dialogs. Give each dialog a unique ID and
-a visible labelled heading; select a safe initial focus target and preserve the
-caller's draft on errors. Set `dismissible: false` while a write is pending and
-guard the handler as well as disabling its controls. `dismiss_on_backdrop: false`
-keeps intentional draft-editing dialogs open on background taps without changing
-their Escape or Cancel behavior. Docked schedule editors and anchored menus are
-different interaction patterns and do not use a modal.
-
-`src/viewport.rs` measures the normal app header and the unzoomed visual viewport.
-Its scoped CSS properties keep sticky editing tools and native dialogs within
-available space, including browsers whose keyboard does not resize the layout
-viewport. Observers are removed when the normal layout unmounts; standalone
-scorers and OBS frames retain independent geometry. CSS provides fallbacks,
-separate physical safe-area insets and scrollable short-height dialogs. Do not
-disable browser zoom or substitute user-agent checks for these measurements.
-
-## Testing
-
-Backend: `just test` / `just coverage-check`.
-
-Frontend: Pure Rust unit tests for time sync, counters, filters, display
-helpers, image bounds, and crop geometry run on the host target with
-`just frontend-test`.
-
-Run the browser matrix against the demo with
-`uv run python scripts/check_mobile_ui.py` from the repository root while
-`just demo` and `just frontend` are running. It covers phone, tablet, and
-desktop layouts plus common input and save failures. See
-[`TESTING.md`](../TESTING.md#mobile-browser-verification) for browser setup
-and the focused appearance, event, profile/crop, and Stones checks, plus the
-remaining real-device checks.
-
-## When the SPA cannot reach the backend
-
-1. Start Flask on `127.0.0.1:5006` (`just demo` or `just dev`).
-2. Open the frontend on port 8080. Its `/_api/tournaments` request should use
-   that same origin. Restart `dx serve` after changing proxy configuration.
-3. With the default proxy, keep `ARCTOS_CORS_DEV` unset/0; secure cross-origin
-   cookies are unnecessary and will not work on an ordinary HTTP LAN address.
-4. If intentionally setting `ARCTOS_API_BASE`, rebuild after changing it and
-   configure backend CORS and secure cookies for that separate origin.
+If requests fail, confirm Flask is listening on `127.0.0.1:5006` and that the
+browser requests `/_api/tournaments` through the frontend origin. Restart
+`dx serve` after proxy changes. For the normal proxy, leave `ARCTOS_CORS_DEV`
+unset or `0`; an HTTP LAN address cannot use secure cross-origin cookies.

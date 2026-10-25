@@ -77,7 +77,6 @@ async def introductions(check: SmokeCheck, page: Page) -> None:
         await expect(dismiss).to_have_attribute("aria-controls", "page-banner-content")
         await expect(dismiss).to_have_attribute("aria-expanded", "true")
         await expect(dismiss.locator(".fa-chevron-up")).to_have_count(1)
-        await expect(dismiss.locator(".fa-xmark")).to_have_count(0)
         if target.endswith("search"):
             await page.locator(target).fill("demo")
         await dismiss.focus()
@@ -128,7 +127,6 @@ async def selected_profile(page: Page, kind: str, tab: str) -> None:
 
 async def profile_composition(page: Page) -> None:
     await expect(page.locator(".profile-cover")).to_be_visible()
-    await expect(page.locator(".profile-section.card, .profile-section > .card")).to_have_count(0)
     geometry = await page.locator(".profile-page").evaluate("""profile => {
         const box = selector => {const r = profile.querySelector(selector).getBoundingClientRect();
             return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
@@ -270,10 +268,6 @@ URL.revokeObjectURL = url => {cropUrls.revoked.push(url); revoke(url);};"""
 
 async def simple_position_controls(page: Page, viewport, zoom) -> None:
     """Reset keeps zoom; pointer and keyboard alternatives work without extra controls."""
-    await expect(page.get_by_text("Fine positioning", exact=True)).to_have_count(0)
-    await expect(page.get_by_text("Position controls", exact=True)).to_have_count(0)
-    await expect(page.get_by_label("Horizontal position", exact=True)).to_have_count(0)
-    await expect(page.get_by_label("Vertical position", exact=True)).to_have_count(0)
     reset = viewport.locator("..").get_by_role("button", name="Reset position", exact=True)
     await expect(reset).to_be_visible()
     reset_box = await reset.bounding_box()
@@ -361,20 +355,16 @@ async def adjust_crop(page: Page, crop_id: str) -> None:
     await simple_position_controls(page, viewport, zoom)
 
 
-async def image_upload(check: SmokeCheck, page: Page, kind: str, avatar: bool = False) -> None:
-    assert kind in ("tournament", "league"), "Profile images use the staged final Save workflow"
-    profile = False
-    noun = "photo" if avatar else "banner"
-    field = "profile_photo" if avatar else "banner_photo"
-    owner = f"demo-{kind}" if profile else DEMO_USER
-    await check.login(page, owner)
-    path = f"/{kind}s/{owner}" if profile else "/demo-open" if kind == "tournament" else "/leagues/demo-coast-league"
+async def event_banner_upload(check: SmokeCheck, page: Page, kind: str) -> None:
+    assert kind in ("tournament", "league")
+    await check.login(page)
+    path = "/demo-open" if kind == "tournament" else "/leagues/demo-coast-league"
     api_path = "/_api" + ("/tournaments" if kind == "tournament" else "") + path
-    endpoint = api_path + ("/profile-photo" if avatar else "/banner-photo")
-    edit_path = path + ("/edit" if profile else "/settings")
+    endpoint = api_path + "/banner-photo"
+    edit_path = path + "/settings"
     data = await api_json(page.context, check.base_url, api_path)
     current = "smoke-profile/old.png"
-    source = SMALL_PNG if avatar else PNG
+    source = PNG
     error = "Smoke check: image upload failed. Existing image kept."
     succeed = False
     writes, images = [], []
@@ -392,7 +382,7 @@ async def image_upload(check: SmokeCheck, page: Page, kind: str, avatar: bool = 
                 body=images[-1] if images and parsed.path.endswith("new.png") else source, content_type="image/png"
             )
         elif request.method == "GET" and parsed.path == api_path:
-            await route.fulfill(json={**data, kind: {**data[kind], field: current}})
+            await route.fulfill(json={**data, kind: {**data[kind], "banner_photo": current}})
         elif parsed.path == endpoint and request.method in ("POST", "DELETE"):
             writes.append(request.method)
             if request.method == "POST":
@@ -414,50 +404,29 @@ async def image_upload(check: SmokeCheck, page: Page, kind: str, avatar: bool = 
     await page.context.route("**/*", fixture)
     try:
         await page.goto(check.base_url + edit_path, wait_until="domcontentloaded")
-        upload = page.locator("#profile-photo-file" if avatar else "#profile-banner-file")
+        upload = page.locator("#profile-banner-file")
         await expect(upload).to_be_visible()
-        palette, mode = {
-            ("player", False): ("california", "light"),
-            ("team", False): ("field", "dark"),
-            ("tournament", False): ("neutral", "light"),
-            ("league", False): ("california", "dark"),
-            ("player", True): ("field", "light"),
-            ("team", True): ("neutral", "dark"),
-        }[kind, avatar]
+        palette, mode = ("neutral", "light") if kind == "tournament" else ("california", "dark")
         await choose(page, palette, mode)
         await close_menu(page)
-        widget = page.get_by_role("region", name="Profile photo" if avatar else "Banner image", exact=True)
-        crop_id = "image-crop-avatar" if avatar else "image-crop-banner"
+        widget = page.get_by_role("region", name="Banner image", exact=True)
+        crop_id = "image-crop-banner"
         crop = page.locator("#" + crop_id)
         save_form = page.locator("main form button[type=submit]").first
-        save_crop = widget.get_by_role("button", name="Save " + noun, exact=True)
+        save_crop = widget.get_by_role("button", name="Save banner", exact=True)
         draft = page.locator("#about") if kind == "league" else page.locator('main form input[type="text"]').first
         await draft.fill("Unsaved local details")
-        registration_open = None
-        if not profile:
-            await page.locator("#team_reg_fee").fill("123.45")
-            registration_open = not await page.locator("#team_registration_open").is_checked()
-            await page.locator('label[for="team_registration_open"]').click()
+        await page.locator("#team_reg_fee").fill("123.45")
+        registration_open = not await page.locator("#team_registration_open").is_checked()
+        await page.locator('label[for="team_registration_open"]').click()
 
         async def draft_retained() -> None:
             await expect(draft).to_have_value("Unsaved local details")
-            if not profile:
-                await expect(page.locator("#team_reg_fee")).to_have_value("123.45")
-                await expect(page.locator("#team_registration_open")).to_be_checked(checked=registration_open)
+            await expect(page.locator("#team_reg_fee")).to_have_value("123.45")
+            await expect(page.locator("#team_registration_open")).to_be_checked(checked=registration_open)
 
-        preview = widget.locator(".photo-upload-preview" if avatar else ".banner-upload-preview")
+        preview = widget.locator(".banner-upload-preview")
         await expect(preview).to_have_attribute("src", check.base_url + "/static/" + current)
-        if kind == "player" and not avatar:
-            for name, body, message in (
-                ("broken.png", b"not an image", "valid JPEG"),
-                ("large.png", PNG + bytes(8 * 1024 * 1024), "8 MB"),
-            ):
-                await upload.set_input_files({"name": name, "mimeType": "image/png", "buffer": body})
-                await expect(widget.get_by_role("alert")).to_contain_text(message)
-                await expect(crop).to_have_count(0)
-                await expect(save_form).to_be_enabled()
-            assert not writes
-
         await upload.set_input_files({"name": "cancel.png", "mimeType": "image/png", "buffer": source})
         await expect(crop).to_be_visible()
         cancelled_url = await crop.locator("img").get_attribute("src")
@@ -481,7 +450,7 @@ async def image_upload(check: SmokeCheck, page: Page, kind: str, avatar: bool = 
             page,
             ".image-crop-editor, .image-crop-editor .form-label, .image-crop-actions .btn, .image-position-reset, .image-upload > .form-text",
         )
-        await check.check_layout(page, f"{kind}-{noun}-crop-{palette}-{mode}", 320)
+        await check.check_layout(page, f"{kind}-banner-crop-{palette}-{mode}", 320)
         check.visited += 1
         await save_crop.click()
         await asyncio.wait_for(request_seen.wait(), 10)
@@ -501,7 +470,7 @@ async def image_upload(check: SmokeCheck, page: Page, kind: str, avatar: bool = 
         await save_crop.click()
         await asyncio.wait_for(request_seen.wait(), 10)
         gate.set()
-        await expect(widget.get_by_role("status")).to_have_text(noun.title() + " updated.")
+        await expect(widget.get_by_role("status")).to_have_text("Banner updated.")
         await expect(crop).to_have_count(0)
         await expect(upload).to_be_focused()
         await expect(save_form).to_be_enabled()
@@ -509,8 +478,8 @@ async def image_upload(check: SmokeCheck, page: Page, kind: str, avatar: bool = 
         assert images[0] == images[1], "Retry changed the user's selected crop"
         with Image.open(BytesIO(images[-1])) as result, Image.open(BytesIO(source)) as original:
             assert result.format == "PNG"
-            assert result.width == result.height * (1 if avatar else 3), result.size
-            assert result.width <= (512 if avatar else 1500) and result.height <= (512 if avatar else 500), result.size
+            assert result.width == result.height * 3, result.size
+            assert result.width <= 1500 and result.height <= 500, result.size
             assert result.width <= original.width / 3 + 1 and result.height <= original.height / 3 + 1, (
                 "Zoomed crop was upscaled"
             )
@@ -527,23 +496,23 @@ async def image_upload(check: SmokeCheck, page: Page, kind: str, avatar: bool = 
         check.observe(viewer)
         try:
             await viewer.goto(check.base_url + path, wait_until="domcontentloaded")
-            image = ".profile-avatar" if avatar else ".profile-cover-image" if profile else ".event-banner-image img"
+            image = ".event-banner-image img"
             await expect(viewer.locator(image)).to_have_attribute(
                 "src", check.base_url + "/static/smoke-profile/new.png"
             )
             await viewer.locator(image).evaluate("img => img.decode()")
-            await check.check_layout(viewer, f"{kind}-uploaded-{noun}", 320)
+            await check.check_layout(viewer, f"{kind}-uploaded-banner", 320)
             check.visited += 1
         finally:
             await viewer.close()
-        await widget.get_by_role("button", name="Remove " + noun, exact=True).click()
-        await expect(widget.get_by_role("status")).to_have_text(noun.title() + " removed.")
+        await widget.get_by_role("button", name="Remove banner", exact=True).click()
+        await expect(widget.get_by_role("status")).to_have_text("Banner removed.")
         await expect(preview).to_have_count(0)
         await expect(page.locator(".event-banner-image img")).to_have_count(0)
         await expect(page.locator(".event-banner-image")).to_be_visible()
         await draft_retained()
         assert writes == ["POST", "POST", "DELETE"], writes
-        await check.check_layout(page, f"{kind}-{noun}-upload", 320)
+        await check.check_layout(page, f"{kind}-banner-upload", 320)
         check.visited += 1
         await upload.set_input_files({"name": "leave.png", "mimeType": "image/png", "buffer": source})
         await expect(crop).to_be_visible()
@@ -688,7 +657,6 @@ async def staged_profile_edit(check: SmokeCheck, page: Page, kind: str) -> None:
         await expect(form).to_be_visible()
         if kind == "team":
             await expect(page.locator("#profile-edit-pronouns, .player-pompfen-editor")).to_have_count(0)
-        await expect(form.locator(".card")).to_have_count(0)
         await expect(save).to_be_disabled()
         settings = page.locator(".profile-account-settings")
         await settings.locator("summary").click()
@@ -1197,8 +1165,8 @@ async def run(args) -> int:
                 ("team-owner-tabs", 320, lambda check, page: owner_profile_tabs(check, page, "team")),
                 ("player-profile-editor", 320, lambda check, page: staged_profile_edit(check, page, "player")),
                 ("team-profile-editor", 320, lambda check, page: staged_profile_edit(check, page, "team")),
-                ("tournament-banner-upload", 320, lambda check, page: image_upload(check, page, "tournament")),
-                ("league-banner-upload", 320, lambda check, page: image_upload(check, page, "league")),
+                ("tournament-banner-upload", 320, lambda check, page: event_banner_upload(check, page, "tournament")),
+                ("league-banner-upload", 320, lambda check, page: event_banner_upload(check, page, "league")),
                 ("organizer-tools", 320, organizer_tools),
                 ("profile-theme-matrix", 360, profile_themes),
                 ("player-pronouns-pompfen", 320, player_identity),

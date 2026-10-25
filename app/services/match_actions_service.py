@@ -343,7 +343,11 @@ class MatchActionsService:
         if match.set_type != "STONES":
             return Err(ValidationError("Stone corrections require a stones match", status_code=400))
         observed_ms = correction["observed_at_ms"]
-        if isinstance(observed_ms, bool) or not isinstance(observed_ms, (int, float)) or not math.isfinite(observed_ms):
+        if (
+            isinstance(observed_ms, bool)
+            or not isinstance(observed_ms, (int, float))
+            or (isinstance(observed_ms, float) and not math.isfinite(observed_ms))
+        ):
             return Err(ValidationError("Invalid correction observation time", status_code=400))
         now = now_utc_naive()
         now_ms = now.replace(tzinfo=timezone.utc).timestamp() * 1000

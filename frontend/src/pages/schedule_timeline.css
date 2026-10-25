@@ -1228,7 +1228,7 @@
         overflow-y: auto;
     }
 
-    /* The card is far narrower than the old modal: stack its form columns. */
+    /* Stack form columns to fit the docked editor. */
     .schedule-editor-panel .col-md-4,
     .schedule-editor-panel .col-md-6 {
         width: 100%;

@@ -312,7 +312,6 @@ pub fn LeagueSettings(league_url: String) -> Element {
                                     onchange: move |evt| {
                                         #[cfg(target_arch = "wasm32")]
                                         {
-                                            use dioxus::html::HasFileData;
                                             let files = evt.files();
                                             if let Some(file) = files.into_iter().next() {
                                                 waiver_upload_error.set(None);

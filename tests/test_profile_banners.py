@@ -233,3 +233,18 @@ def test_filename_collision_does_not_delete_previous_image(client, owner, storag
     response = upload(client, kind, account)
     assert response.status_code == 500
     assert account.banner_photo == original and (storage / original).is_file()
+
+
+def test_lost_commit_acknowledgement_preserves_saved_banner(client, owner, storage, monkeypatch):
+    kind, account = owner
+    login_as(client, account)
+    commit = db.session.commit
+
+    def commit_without_reply():
+        commit()
+        raise RuntimeError("connection lost after commit")
+
+    monkeypatch.setattr(db.session, "commit", commit_without_reply)
+    response = upload(client, kind, account)
+    assert response.status_code == 500 and "could not be confirmed" in response.json["error"]
+    assert (storage / account.banner_photo).is_file()

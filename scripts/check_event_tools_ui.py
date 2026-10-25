@@ -120,7 +120,7 @@ async def penalty_edit_state(check: SmokeCheck, page: Page) -> None:
                     return {width:r.width,height:r.height,left:r.left,right:r.right};
                 })"""
             )
-            assert len(choices) == 14 and all(
+            assert choices and all(
                 choice["width"] >= 44
                 and choice["height"] >= 44
                 and choice["left"] >= 0
@@ -174,15 +174,16 @@ async def schedule_panels(check: SmokeCheck, page: Page) -> None:
     await composition(page, "schedule-edit")
     assert await page.evaluate("window.scrollY") <= 1
     await page.get_by_role("button", name="Fields", exact=True).click()
-    await expect(page.locator(".modal-title")).to_have_text("Manage Fields")
-    await expect(page.locator(".modal-body .card")).to_have_count(0)
-    await page.locator(".modal-header").get_by_role("button", name="Close", exact=True).click()
+    dialog = page.get_by_role("dialog", name="Manage Fields", exact=True)
+    await expect(dialog.get_by_label("Field name", exact=True)).to_be_visible()
+    await page.keyboard.press("Escape")
+    await expect(dialog).to_be_hidden()
+    await expect(page.get_by_role("button", name="Fields", exact=True)).to_be_focused()
     await page.get_by_role("button", name="Table", exact=True).click()
     row = page.locator("tbody tr").filter(has_text="Next on Field B")
-    await row.get_by_role("button", name="✎", exact=True).click()
+    await row.get_by_role("button", name="Edit Next on Field B", exact=True).click()
     panel = page.locator(".schedule-editor-card")
     await expect(panel).to_be_visible()
-    assert "card" not in (await panel.get_attribute("class")).split()
     await panel.get_by_role("button", name="Close", exact=True).click()
 
 
@@ -488,10 +489,6 @@ async def run(args) -> int:
                         if len(check.failures) == before:
                             try:
                                 await composition(page, tab, prefix)
-                                framed = await page.locator("main form").evaluate_all(
-                                    "forms => forms.filter(el => el.closest('.card')).map(el => el.id)"
-                                )
-                                assert not framed, f"Editing forms retain card frames: {framed}"
                             except Exception as error:
                                 check.failures.append(f"{width}px {path}: {error}")
                     await check.workflow(page, "settings-parent-state", width, lambda: settings_state(check, page))

@@ -121,6 +121,7 @@ def test_invalid_count_never_writes(stone_match, count):
     [
         float("nan"),
         float("inf"),
+        10**1000,
         "time",
         True,
         millis(NOW + timedelta(seconds=6)),

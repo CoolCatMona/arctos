@@ -115,7 +115,7 @@ pub use sidecomp_results::SideCompResults;
 pub use start_match::StartMatch;
 pub use stones::Stones;
 pub use create_event::CreateEvent;
-pub use legacy_bracket::{LegacyBracket, LegacyBracketDiagrams};
+pub use legacy_bracket::LegacyBracket;
 pub use team_profile::{TeamProfilePage, TeamProfilePageWithTab};
 pub use teams_list::{TeamsList, TeamsListWithQuery};
 pub use terms::Terms;

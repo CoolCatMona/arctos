@@ -54,16 +54,12 @@ SQLALCHEMY_DATABASE_URI=sqlite:////tmp/test.db uv run alembic upgrade head
 
 ## Documentation requirements
 
-Every migration file **must** have a module-level docstring explaining *why* the change is being made.
-
-Pre-commit hooks and CI may enforce this; in any case, treat it as a hard
-review-time requirement.
-
+Every migration file must have a module-level docstring explaining why the
+change is needed. Review that explanation along with the schema operations.
 
 ## Profile and event banners
 
-These migrations are required before running the updated backend against an
-existing database:
+The current profile fields are introduced by these migrations:
 
 | Revision | Addition |
 |---|---|
@@ -71,11 +67,9 @@ existing database:
 | `0024_event_banners` | Nullable `banner_photo` columns on `tournaments` and `leagues` |
 | `0025_player_profile_details` | Optional player `pronouns` and a `pompfen` JSON list, initially empty |
 
-Existing rows and avatar paths stay intact. Existing players have no pronouns
-or selected pompfen until they choose to add them. Profiles and events display the
-theme background until an authorized user uploads a cover. Run `uv sync` to
-install Pillow, back up the database, then apply pending migrations to the
-intended database before starting Flask:
+These migrations preserve existing rows and avatar paths. Optional profile
+fields start empty. Back up the database, install dependencies with `uv sync`,
+and apply pending migrations to the intended database before starting Flask:
 
 ```bash
 SQLALCHEMY_DATABASE_URI=sqlite:////absolute/path/to/database.db uv run alembic current
@@ -85,16 +79,15 @@ SQLALCHEMY_DATABASE_URI=sqlite:////absolute/path/to/database.db uv run alembic u
 Banner files are stored under `static/uploads/banners`; avatars remain under
 `static/uploads/profiles`. Preserve both directories with database backups and
 across deployments. The database stores relative paths rather than image
-bytes. Avatar validation/storage improvements need no additional columns and
-do not rewrite existing uploads during migration. New uploads are validated,
+bytes. Migrations do not rewrite existing image files. Uploads are validated,
 normalized, and stripped of metadata; replacements use fresh filenames and
 remove old files only after the database update succeeds.
 
 A database created directly by `db.create_all()` may have no Alembic revision.
-Do not stamp it at the new head to skip missing columns. Inspect its schema
+Do not stamp it at head to skip missing columns. Inspect its schema
 first: if it matches revision `0022_oauth_provider` and lacks all four banner
 columns, stamp **0022_oauth_provider**, then upgrade. A fresh database created
-from the updated models already contains all listed additions; verify that schema
+from the current models already contains all listed additions; verify that schema
 before stamping it at head. Always point these commands at the intended
 local/demo database using `SQLALCHEMY_DATABASE_URI`.
 
