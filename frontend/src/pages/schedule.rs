@@ -1,7 +1,8 @@
 use super::TeamSelectionField;
+use super::tournament_home::TournamentHomeContent;
 use crate::Route;
 use crate::api;
-use crate::components::{AssEntry, TeamLabel, TeamLabelStyle, TeamSlot};
+use crate::components::{ActionRecovery, AssEntry, Modal, ModalKind, ModalSize, TeamLabel, TeamLabelStyle, TeamSlot};
 use crate::display::short_or_truncate;
 use crate::types::*;
 use dioxus::html::ModifiersInteraction;
@@ -461,6 +462,45 @@ fn ls_set(key: &str, val: &str) {
     }
 }
 
+/// Public schedules use the page scroll on small screens. The editor retains
+/// its own viewport so drag and drop can reach every hour of the day.
+#[cfg(target_arch = "wasm32")]
+fn timeline_uses_page_scroll(window: &web_sys::Window, element: &web_sys::Element) -> bool {
+    window
+        .get_computed_style(element)
+        .ok()
+        .flatten()
+        .and_then(|style| style.get_property_value("overflow-y").ok())
+        .is_some_and(|overflow| overflow == "visible")
+}
+
+fn scroll_selected_schedule_into_view() {
+    #[cfg(target_arch = "wasm32")]
+    wasm_bindgen_futures::spawn_local(async move {
+        // Let the chosen team's day and timeline finish rendering first.
+        gloo_timers::future::TimeoutFuture::new(100).await;
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let Some(document) = window.document() else {
+            return;
+        };
+        let Some(timeline) = document.get_element_by_id("schedule-timeline-wrapper") else {
+            return;
+        };
+        let header_height = document
+            .query_selector(".app-header")
+            .ok()
+            .flatten()
+            .map(|header| header.get_bounding_client_rect().height())
+            .unwrap_or(0.0);
+        let top = timeline.get_bounding_client_rect().top() + window.scroll_y().unwrap_or(0.0)
+            - header_height
+            - 12.0;
+        window.scroll_to_with_x_and_y(0.0, top.max(0.0));
+    });
+}
+
 /// Compute the scrollTop that keeps the current viewport center fixed after a
 /// uniform content-height scale of `ratio` (new/old). Returns None if the
 /// scroll element is missing.
@@ -472,6 +512,18 @@ fn scroll_top_after_centered_zoom(scroll_el_id: &str, ratio: f64) -> Option<i32>
         let doc = window.document()?;
         let el = doc.get_element_by_id(scroll_el_id)?;
         let html_el = el.dyn_ref::<web_sys::HtmlElement>()?;
+        if timeline_uses_page_scroll(&window, &el) {
+            let viewport_center = window.inner_height().ok()?.as_f64()? / 2.0;
+            let top = el.get_bounding_client_rect().top();
+            let grid_header = el
+                .query_selector(".schedule-timeline-header > div")
+                .ok()
+                .flatten()
+                .map(|header| header.get_bounding_client_rect().height())
+                .unwrap_or(0.0);
+            let distance = (viewport_center - top - grid_header).max(0.0);
+            return Some((window.scroll_y().ok()? + distance * (ratio - 1.0)).max(0.0) as i32);
+        }
         let client_h = html_el.client_height() as f64;
         let scroll_top = html_el.scroll_top() as f64;
         let center = scroll_top + client_h / 2.0;
@@ -491,7 +543,9 @@ fn apply_scroll_top(scroll_el_id: &str, scroll_top: i32) {
         if let Some(window) = web_sys::window() {
             if let Some(doc) = window.document() {
                 if let Some(el) = doc.get_element_by_id(scroll_el_id) {
-                    if let Some(html_el) = el.dyn_ref::<web_sys::HtmlElement>() {
+                    if timeline_uses_page_scroll(&window, &el) {
+                        window.scroll_to_with_x_and_y(0.0, scroll_top as f64);
+                    } else if let Some(html_el) = el.dyn_ref::<web_sys::HtmlElement>() {
                         html_el.set_scroll_top(scroll_top);
                     }
                 }
@@ -501,6 +555,23 @@ fn apply_scroll_top(scroll_el_id: &str, scroll_top: i32) {
     #[cfg(not(target_arch = "wasm32"))]
     {
         let _ = (scroll_el_id, scroll_top);
+    }
+}
+
+fn focus_schedule_root() {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+            return;
+        };
+        let Ok(Some(element)) = document.query_selector(".schedule-keyboard-focus") else {
+            return;
+        };
+        if let Some(element) = element.dyn_ref::<web_sys::HtmlElement>() {
+            let options = web_sys::FocusOptions::new();
+            options.set_prevent_scroll(true);
+            let _ = element.focus_with_options(&options);
+        }
     }
 }
 
@@ -574,6 +645,25 @@ const EDIT_SHOW_AS_HAPPENED_KEY: &str = "schedule_edit_show_as_happened";
 const BASE_SLOT_HEIGHT_REM: f64 = 7.0;
 const MIN_VERTICAL_SCALE: f64 = 0.55;
 const MAX_VERTICAL_SCALE: f64 = 2.5;
+
+/// Change the time-axis scale without moving the currently viewed midpoint.
+fn change_time_scale(
+    mut vertical_scale: Signal<f64>,
+    mut pending_scroll_top: Signal<Option<i32>>,
+    scroll_el_id: &str,
+    requested: f64,
+) {
+    let old = vertical_scale();
+    let next = requested.clamp(MIN_VERTICAL_SCALE, MAX_VERTICAL_SCALE);
+    if !next.is_finite() || (next - old).abs() < 1e-6 {
+        return;
+    }
+    if let Some(top) = scroll_top_after_centered_zoom(scroll_el_id, next / old) {
+        pending_scroll_top.set(Some(top));
+    }
+    vertical_scale.set(next);
+    ls_set(VERTICAL_SCALE_KEY, &format!("{next:.3}"));
+}
 
 /// Full-timestamp local formatter so debug-mode tables show the full timestamp.
 fn format_datetime_local(iso: &str, tz_offset_minutes: i64) -> String {
@@ -657,12 +747,20 @@ pub(crate) struct MoveCommitPayload {
 #[component]
 pub fn Schedule(url: String, view: String, team: String, field: String) -> Element {
     rsx! {
-        SchedulePage {
-            url,
-            view,
-            team,
-            field,
-            editor: false,
+        TournamentHomeContent {
+            key: "{url}",
+            url: url.clone(),
+            initial_tab: Some("schedule".to_string()),
+            content: Some(rsx! {
+                SchedulePage {
+                    url,
+                    view,
+                    team,
+                    field,
+                    editor: false,
+                    embedded: true,
+                }
+            }),
         }
     }
 }
@@ -679,12 +777,20 @@ pub fn ScheduleEdit(url: String) -> Element {
             team: String::new(),
             field: String::new(),
             editor: true,
+            embedded: true,
         }
     }
 }
 
 #[component]
-fn SchedulePage(url: String, view: String, team: String, field: String, editor: bool) -> Element {
+fn SchedulePage(
+    url: String,
+    view: String,
+    team: String,
+    field: String,
+    editor: bool,
+    #[props(default)] embedded: bool,
+) -> Element {
     let url_data = url.clone();
     let mut setup_data = use_resource(move || {
         let u = url_data.clone();
@@ -769,6 +875,12 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
     let mut is_to = use_signal(|| false);
 
     let mut active_modal = use_signal(|| "none".to_string());
+    let mut last_helper_setup = use_signal(|| None::<ScheduleSetupResponse>);
+    use_effect(move || {
+        if let Some(Ok(data)) = setup_data.read().as_ref() {
+            last_helper_setup.set(Some(data.clone()));
+        }
+    });
     let mut selected_match_id = use_signal(|| "".to_string());
     // Display name of the break group being edited (BREAK/STATBREAK/JOIN
     // blocks open the group modal instead of the single-match edit modal).
@@ -969,28 +1081,26 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
             }
 
             let handle = Interval::new(SCHEDULE_REFRESH_INTERVAL_MS, move || {
-                refresh_trigger.set(refresh_trigger().wrapping_add(1));
+                if active_modal.peek().as_str() == "none" {
+                    refresh_trigger.set(refresh_trigger().wrapping_add(1));
+                }
             });
             schedule_refresh_interval.set(Some(handle));
         });
     }
 
-    // Refocus the schedule container when a modal closes so keyboard shortcuts work without a click
+    // Native helper dialogs restore their own opener. Only docked editors need
+    // the schedule keyboard target restored when they close.
+    let mut previous_active_modal = use_signal(|| "none".to_string());
     use_effect(move || {
-        let _ = active_modal();
+        let current = active_modal();
+        let previous = previous_active_modal.peek().clone();
+        previous_active_modal.set(current.clone());
         #[cfg(target_arch = "wasm32")]
-        if active_modal() == "none" {
+        if current == "none" && is_docked_schedule_editor(&previous) {
             spawn(async move {
                 gloo_timers::future::TimeoutFuture::new(0).await;
-                if let Some(window) = web_sys::window() {
-                    if let Some(doc) = window.document() {
-                        if let Ok(Some(el)) = doc.query_selector(".schedule-keyboard-focus") {
-                            if let Some(html_el) = el.dyn_ref::<web_sys::HtmlElement>() {
-                                let _ = html_el.focus();
-                            }
-                        }
-                    }
-                }
+                focus_schedule_root();
             });
         }
     });
@@ -1003,7 +1113,11 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
     };
 
     let val = setup_data.value();
-    let data_opt = val.read().as_ref().and_then(|r| r.as_ref().ok().cloned());
+    let setup_reloading = *setup_data.state().read() == UseResourceState::Pending;
+    let helper_open = is_schedule_helper(&active_modal());
+    let helper_reload_error = val.read().as_ref().and_then(|result| result.as_ref().err().cloned());
+    let data_opt = val.read().as_ref().and_then(|r| r.as_ref().ok().cloned())
+        .or_else(|| helper_open.then(|| last_helper_setup()).flatten());
 
     match data_opt {
         Some(data) => {
@@ -1011,11 +1125,32 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
             let url_for_export = url.clone();
             let url_for_export_key = url_for_export.clone();
             let handle_keydown = move |ev: Event<KeyboardData>| {
+                if ev.modifiers().ctrl() || ev.modifiers().meta() || ev.modifiers().alt() {
+                    return;
+                }
+                #[cfg(target_arch = "wasm32")]
+                if ev
+                    .data
+                    .downcast::<web_sys::KeyboardEvent>()
+                    .and_then(|event| event.target())
+                    .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+                    .and_then(|target| {
+                        target
+                            .closest("input, textarea, select, [contenteditable='true']")
+                            .ok()
+                            .flatten()
+                    })
+                    .is_some()
+                    && ev.key() != Key::Escape
+                {
+                    return;
+                }
                 let key_str = ev.key().to_string();
                 let modal_open = active_modal() != "none";
                 if modal_open {
-                    // When a modal is open, only handle Escape to close it; let all other keys go to modal inputs
-                    if key_str == "Escape" {
+                    // Native helpers own Escape, including their pending-write guard.
+                    // Docked editors retain their existing Escape behavior.
+                    if key_str == "Escape" && is_docked_schedule_editor(&active_modal()) {
                         ev.prevent_default();
                         active_modal.set("none".to_string());
                     }
@@ -1136,33 +1271,30 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
             rsx! {
                 style { {SCHEDULE_PAGE_CSS} }
                 div {
-                    // The editor gets the full viewport width (escapes the layout's
-                    // centered max-width container via the full-bleed class).
-                    class: if editor { "container-fluid mt-3 position-relative schedule-keyboard-focus schedule-editor-fullbleed" } else { "container-fluid mt-3 position-relative schedule-keyboard-focus" },
+                    // Keep the editor within the available page width, including scrollbars.
+                    class: if editor && !embedded { "container-fluid mt-3 position-relative schedule-keyboard-focus schedule-editor-page" } else if embedded { "mt-3 position-relative schedule-keyboard-focus" } else { "container-fluid mt-3 position-relative schedule-keyboard-focus" },
                     tabindex: 0,
                     onkeydown: handle_keydown,
-                    onmounted: move |ev| {
-                        spawn(async move {
-                            let _ = ev.data().set_focus(true).await;
-                        });
-                    },
-                    role: "application",
+                    onmounted: move |_| focus_schedule_root(),
+                    role: "region",
                     aria_label: "Schedule",
-                    div { class: "row mb-3",
-                        div { class: "col",
-                            h1 { "{data.tournament.name}" }
-                            nav { "aria-label": "breadcrumb",
-                                ol { class: "breadcrumb",
-                                    li { class: "breadcrumb-item",
-                                        Link { to: Route::TournamentHome { url: url.clone() }, "{data.tournament.name}" }
-                                    }
-                                    if editor {
+                    if !embedded {
+                        div { class: "row mb-3",
+                            div { class: "col",
+                                h1 { "{data.tournament.name}" }
+                                nav { "aria-label": "breadcrumb",
+                                    ol { class: "breadcrumb",
                                         li { class: "breadcrumb-item",
-                                            Link { to: Route::Schedule { url: url.clone(), view: String::new(), team: String::new(), field: String::new() }, "Schedule" }
+                                            Link { to: Route::TournamentHome { url: url.clone() }, "{data.tournament.name}" }
                                         }
-                                        li { class: "breadcrumb-item active", "Edit" }
-                                    } else {
-                                        li { class: "breadcrumb-item active", "Schedule" }
+                                        if editor {
+                                            li { class: "breadcrumb-item",
+                                                Link { to: Route::Schedule { url: url.clone(), view: String::new(), team: String::new(), field: String::new() }, "Schedule" }
+                                            }
+                                            li { class: "breadcrumb-item active", "Edit" }
+                                        } else {
+                                            li { class: "breadcrumb-item active", "Schedule" }
+                                        }
                                     }
                                 }
                             }
@@ -1211,13 +1343,16 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
                         }
                     }
 
-                    div { class: "card mb-3 bg-light",
-                        div { class: "card-body p-2",
-                            div { class: "d-flex flex-wrap justify-content-between align-items-center gap-2",
-                                div { class: "d-flex flex-wrap align-items-center gap-2",
+                    div { class: if editor { "edit-toolbar mb-3" } else { "schedule-view-toolbar mb-2" },
+                        div { class: if editor { "edit-toolbar-body p-2" } else { "schedule-view-toolbar-body" },
+                            div { class: "schedule-toolbar-layout d-flex flex-wrap justify-content-between align-items-center gap-2",
+                                div { class: "schedule-view-filters d-flex flex-wrap align-items-center gap-2",
                                     if view_mode() != "team" {
+                                        div { class: "schedule-filter",
+                                        label { r#for: "schedule-field", "Field" }
                                         select {
-                                            class: "form-select form-select-sm d-inline-block w-auto",
+                                            id: "schedule-field",
+                                            class: "form-select form-select-sm",
                                             value: "{selected_field}",
                                             onchange: move |e| selected_field.set(e.value()),
                                             onkeydown: move |ev: Event<KeyboardData>| ev.stop_propagation(),
@@ -1233,21 +1368,29 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
                                                 }
                                             }
                                         }
+                                        }
+                                        div { class: "schedule-filter",
+                                        label { r#for: "schedule-highlight-team", "Highlight team" }
                                         input {
+                                            id: "schedule-highlight-team",
                                             class: "form-control form-control-sm d-inline-block",
                                             style: "width: 10rem;",
-                                            placeholder: "Highlight Team...",
+                                            placeholder: "Team name",
                                             value: "{highlight_team}",
                                             oninput: move |e| highlight_team.set(e.value()),
                                             onkeydown: move |ev: Event<KeyboardData>| ev.stop_propagation(),
+                                        }
                                         }
                                     } else {
                                         {
                                             let selected = focus_team_id();
                                             let selected_in_options = data.team_options.iter().any(|t| t.id == selected);
                                             rsx! {
+                                                div { class: "schedule-filter",
+                                                label { r#for: "schedule-team", "Your team" }
                                                 select {
-                                                    class: "form-select form-select-sm d-inline-block w-auto",
+                                                    id: "schedule-team",
+                                                    class: "form-select form-select-sm",
                                                     // Controlled value + per-option selected so default team shows correctly.
                                                     value: "{selected}",
                                                     onkeydown: move |ev: Event<KeyboardData>| ev.stop_propagation(),
@@ -1257,6 +1400,7 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
                                                             let v = e.value();
                                                             focus_team_id.set(v.clone());
                                                             ls_set(&focus_team_storage_key(&u), &v);
+                                                            if !v.is_empty() { scroll_selected_schedule_into_view(); }
                                                         }
                                                     },
                                                     option {
@@ -1285,18 +1429,21 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
                                                         }
                                                     }
                                                 }
+                                                }
                                             }
                                         }
                                     }
-                                    div { class: "btn-group btn-group-sm",
+                                    div { class: "btn-group btn-group-sm schedule-view-switch", role: "group", aria_label: "Schedule view",
                                         if !editor {
                                             button {
                                                 class: if view_mode() == "team" { "btn btn-primary" } else { "btn btn-outline-primary" },
+                                                aria_pressed: view_mode() == "team",
                                                 onclick: move |_| view_mode.set("team".to_string()),
                                                 "By team"
                                             }
                                             button {
                                                 class: if view_mode() == "field" { "btn btn-primary" } else { "btn btn-outline-primary" },
+                                                aria_pressed: view_mode() == "field",
                                                 onclick: move |_| view_mode.set("field".to_string()),
                                                 "By field"
                                             }
@@ -1304,11 +1451,13 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
                                         if editor {
                                             button {
                                                 class: if view_mode() == "timeline" { "btn btn-primary" } else { "btn btn-outline-primary" },
+                                                aria_pressed: view_mode() == "timeline",
                                                 onclick: move |_| view_mode.set("timeline".to_string()),
                                                 "All fields"
                                             }
                                             button {
                                                 class: if view_mode() == "table" { "btn btn-primary" } else { "btn btn-outline-primary" },
+                                                aria_pressed: view_mode() == "table",
                                                 onclick: move |_| view_mode.set("table".to_string()),
                                                 "Table"
                                             }
@@ -1317,6 +1466,18 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
                                 }
                                 if editor {
                                     div { class: "d-flex flex-wrap align-items-center gap-1",
+                                            button {
+                                                r#type: "button",
+                                                class: "btn btn-sm btn-outline-secondary",
+                                                disabled: data.fields.is_empty() || active_modal() != "none" || bulk_mode(),
+                                                onclick: move |_| {
+                                                    create_prefill.set(None);
+                                                    create_prefill_nonce.set(create_prefill_nonce().wrapping_add(1));
+                                                    team_field_focus.set(None);
+                                                    active_modal.set("match_create".to_string());
+                                                },
+                                                "Add match"
+                                            }
                                             button { class: "btn btn-sm btn-outline-secondary", onclick: move |_| active_modal.set("tags".to_string()), "Tags" }
                                             button { class: "btn btn-sm btn-outline-secondary", onclick: move |_| active_modal.set("scripting".to_string()), "Scripting" }
                                             button { class: "btn btn-sm btn-outline-secondary", onclick: move |_| active_modal.set("fields".to_string()), "Fields" }
@@ -1437,14 +1598,14 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
                             }
                         }
                         if push_back_open() {
-                            div { class: "card mb-2 border-secondary",
-                                div { class: "card-body py-2 d-flex flex-wrap align-items-center gap-2",
+                            div { class: "edit-toolbar mb-2",
+                                div { class: "edit-toolbar-body py-2 d-flex flex-wrap align-items-center gap-2",
                                     strong { class: "small", "Push back day:" }
                                     span { class: "small text-muted",
                                         "push back all non-started matches on {viewed_day()}"
                                     }
-                                    label { class: "small mb-0 ms-2", "Minutes" }
-                                    input {
+                                    label { r#for: "schedule-push-minutes", class: "small mb-0 ms-2", "Minutes" }
+                                    input { id: "schedule-push-minutes",
                                         class: "form-control form-control-sm d-inline-block",
                                         style: "width: 6rem;",
                                         r#type: "number",
@@ -1493,14 +1654,14 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
                             }
                         }
                         if bulk_mode() {
-                            div { class: "card mb-2 border-secondary",
-                                div { class: "card-body py-2 d-flex flex-wrap align-items-center gap-2",
+                            div { class: "edit-toolbar mb-2",
+                                div { class: "edit-toolbar-body py-2 d-flex flex-wrap align-items-center gap-2",
                                     strong { class: "small", "Bulk length:" }
                                     span { class: "small text-muted",
                                         "click blocks to select — {bulk_selected().len()} selected"
                                     }
-                                    label { class: "small mb-0 ms-2", "Length (min)" }
-                                    input {
+                                    label { r#for: "schedule-bulk-length", class: "small mb-0 ms-2", "Length (min)" }
+                                    input { id: "schedule-bulk-length",
                                         class: "form-control form-control-sm d-inline-block",
                                         style: "width: 6rem;",
                                         r#type: "number",
@@ -1858,6 +2019,9 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
                     if active_modal() == "tags" {
                         TagsModal {
                             tournament_url: url.clone(),
+                            reload_error: helper_reload_error.clone(),
+                            reloading: setup_reloading,
+                            on_reload: move |_| refresh(),
                             data: data.clone(),
                             on_close: move |_| active_modal.set("none".to_string()),
                             on_change: move |_| refresh()
@@ -1866,6 +2030,9 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
                     if active_modal() == "scripting" {
                         ScriptingModal {
                             tournament_url: url.clone(),
+                            reload_error: helper_reload_error.clone(),
+                            reloading: setup_reloading,
+                            on_reload: move |_| refresh(),
                             data: data.clone(),
                             on_close: move |_| active_modal.set("none".to_string()),
                             on_change: move |_| refresh()
@@ -1874,6 +2041,9 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
                     if active_modal() == "fields" {
                         FieldsModal {
                             tournament_url: url.clone(),
+                            reload_error: helper_reload_error.clone(),
+                            reloading: setup_reloading,
+                            on_reload: move |_| refresh(),
                             data: data.clone(),
                             on_close: move |_| active_modal.set("none".to_string()),
                             on_change: move |_| refresh()
@@ -1882,6 +2052,9 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
                     if active_modal() == "toml_import" {
                         TOMLImportModal {
                             tournament_url: url.clone(),
+                            reload_error: helper_reload_error.clone(),
+                            reloading: setup_reloading,
+                            on_reload: move |_| refresh(),
                             on_close: move |_| active_modal.set("none".to_string()),
                             on_import: move |_| {
                                 active_modal.set("none".to_string());
@@ -1892,6 +2065,9 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
                     if active_modal() == "schedule_warnings" {
                         ScheduleWarningsModal {
                             tournament_url: url.clone(),
+                            reload_error: helper_reload_error.clone(),
+                            reloading: setup_reloading,
+                            on_reload: move |_| refresh(),
                             on_close: move |_| active_modal.set("none".to_string()),
                             selectable: editor,
                             on_select_match: {
@@ -1956,6 +2132,17 @@ fn SchedulePage(url: String, view: String, team: String, field: String, editor: 
         None => {
             // Check if it was an error or loading
             match val.read().as_ref() {
+                Some(Err(e)) if e == "Schedule not published" => rsx! {
+                    div { class: "card",
+                        div { class: "card-body",
+                            if !embedded { h1 { "Schedule" } }
+                            p { "The schedule has not been posted yet." }
+                            if !embedded {
+                                Link { to: Route::TournamentHome { url: url.clone() }, class: "btn btn-outline-primary", "Back to event" }
+                            }
+                        }
+                    }
+                },
                 Some(Err(e)) => rsx! { div { class: "alert alert-danger", "Error: {e}" } },
                 _ => rsx! { div { class: "text-center mt-5", "Loading..." } },
             }
@@ -1987,49 +2174,145 @@ fn matches_on_field_sorted<'a>(
     v
 }
 
+fn is_docked_schedule_editor(value: &str) -> bool {
+    matches!(value, "match_create" | "match_edit" | "break_group")
+}
+
+fn is_schedule_helper(value: &str) -> bool {
+    matches!(value, "tags" | "scripting" | "fields" | "toml_import" | "schedule_warnings")
+}
+
+/// Merge authoritative reloads without overwriting another row's local draft.
+fn merge_schedule_drafts(
+    drafts: &mut HashMap<u32, String>,
+    baseline: &mut HashMap<u32, String>,
+    fresh: HashMap<u32, String>,
+) {
+    drafts.retain(|id, _| fresh.contains_key(id));
+    for (id, value) in &fresh {
+        if !drafts.contains_key(id) || drafts.get(id) == baseline.get(id) {
+            drafts.insert(*id, value.clone());
+        }
+    }
+    *baseline = fresh;
+}
+
+#[component]
+fn ScheduleHelperDialog(
+    id: String,
+    title: String,
+    #[props(default)] pending: bool,
+    #[props(default)] reloading: bool,
+    #[props(default)] reload_error: Option<String>,
+    #[props(default)] on_reload: EventHandler<()>,
+    on_close: EventHandler<()>,
+    #[props(default)] footer: Option<Element>,
+    children: Element,
+) -> Element {
+    let title_id = format!("{id}-title");
+    let reload_error_id = format!("{id}-reload-error");
+    let focus_error_id = reload_error_id.clone();
+    use_effect(use_reactive(&reload_error, move |error| {
+        if error.is_some() { crate::form_validation::focus_after_render(focus_error_id.clone()); }
+    }));
+    rsx! {
+        Modal {
+            id, labelled_by: title_id.clone(), size: ModalSize::Large,
+            dismissible: !pending,
+            on_close: move |_| { if !pending { on_close.call(()); } },
+            div { class: "modal-header",
+                h2 { id: title_id.clone(), class: "modal-title h5", tabindex: "-1", "{title}" }
+                button { r#type: "button", class: "btn-close", aria_label: "Close {title}", disabled: pending,
+                    onclick: move |_| { if !pending { on_close.call(()); } },
+                }
+            }
+            div { class: "modal-body", aria_busy: "{pending}",
+                if let Some(error) = &reload_error {
+                    div { id: reload_error_id.clone(), class: "alert alert-danger", role: "alert", tabindex: "-1",
+                        p { class: "mb-2", "Could not refresh the schedule. Your open drafts are kept. Refresh before making another change. {error}" }
+                        button { r#type: "button", class: "btn btn-outline-secondary", disabled: pending,
+                            onclick: move |_| on_reload.call(()), "Retry refresh" }
+                    }
+                }
+                if reloading { p { class: "text-muted", role: "status", "Refreshing schedule…" } }
+                fieldset { disabled: pending || reloading || reload_error.is_some(), class: "m-0 p-0 border-0", style: "min-width: 0;",
+                    legend { class: "visually-hidden", "{title}" }
+                    {children}
+                }
+            }
+            if let Some(footer) = footer { {footer} } else {
+                div { class: "modal-footer",
+                    button { r#type: "button", class: "btn btn-secondary", disabled: pending,
+                        onclick: move |_| { if !pending { on_close.call(()); } }, "Close" }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod schedule_helper_tests {
+    use super::{is_docked_schedule_editor, is_schedule_helper, merge_schedule_drafts};
+    use std::collections::HashMap;
+
+    #[test]
+    fn helper_escape_is_distinct_from_docked_editor_escape() {
+        for helper in ["fields", "tags", "scripting", "toml_import", "schedule_warnings"] {
+            assert!(is_schedule_helper(helper));
+            assert!(!is_docked_schedule_editor(helper));
+        }
+        for editor in ["match_create", "match_edit", "break_group"] {
+            assert!(is_docked_schedule_editor(editor));
+            assert!(!is_schedule_helper(editor));
+        }
+        assert!(!is_schedule_helper("none"));
+        assert!(!is_docked_schedule_editor("none"));
+    }
+
+    #[test]
+    fn reload_preserves_dirty_rows_and_refreshes_untouched_values() {
+        let mut baseline = HashMap::from([(1, "saved".into()), (2, "old".into()), (3, "removed".into())]);
+        let mut drafts = HashMap::from([(1, "unsaved draft".into()), (2, "old".into()), (3, "removed".into())]);
+        merge_schedule_drafts(&mut drafts, &mut baseline,
+            HashMap::from([(1, "server update".into()), (2, "new".into()), (4, "created".into())]));
+        assert_eq!(drafts.get(&1).map(String::as_str), Some("unsaved draft"));
+        assert_eq!(drafts.get(&2).map(String::as_str), Some("new"));
+        assert_eq!(drafts.get(&4).map(String::as_str), Some("created"));
+        assert!(!drafts.contains_key(&3));
+        assert_eq!(baseline.get(&1).map(String::as_str), Some("server update"));
+        // Once that draft is saved, later authoritative changes are allowed through.
+        merge_schedule_drafts(&mut drafts, &mut baseline,
+            HashMap::from([(1, "unsaved draft".into()), (2, "new".into()), (4, "created".into())]));
+        merge_schedule_drafts(&mut drafts, &mut baseline,
+            HashMap::from([(1, "later server value".into()), (2, "new".into()), (4, "created".into())]));
+        assert_eq!(drafts.get(&1).map(String::as_str), Some("later server value"));
+    }
+}
+
 /// Skip condition help modal
 #[component]
 fn SkipConditionHelpModal(on_close: EventHandler<()>) -> Element {
     rsx! {
-        div {
-            class: "modal d-block",
-            style: "background: rgba(0,0,0,0.5); z-index: 1060;",
-            tabindex: -1,
-            div {
-                class: "modal-dialog modal-lg",
-                style: "z-index: 1061;",
-                div { class: "modal-content",
-                    div { class: "modal-header",
-                        h5 { class: "modal-title", "Skip Condition Help" }
-                        button { class: "btn-close", "type": "button", onclick: move |_| on_close.call(()) }
-                    }
-                    div { class: "modal-body",
-                          p {
-                  "The skip condition uses "
-                  Link {
-                  to: Route::ArctosScheduleScript {},
-                  "Arctos Schedule Script"
-                  }
-                  " to express boolean conditions. If it evaluates to true, the match will be skipped. This evaluation happens when this match's last dependency becomes finished or skipped. If this match is not skipped, the skip condition will be re-evaluated every time a match starts or finishes until it is started or the skip condition evaluates to true and it gets skipped."
-              }
+        ScheduleHelperDialog {
+            id: "schedule-skip-help", title: "Skip Condition Help",
+            on_close,
+            p {
+                "The skip condition uses "
+                Link { to: Route::ArctosScheduleScript {}, "Arctos Schedule Script" }
+                " to express boolean conditions. If it evaluates to true, the match will be skipped. This evaluation happens when this match's last dependency becomes finished or skipped. If this match is not skipped, the skip condition will be re-evaluated every time a match starts or finishes until it is started or the skip condition evaluates to true and it gets skipped."
+            }
 
-                        h6 { class: "mt-3", "Examples" }
-                        ul {
-                            li { code { "(== 0 (losses [TeamName]))" } " - Skip if team has no losses" }
-                            li { code { "(> (wins [TeamA]) (wins [TeamB]))" } " - Skip if TeamA has more wins than TeamB" }
-                            li { code { "(== (winner {{Match1}}) [TeamName])" } " - Skip if TeamName won Match1" }
-                        }
+            h6 { class: "mt-3", "Examples" }
+            ul {
+                li { code { "(== 0 (losses [TeamName]))" } " - Skip if team has no losses" }
+                li { code { "(> (wins [TeamA]) (wins [TeamB]))" } " - Skip if TeamA has more wins than TeamB" }
+                li { code { "(== (winner {{Match1}}) [TeamName])" } " - Skip if TeamName won Match1" }
+            }
 
-                        p { class: "text-muted small mt-3",
-                            strong { "Note:" } " The expression must eventually evaluate to a boolean (true/false), but it doesn't need to simplify to a boolean immediately. "
-                            "There is very minimal error checking, so be careful. "
-                            strong { "You can deadlock your tournament if you do this wrong!" }
-                        }
-                    }
-                    div { class: "modal-footer",
-                        button { class: "btn btn-secondary", "type": "button", onclick: move |_| on_close.call(()), "Close" }
-                    }
-                }
+            p { class: "text-muted small mt-3",
+                strong { "Note:" } " The expression must eventually evaluate to a boolean (true/false), but it doesn't need to simplify to a boolean immediately. "
+                "There is very minimal error checking, so be careful. "
+                strong { "You can deadlock your tournament if you do this wrong!" }
             }
         }
     }
@@ -2605,10 +2888,10 @@ fn CreateMatchModal(
             // Docked editor card (not a modal): the schedule stays visible and
             // interactive beside/below it.
             div {
-                class: "card schedule-editor-card",
+                class: "edit-section schedule-editor-card",
                 tabindex: -1,
                 onkeydown: modal_keydown,
-                div { class: "card-header d-flex justify-content-between align-items-center",
+                div { class: "edit-section-heading d-flex justify-content-between align-items-center",
                     h5 { class: "mb-0", "New Match" }
                     button {
                         class: "btn-close",
@@ -2617,7 +2900,7 @@ fn CreateMatchModal(
                         onclick: move |_| on_close.call(()),
                     }
                 }
-                    div { class: "card-body",
+                    div { class: "edit-section-body",
                         if let Some(err) = error() {
                             div { class: "alert alert-danger", "{err}" }
                         }
@@ -2628,7 +2911,7 @@ fn CreateMatchModal(
                             div { class: "row",
                                 div { class: "col-md-6",
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Match Name" }
+                                        label { r#for: "new-match-name-input", class: "form-label", "Match Name" }
                                         input {
                                             id: "new-match-name-input",
                                             class: "form-control",
@@ -2642,8 +2925,8 @@ fn CreateMatchModal(
                                 if !matches!(schedule_type().as_str(), "BREAK" | "STATBREAK" | "JOIN") {
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Field" }
-                                            select {
+                                            label { r#for: "schedule-create-field", class: "form-label", "Field" }
+                                            select { id: "schedule-create-field",
                                                 class: "form-select",
                                                 value: "{field}",
                                                 onchange: move |e| on_field_change(e.value()),
@@ -2660,8 +2943,8 @@ fn CreateMatchModal(
                             div { class: "row",
                                 div { class: "col-md-6",
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Type" }
-                                        select { class: "form-select", value: "{schedule_type}", onchange: {
+                                        label { r#for: "schedule-create-type", class: "form-label", "Type" }
+                                        select { id: "schedule-create-type", class: "form-select", value: "{schedule_type}", onchange: {
                                             let prefill_prev = prefill_prev_match_id.clone();
                                             let compute_prev = compute_prev_from_start.clone();
                                             move |e: Event<FormData>| {
@@ -2691,8 +2974,8 @@ fn CreateMatchModal(
                                 if schedule_type() != "JOIN" {
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Length (min)" }
-                                            input { class: "form-control", "type": "number", min: "0", value: "{length}", oninput: move |e| { let mut length = length; length.set(e.value().parse().unwrap_or(60)); } }
+                                            label { r#for: "schedule-create-length", class: "form-label", "Length (min)" }
+                                            input { id: "schedule-create-length", class: "form-control", "type": "number", min: "0", value: "{length}", oninput: move |e| { let mut length = length; length.set(e.value().parse().unwrap_or(60)); } }
                                         }
                                     }
                                 }
@@ -2700,13 +2983,13 @@ fn CreateMatchModal(
 
                             if schedule_type() == "STATIC" || schedule_type() == "STATBREAK" {
                                 div { class: "mb-3",
-                                    label { class: "form-label", "Start Time" }
-                                    input { class: "form-control", "type": "datetime-local", value: "{start_time}", oninput: move |e| { let mut start_time = start_time; start_time.set(e.value()); } }
+                                    label { r#for: "schedule-create-start", class: "form-label", "Start Time" }
+                                    input { id: "schedule-create-start", class: "form-control", "type": "datetime-local", value: "{start_time}", oninput: move |e| { let mut start_time = start_time; start_time.set(e.value()); } }
                                 }
                             } else if schedule_type() == "SAFE" || schedule_type() == "FAST" {
                                 div { class: "mb-3",
-                                    label { class: "form-label", "Previous Match" }
-                                    select { class: "form-select", value: "{previous_match_id}", onchange: move |e| previous_match_id.set(e.value()),
+                                    label { r#for: "schedule-create-previous", class: "form-label", "Previous Match" }
+                                    select { id: "schedule-create-previous", class: "form-select", value: "{previous_match_id}", onchange: move |e| previous_match_id.set(e.value()),
                                         option { value: "", "None" }
                                         for m in &matches_on_field {
                                             option { value: "{m.uuid}", "{m.name}" }
@@ -2716,8 +2999,8 @@ fn CreateMatchModal(
                             }
 
                             if matches!(schedule_type().as_str(), "BREAK" | "STATBREAK" | "JOIN") {
-                                div { class: "mb-3",
-                                    label { class: "form-label", "Fields" }
+                                fieldset { class: "mb-3 border-0 p-0",
+                                    legend { class: "form-label fs-6", "Fields" }
                                     {
                                         let all_field_names: Vec<String> = data.fields.iter().map(|f| f.name.clone()).collect();
                                         let all_selected = !all_field_names.is_empty()
@@ -2835,8 +3118,8 @@ fn CreateMatchModal(
                                 div { class: "row",
                                     div { class: "col-md-4",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Format" }
-                                            select { class: "form-select", value: "{set_type}", onchange: move |e| { let mut set_type = set_type; set_type.set(e.value()); },
+                                            label { r#for: "schedule-create-format", class: "form-label", "Format" }
+                                            select { id: "schedule-create-format", class: "form-select", value: "{set_type}", onchange: move |e| { let mut set_type = set_type; set_type.set(e.value()); },
                                                 option { value: "SETS", "Sets" }
                                                 option { value: "STONES", "Stones" }
                                             }
@@ -2844,15 +3127,15 @@ fn CreateMatchModal(
                                     }
                                     div { class: "col-md-4",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Number of sets" }
-                                            input { class: "form-control", "type": "number", min: "1", value: "{nsets}", oninput: move |e| { let mut nsets = nsets; nsets.set(e.value().parse().unwrap_or(3)); } }
+                                            label { r#for: "schedule-create-sets", class: "form-label", "Number of sets" }
+                                            input { id: "schedule-create-sets", class: "form-control", "type": "number", min: "1", value: "{nsets}", oninput: move |e| { let mut nsets = nsets; nsets.set(e.value().parse().unwrap_or(3)); } }
                                         }
                                     }
                                     if set_type() == "STONES" {
                                         div { class: "col-md-4",
                                             div { class: "mb-3",
-                                                label { class: "form-label", "Stones per set" }
-                                                input { class: "form-control", "type": "number", min: "1", value: "{stones_per_set}", oninput: move |e| { let mut stones_per_set = stones_per_set; stones_per_set.set(e.value().parse().unwrap_or(100)); } }
+                                                label { r#for: "schedule-create-stones", class: "form-label", "Stones per set" }
+                                                input { id: "schedule-create-stones", class: "form-control", "type": "number", min: "1", value: "{stones_per_set}", oninput: move |e| { let mut stones_per_set = stones_per_set; stones_per_set.set(e.value().parse().unwrap_or(100)); } }
                                             }
                                         }
                                     }
@@ -2865,8 +3148,8 @@ fn CreateMatchModal(
                                 }
                                 if schedule_type() == "SAFE" || schedule_type() == "FAST" {
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Skip condition" }
-                                        div { class: "form-text mb-1",
+                                        label { r#for: "ass-entry-create", class: "form-label", "Skip condition" }
+                                        div { id: "schedule-create-skip-help", class: "form-text mb-1",
                                             "Optional expression that evaluates to a boolean. If true, this match will be skipped. "
                                             a {
                                                 href: "#",
@@ -2880,6 +3163,7 @@ fn CreateMatchModal(
                                         }
                                         AssEntry {
                                             id_suffix: "create".to_string(),
+                                            described_by: "schedule-create-skip-help".to_string(),
                                             value: skip_condition(),
                                             on_change: move |v| skip_condition.set(v),
                                             team_options: data.team_options.clone(),
@@ -2894,11 +3178,11 @@ fn CreateMatchModal(
                                 }
                             }
 
-                            div { class: "modal-footer",
-                                button { class: "btn btn-secondary", "type": "button", onclick: move |_| on_close.call(()), "Cancel (Esc)" }
-                                button { class: "btn btn-success", "type": "submit", disabled: "{saving}",
+                            div { class: "modal-footer schedule-editor-actions",
+                                button { class: "btn btn-secondary", "type": "button", title: "Cancel (Esc)", onclick: move |_| on_close.call(()), "Cancel" }
+                                button { class: "btn btn-success", "type": "submit", title: "Save (Shift+Enter)", disabled: "{saving}",
                                     if saving() { span { class: "spinner-border spinner-border-sm me-2" } }
-                                    "Save (⇧↵)"
+                                    "Save"
                                 }
                             }
                         }
@@ -3088,11 +3372,11 @@ fn BreakGroupModal(
         // Docked editor card (not a modal): the schedule stays visible and
         // interactive beside/below it.
         div {
-            class: "card schedule-editor-card",
+            class: "edit-section schedule-editor-card",
             tabindex: -1,
             onkeydown: modal_keydown,
-            div { class: "card-header d-flex justify-content-between align-items-center",
-                h5 { class: "mb-0", "Edit {type_label}: {group_name}" }
+            div { class: "edit-section-heading d-flex justify-content-between align-items-center",
+                h5 { class: "mb-0", tabindex: "-1", onmounted: move |event| async move { let _ = event.data.set_focus(true).await; }, "Edit {type_label}: {group_name}" }
                 button {
                     class: "btn-close",
                     r#type: "button",
@@ -3100,7 +3384,7 @@ fn BreakGroupModal(
                     onclick: move |_| on_close.call(()),
                 }
             }
-                    div { class: "card-body",
+                    div { class: "edit-section-body",
                         if let Some(err) = error() {
                             div { class: "alert alert-danger", "{err}" }
                         }
@@ -3120,8 +3404,8 @@ fn BreakGroupModal(
                         // convert (create one deliberately, with a start time).
                         if !is_statbreak {
                             div { class: "mb-3",
-                                label { class: "form-label", "Type" }
-                                select {
+                                label { r#for: "schedule-break-type", class: "form-label", "Type" }
+                                select { id: "schedule-break-type",
                                     class: "form-select",
                                     value: "{sel_type}",
                                     disabled: edit_locked,
@@ -3135,8 +3419,8 @@ fn BreakGroupModal(
                             div { class: "row",
                                 div { class: "col-md-6",
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Length (min)" }
-                                        input {
+                                        label { r#for: "schedule-break-length", class: "form-label", "Length (min)" }
+                                        input { id: "schedule-break-length",
                                             class: "form-control",
                                             "type": "number",
                                             min: "0",
@@ -3149,8 +3433,8 @@ fn BreakGroupModal(
                                 if is_statbreak {
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Start Time" }
-                                            input {
+                                            label { r#for: "schedule-break-start", class: "form-label", "Start Time" }
+                                            input { id: "schedule-break-start",
                                                 class: "form-control",
                                                 "type": "datetime-local",
                                                 value: "{start_time}",
@@ -3162,8 +3446,8 @@ fn BreakGroupModal(
                                 }
                             }
                         }
-                        div { class: "mb-3",
-                            label { class: "form-label", "Fields" }
+                        fieldset { class: "mb-3 border-0 p-0",
+                            legend { class: "form-label fs-6", "Fields" }
                             {
                                 let all_field_names: Vec<String> = data.fields.iter().map(|f| f.name.clone()).collect();
                                 let all_selected = !all_field_names.is_empty()
@@ -3218,14 +3502,14 @@ fn BreakGroupModal(
                                 "Checking a new field adds this {type_noun} there; unchecking removes that field's copy."
                             }
                         }
-                        div { class: "modal-footer",
-                            button { class: "btn btn-secondary", "type": "button", onclick: move |_| on_close.call(()), "Cancel (Esc)" }
+                        div { class: "modal-footer schedule-editor-actions",
+                            button { class: "btn btn-secondary", "type": "button", title: "Cancel (Esc)", onclick: move |_| on_close.call(()), "Cancel" }
                             button {
                                 class: "btn btn-danger",
                                 "type": "button",
                                 disabled: saving() || edit_locked,
                                 onclick: do_delete,
-                                "Delete Group"
+                                "Delete"
                             }
                             button {
                                 class: "btn btn-primary",
@@ -3244,140 +3528,168 @@ fn BreakGroupModal(
 #[component]
 fn FieldsModal(
     tournament_url: String,
+    reload_error: Option<String>,
+    reloading: bool,
+    on_reload: EventHandler<()>,
     data: ScheduleSetupResponse,
     on_close: EventHandler<()>,
     on_change: EventHandler<()>,
 ) -> Element {
+    let blocked = reloading || reload_error.is_some();
     let mut new_name = use_signal(|| "".to_string());
+    let mut new_name_invalid = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
+    let mut pending = use_signal(|| false);
+    use_effect(move || {
+        if error().is_some() {
+            crate::form_validation::focus_after_render("schedule-fields-error");
+        }
+    });
     let url_sig = use_signal(|| tournament_url.clone());
     let mut editing_field_id = use_signal(|| None::<u32>);
     let mut editing_name = use_signal(|| "".to_string());
 
     rsx! {
-        div { class: "modal d-block", tabindex: "-1", style: "background: rgba(0,0,0,0.5)",
-            div { class: "modal-dialog modal-lg",
-                div { class: "modal-content",
-                    div { class: "modal-header d-flex justify-content-between align-items-center",
-                        h5 { class: "modal-title mb-0", "Manage Fields" }
-                        button { type: "button", class: "btn-close", "aria-label": "Close", onclick: move |_| on_close.call(()) }
+        ScheduleHelperDialog {
+            id: "schedule-fields", title: "Manage Fields",
+            pending: pending(),
+            reload_error, reloading, on_reload,
+            on_close: move |_| { if !pending() { on_close.call(()); } },
+            if let Some(err) = error() { div { id: "schedule-fields-error", class: "alert alert-danger", role: "alert", tabindex: "-1", "{err}" } }
+
+            form {
+                id: "schedule-add-field-form", class: "edit-section mb-3",
+                onsubmit: move |event| {
+                    event.prevent_default();
+                    if pending() || blocked { return; }
+                    let name = new_name().trim().to_string();
+                    if name.is_empty() {
+                        new_name_invalid.set(true);
+                        crate::form_validation::focus_after_render("schedule-new-field");
+                        return;
                     }
-                    div { class: "modal-body",
-                        if let Some(err) = error() { div { class: "alert alert-danger", "{err}" } }
-
-                        div { class: "card mb-3",
-                            div { class: "card-header py-2", "Add field" }
-                            div { class: "card-body py-3",
-                                div { class: "mb-3",
-                                    label { class: "form-label", "Field name" }
-                                    input {
-                                        class: "form-control",
-                                        placeholder: "e.g. Blue",
-                                        value: "{new_name}",
-                                        oninput: move |e| new_name.set(e.value())
-                                    }
-                                }
-                                button {
-                                    class: "btn btn-outline-success",
-                                    onclick: move |_| {
-                                        let u = url_sig().clone();
-                                        let on_change = on_change.clone();
-                                        let name = new_name().trim().to_string();
-                                        spawn(async move {
-                                            let req = CreateFieldRequest { name: name.clone() };
-                                            match api::create_field(&u, &req).await {
-                                                Ok(_) => {
-                                                    new_name.set("".to_string());
-                                                    on_change.call(());
-                                                }
-                                                Err(e) => error.set(Some(e)),
-                                            }
-                                        });
-                                    },
-                                    "Add field"
-                                }
+                    new_name_invalid.set(false);
+                    let u = url_sig();
+                    pending.set(true);
+                    error.set(None);
+                    spawn(async move {
+                        let req = CreateFieldRequest { name };
+                        match api::create_field(&u, &req).await {
+                            Ok(response) if response.success => {
+                                new_name.set(String::new());
+                                on_change.call(());
                             }
+                            Ok(_) => error.set(Some("The server did not save this change.".to_string())),
+                            Err(e) => error.set(Some(e)),
                         }
+                        pending.set(false);
+                    });
+                },
+                div { class: "edit-section-heading py-2", "Add field" }
+                div { class: "edit-section-body py-3",
+                    div { class: "mb-3",
+                        label { r#for: "schedule-new-field", class: "form-label", "Field name" }
+                        input {
+                            id: "schedule-new-field", class: "form-control", required: true,
+                            aria_invalid: if new_name_invalid() { "true" } else { "false" },
+                            aria_describedby: new_name_invalid().then_some("schedule-new-field-error"),
+                            placeholder: "e.g. Blue",
+                            value: "{new_name}",
+                            oninput: move |event| { new_name.set(event.value()); new_name_invalid.set(false); },
+                        }
+                        if new_name_invalid() {
+                            p { id: "schedule-new-field-error", class: "text-danger small mb-0 mt-1", "Enter a field name." }
+                        }
+                    }
+                    button { r#type: "submit", class: "btn btn-outline-success", "Add field" }
+                }
+            }
 
-                        h6 { class: "mb-2", "Existing fields" }
-                        ul { class: "list-group",
-                            {data.fields.iter().map(|f| {
-                                let fid = f.id;
-                                let fname = f.name.clone();
-                                let is_editing = editing_field_id() == Some(fid);
-                                rsx! {
-                                    li { key: "{fid}", class: "list-group-item d-flex flex-column gap-2",
-                                        if is_editing {
-                                            div { class: "d-flex flex-column gap-2",
-                                                div {
-                                                    label { class: "form-label small mb-0", "Field name" }
-                                                    input {
-                                                        class: "form-control form-control-sm",
-                                                        placeholder: "Field name",
-                                                        value: "{editing_name}",
-                                                        oninput: move |e| editing_name.set(e.value())
+            h6 { class: "mb-2", "Existing fields" }
+            ul { class: "list-group",
+                {data.fields.iter().map(|f| {
+                    let fid = f.id;
+                    let fname = f.name.clone();
+                    let is_editing = editing_field_id() == Some(fid);
+                    rsx! {
+                        li { key: "{fid}", class: "list-group-item d-flex flex-column gap-2",
+                            if is_editing {
+                                div { class: "d-flex flex-column gap-2",
+                                    div {
+                                        label { r#for: "schedule-field-name-{fid}", class: "form-label small mb-0", "Field name" }
+                                        input {
+                                            id: "schedule-field-name-{fid}", class: "form-control form-control-sm",
+                                            placeholder: "Field name",
+                                            value: "{editing_name}",
+                                            oninput: move |e| editing_name.set(e.value())
+                                        }
+                                    }
+                                    div { class: "d-flex gap-1 mt-1",
+                                        button { class: "btn btn-sm btn-primary",
+                                            onclick: move |_| {
+                                                if pending() || blocked { return; }
+                                                let u = url_sig().clone();
+                                                let name = editing_name().clone();
+                                                let on_change = on_change.clone();
+                                                pending.set(true);
+                                                error.set(None);
+                                                spawn(async move {
+                                                    let req = UpdateFieldRequest { name };
+                                                    if api::update_field(&u, fid, &req).await.is_ok() {
+                                                        editing_field_id.set(None);
+                                                        on_change.call(());
+                                                    } else {
+                                                        error.set(Some("Failed to update field".to_string()));
                                                     }
-                                                }
-                                                div { class: "d-flex gap-1 mt-1",
-                                                    button { class: "btn btn-sm btn-primary",
-                                                        onclick: move |_| {
-                                                            let u = url_sig().clone();
-                                                            let name = editing_name().clone();
-                                                            let on_change = on_change.clone();
-                                                            spawn(async move {
-                                                                let req = UpdateFieldRequest { name };
-                                                                if api::update_field(&u, fid, &req).await.is_ok() {
-                                                                    editing_field_id.set(None);
-                                                                    on_change.call(());
-                                                                } else {
-                                                                    error.set(Some("Failed to update field".to_string()));
-                                                                }
-                                                            });
-                                                        },
-                                                        "Save"
-                                                    }
-                                                    button { class: "btn btn-sm btn-secondary",
-                                                        onclick: move |_| editing_field_id.set(None),
-                                                        "Cancel"
-                                                    }
-                                                }
-                                            }
-                                        } else {
-                                            div { class: "d-flex justify-content-between align-items-center flex-wrap gap-2",
-                                                div { class: "d-flex align-items-center gap-2 flex-wrap",
-                                                    strong { "{fname}" }
-                                                }
-                                                div { class: "btn-group btn-group-sm",
-                                                    button { class: "btn btn-outline-primary",
-                                                        onclick: move |_| {
-                                                            editing_field_id.set(Some(fid));
-                                                            editing_name.set(fname.clone());
-                                                        },
-                                                        "Edit"
-                                                    }
-                                                    button { class: "btn btn-outline-danger",
-                                                        onclick: move |_| {
-                                                            let u = url_sig().clone();
-                                                            let on_change = on_change.clone();
-                                                            spawn(async move {
-                                                                if let Ok(_) = api::delete_field(&u, fid).await {
-                                                                    on_change.call(());
-                                                                } else {
-                                                                    error.set(Some("Cannot delete field with matches".to_string()));
-                                                                }
-                                                            });
-                                                        },
-                                                        "Delete"
-                                                    }
-                                                }
-                                            }
+                                                    pending.set(false);
+                                                });
+                                            },
+                                            "Save"
+                                        }
+                                        button { class: "btn btn-sm btn-secondary",
+                                            onclick: move |_| { if !pending() && !blocked { editing_field_id.set(None); } },
+                                            "Cancel"
                                         }
                                     }
                                 }
-                            })}
+                            } else {
+                                div { class: "d-flex justify-content-between align-items-center flex-wrap gap-2",
+                                    div { class: "d-flex align-items-center gap-2 flex-wrap",
+                                        strong { "{fname}" }
+                                    }
+                                    div { class: "btn-group btn-group-sm",
+                                        button { class: "btn btn-outline-primary",
+                                            onclick: move |_| {
+                                                if pending() || blocked { return; }
+                                                editing_field_id.set(Some(fid));
+                                                editing_name.set(fname.clone());
+                                            },
+                                            "Edit"
+                                        }
+                                        button { class: "btn btn-outline-danger",
+                                            onclick: move |_| {
+                                                if pending() || blocked { return; }
+                                                let u = url_sig().clone();
+                                                let on_change = on_change.clone();
+                                                pending.set(true);
+                                                error.set(None);
+                                                spawn(async move {
+                                                    if let Ok(_) = api::delete_field(&u, fid).await {
+                                                        on_change.call(());
+                                                    } else {
+                                                        error.set(Some("Cannot delete field with matches".to_string()));
+                                                    }
+                                                    pending.set(false);
+                                                });
+                                            },
+                                            "Delete"
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                }
+                })}
             }
         }
     }
@@ -3386,15 +3698,32 @@ fn FieldsModal(
 #[component]
 fn TOMLImportModal(
     tournament_url: String,
+    reload_error: Option<String>,
+    reloading: bool,
+    on_reload: EventHandler<()>,
     on_close: EventHandler<()>,
     on_import: EventHandler<()>,
 ) -> Element {
+    let blocked = reloading || reload_error.is_some();
     let mut error = use_signal(|| None::<String>);
     let mut import_warnings = use_signal(|| None::<Vec<String>>);
     let mut importing = use_signal(|| false);
+    use_effect(move || {
+        if error().is_some() { crate::form_validation::focus_after_render("schedule-import-error"); }
+    });
+    let close_import = move |_| {
+        if importing() { return; }
+        if import_warnings().is_some() { on_import.call(()); } else { on_close.call(()); }
+    };
     let on_file_change = move |ev: Event<FormData>| {
+        if importing() || blocked { return; }
         let files = ev.files();
         if let Some(file) = files.first().cloned() {
+            #[cfg(target_arch = "wasm32")]
+            if let Some(input) = web_sys::window().and_then(|window| window.document())
+                .and_then(|document| document.get_element_by_id("schedule-import-file"))
+                .and_then(|element| element.dyn_into::<web_sys::HtmlInputElement>().ok())
+            { input.set_value(""); }
             let u = tournament_url.clone();
             let on_import = on_import.clone();
             importing.set(true);
@@ -3428,49 +3757,48 @@ fn TOMLImportModal(
         }
     };
     rsx! {
-        div { class: "modal d-block", tabindex: "-1", style: "background: rgba(0,0,0,0.5)",
-            div { class: "modal-dialog modal-lg",
-                div { class: "modal-content",
-                    div { class: "modal-header",
-                        h5 { class: "modal-title", "Import Schedule (TOML)" }
+        ScheduleHelperDialog {
+            id: "schedule-import", title: "Import Schedule (TOML)",
+            pending: importing(),
+            reload_error, reloading, on_reload,
+            on_close: close_import,
+            footer: Some(rsx! {
+            div { class: "modal-footer",
+                if import_warnings().is_some() {
+                    button {
+                        r#type: "button", class: "btn btn-primary", disabled: importing(),
+                        onclick: move |_| close_import(()),
+                        "Done"
                     }
-                    div { class: "modal-body",
-                        if let Some(err) = error() {
-                            div { class: "alert alert-danger", "{err}" }
-                        }
-                        if let Some(warnings) = import_warnings() {
-                            div { class: "alert alert-warning",
-                                p { class: "mb-2", strong { "Import succeeded with warnings:" } }
-                                ul { class: "mb-0",
-                                    for w in warnings.iter() {
-                                        li { "{w}" }
-                                    }
-                                }
-                            }
-                        } else {
-                            p { class: "text-muted", "Select a TOML file exported from a tournament schedule." }
-                            input {
-                                r#type: "file",
-                                class: "form-control",
-                                accept: ".toml",
-                                onchange: on_file_change,
-                            }
-                            if importing() {
-                                div { class: "mt-2 text-muted", "Importing..." }
-                            }
+                } else {
+                    button { r#type: "button", class: "btn btn-secondary", disabled: importing(), onclick: move |_| close_import(()), "Cancel" }
+                }
+            }
+            }),
+            if let Some(err) = error() {
+                div { id: "schedule-import-error", class: "alert alert-danger", role: "alert", tabindex: "-1", "{err}" }
+            }
+            if let Some(warnings) = import_warnings() {
+                div { class: "alert alert-warning",
+                    p { class: "mb-2", strong { "Import succeeded with warnings:" } }
+                    ul { class: "mb-0",
+                        for w in warnings.iter() {
+                            li { "{w}" }
                         }
                     }
-                    div { class: "modal-footer",
-                        if import_warnings().is_some() {
-                            button {
-                                class: "btn btn-primary",
-                                onclick: move |_| on_import.call(()),
-                                "Done"
-                            }
-                        } else {
-                            button { class: "btn btn-secondary", onclick: move |_| on_close.call(()), "Cancel" }
-                        }
-                    }
+                }
+            } else {
+                label { r#for: "schedule-import-file", class: "form-label", "Schedule file (TOML)" }
+                p { id: "schedule-import-help", class: "text-muted", "Select a TOML file exported from a tournament schedule." }
+                input {
+                    id: "schedule-import-file", aria_describedby: "schedule-import-help",
+                    r#type: "file",
+                    class: "form-control",
+                    accept: ".toml",
+                    onchange: on_file_change,
+                }
+                if importing() {
+                    div { class: "mt-2 text-muted", role: "status", "Importing…" }
                 }
             }
         }
@@ -3480,6 +3808,9 @@ fn TOMLImportModal(
 #[component]
 fn ScheduleWarningsModal(
     tournament_url: String,
+    reload_error: Option<String>,
+    reloading: bool,
+    on_reload: EventHandler<()>,
     on_close: EventHandler<()>,
     /// Editor: clicking a real match name focuses it on the timeline.
     #[props(default = false)]
@@ -3489,27 +3820,12 @@ fn ScheduleWarningsModal(
     #[props(default)]
     known_match_names: Vec<String>,
 ) -> Element {
-    use crate::types::ScheduleWarning;
-    let mut warnings = use_signal(|| None::<Vec<ScheduleWarning>>);
-    let mut error = use_signal(|| None::<String>);
-    let mut loading = use_signal(|| true);
-
-    let url_for_load = tournament_url.clone();
-    use_hook(move || {
-        let url = url_for_load.clone();
-        spawn(async move {
-            match api::fetch_schedule_warnings(&url).await {
-                Ok(ws) => {
-                    warnings.set(Some(ws));
-                    loading.set(false);
-                }
-                Err(e) => {
-                    error.set(Some(e));
-                    loading.set(false);
-                }
-            }
-        });
+    let mut warnings_resource = use_resource(move || {
+        let url = tournament_url.clone();
+        async move { api::fetch_schedule_warnings(&url).await }
     });
+    let warnings = warnings_resource.value();
+    let warnings_loading = *warnings_resource.state().read() == UseResourceState::Pending;
 
     fn kind_label(kind: &str) -> &'static str {
         match kind {
@@ -3531,69 +3847,61 @@ fn ScheduleWarningsModal(
     }
 
     rsx! {
-        div { class: "modal d-block", tabindex: "-1", style: "background: rgba(0,0,0,0.5)",
-            div { class: "modal-dialog modal-lg",
-                div { class: "modal-content",
-                    div { class: "modal-header",
-                        h5 { class: "modal-title", "Schedule Warnings" }
-                    }
-                    div { class: "modal-body",
-                        if loading() {
-                            div { class: "text-muted", "Checking schedule..." }
-                        } else if let Some(err) = error() {
-                            div { class: "alert alert-danger", "{err}" }
-                        } else {
-                            match warnings.read().as_ref() {
-                                Some(ws) if ws.is_empty() => rsx! {
-                                    div { class: "alert alert-success mb-0",
-                                        "No warnings — every match resolves cleanly."
-                                    }
-                                },
-                                Some(ws) => rsx! {
-                                    ul { class: "list-group",
-                                        for (i, w) in ws.iter().enumerate() {
-                                            li { key: "{i}", class: "list-group-item {kind_class(&w.kind)}",
-                                                div { class: "fw-semibold", "{kind_label(&w.kind)}" }
-                                                div { "{w.message}" }
-                                                if !w.matches.is_empty() {
-                                                    div { class: "small mt-1",
-                                                        span { class: "text-muted", "Matches: " }
-                                                        for (j, name) in w.matches.iter().enumerate() {
-                                                            {
-                                                                let name = name.clone();
-                                                                let selectable = selectable
-                                                                    && known_match_names.iter().any(|n| n == &name);
-                                                                let on_select_match = on_select_match;
-                                                                rsx! {
-                                                                    if j > 0 {
-                                                                        span { class: "text-muted", ", " }
-                                                                    }
-                                                                    if selectable {
-                                                                        button {
-                                                                            r#type: "button",
-                                                                            class: "btn btn-link btn-sm p-0 align-baseline",
-                                                                            onclick: move |_| on_select_match.call(name.clone()),
-                                                                            "{name}"
-                                                                        }
-                                                                    } else {
-                                                                        span { class: "text-muted", "{name}" }
-                                                                    }
-                                                                }
+        ScheduleHelperDialog {
+            id: "schedule-warnings", title: "Schedule Warnings",
+            reload_error, reloading, on_reload,
+            on_close,
+            if warnings_loading {
+                div { class: "text-muted", role: "status", "Checking schedule…" }
+            } else if let Some(Err(err)) = warnings.read().as_ref() {
+                div { class: "alert alert-danger", role: "alert", "{err}" }
+                button { r#type: "button", class: "btn btn-outline-secondary", onclick: move |_| warnings_resource.restart(), "Retry" }
+            } else {
+                match warnings.read().as_ref() {
+                    Some(Ok(ws)) if ws.is_empty() => rsx! {
+                        div { class: "alert alert-success mb-0",
+                            "No warnings — every match resolves cleanly."
+                        }
+                    },
+                    Some(Ok(ws)) => rsx! {
+                        ul { class: "list-group",
+                            for (i, w) in ws.iter().enumerate() {
+                                li { key: "{i}", class: "list-group-item {kind_class(&w.kind)}",
+                                    div { class: "fw-semibold", "{kind_label(&w.kind)}" }
+                                    div { "{w.message}" }
+                                    if !w.matches.is_empty() {
+                                        div { class: "small mt-1",
+                                            span { class: "text-muted", "Matches: " }
+                                            for (j, name) in w.matches.iter().enumerate() {
+                                                {
+                                                    let name = name.clone();
+                                                    let selectable = selectable
+                                                        && known_match_names.iter().any(|n| n == &name);
+                                                    let on_select_match = on_select_match;
+                                                    rsx! {
+                                                        if j > 0 {
+                                                            span { class: "text-muted", ", " }
+                                                        }
+                                                        if selectable {
+                                                            button {
+                                                                r#type: "button",
+                                                                class: "btn btn-link btn-sm p-0 align-baseline",
+                                                                onclick: move |_| on_select_match.call(name.clone()),
+                                                                "{name}"
                                                             }
+                                                        } else {
+                                                            span { class: "text-muted", "{name}" }
                                                         }
                                                     }
                                                 }
                                             }
                                         }
                                     }
-                                },
-                                None => rsx! {},
+                                }
                             }
                         }
-                    }
-                    div { class: "modal-footer",
-                        button { class: "btn btn-secondary", onclick: move |_| on_close.call(()), "Close" }
-                    }
+                    },
+                    _ => rsx! {},
                 }
             }
         }
@@ -3603,12 +3911,22 @@ fn ScheduleWarningsModal(
 #[component]
 fn TagsModal(
     tournament_url: String,
+    reload_error: Option<String>,
+    reloading: bool,
+    on_reload: EventHandler<()>,
     data: ScheduleSetupResponse,
     on_close: EventHandler<()>,
     on_change: EventHandler<()>,
 ) -> Element {
+    let blocked = reloading || reload_error.is_some();
     let mut new_tag = use_signal(|| "".to_string());
     let mut error = use_signal(|| None::<String>);
+    let mut pending = use_signal(|| false);
+    use_effect(move || {
+        if error().is_some() {
+            crate::form_validation::focus_after_render("schedule-tags-error");
+        }
+    });
     let url_sig = use_signal(|| tournament_url.clone());
     // Local state for dropdowns: tag_id -> team_id. Synced from data when modal has data so dropdowns show current values.
     let mut tag_teams = use_signal(|| HashMap::<u32, String>::new());
@@ -3617,218 +3935,225 @@ fn TagsModal(
     let mut tag_exprs = use_signal(|| HashMap::<u32, String>::new());
     let mut tag_expr_valid = use_signal(|| HashMap::<u32, Option<Result<(), String>>>::new());
 
-    // Sync tag_teams / expression drafts from data whenever we have tags, so
-    // inputs show correct values on open and after refetch.
-    let data_effect = data.clone();
-    use_effect(move || {
-        let tags = data_effect.tags.clone();
-        let mut map = tag_teams.write();
-        map.clear();
-        let mut exprs = tag_exprs.write();
-        exprs.clear();
-        for tag in tags {
-            map.insert(tag.id, tag.team.unwrap_or_default());
-            exprs.insert(tag.id, tag.expression.unwrap_or_default());
-        }
-    });
+    let mut team_baseline = use_signal(|| HashMap::<u32, String>::new());
+    let mut expression_baseline = use_signal(|| HashMap::<u32, String>::new());
+    use_effect(use_reactive(&data.tags, move |tags| {
+        merge_schedule_drafts(&mut tag_teams.write(), &mut team_baseline.write(),
+            tags.iter().map(|tag| (tag.id, tag.team.clone().unwrap_or_default())).collect());
+        merge_schedule_drafts(&mut tag_exprs.write(), &mut expression_baseline.write(),
+            tags.iter().map(|tag| (tag.id, tag.expression.clone().unwrap_or_default())).collect());
+    }));
 
     rsx! {
-        div { class: "modal d-block", tabindex: "-1", style: "background: rgba(0,0,0,0.5)",
-            div { class: "modal-dialog modal-lg",
-                div { class: "modal-content",
-                    div { class: "modal-header d-flex justify-content-between align-items-center",
-                        h5 { class: "modal-title mb-0", "Manage Tags" }
-                        button { type: "button", class: "btn-close", "aria-label": "Close", onclick: move |_| on_close.call(()) }
+        ScheduleHelperDialog {
+            id: "schedule-tags", title: "Manage Tags",
+            pending: pending(),
+            reload_error, reloading, on_reload,
+            on_close: move |_| { if !pending() { on_close.call(()); } },
+            if let Some(err) = error() { div { id: "schedule-tags-error", class: "alert alert-danger", role: "alert", tabindex: "-1", "{err}" } }
+
+            h6 { "Create Tag" }
+            label { r#for: "schedule-new-tag", class: "visually-hidden", "Tag name" }
+            form { class: "input-group mb-3",
+                id: "schedule-create-tag-form",
+                onsubmit: move |event| {
+                    event.prevent_default();
+                    if pending() || blocked { return; }
+                    let u = url_sig();
+                    let on_change = on_change.clone();
+                    let name = new_tag().trim().to_string();
+                    if name.is_empty() {
+                        error.set(Some("Tag name is required.".to_string()));
+                        return;
                     }
-                    div { class: "modal-body",
-                        if let Some(err) = error() { div { class: "alert alert-danger", "{err}" } }
-
-                        h6 { "Create Tag" }
-                        div { class: "input-group mb-3",
-                            input { class: "form-control", placeholder: "Tag Name (e.g. Pool A Winner)", value: "{new_tag}", oninput: move |e| { new_tag.set(e.value()); error.set(None); } }
-                            button { class: "btn btn-outline-success",
-                                onclick: move |_| {
-                                    let u = url_sig();
-                                    let on_change = on_change.clone();
-                                    let name = new_tag().trim().to_string();
-                                    if name.is_empty() {
-                                        error.set(Some("Tag name is required.".to_string()));
-                                        return;
-                                    }
-                                    if name.contains("::") {
-                                        error.set(Some("Tag name cannot contain \"::\".".to_string()));
-                                        return;
-                                    }
-                                    error.set(None);
-                                    spawn(async move {
-                                        let req = CreateTagRequest { name, expression: None };
-                                        match api::create_tag(&u, &req).await {
-                                            Ok(_) => { new_tag.set("".to_string()); on_change.call(()); }
-                                            Err(e) => error.set(Some(e)),
-                                        }
-                                    });
-                                },
-                                "Create"
-                            }
+                    if name.contains("::") {
+                        error.set(Some("Tag name cannot contain \"::\".".to_string()));
+                        return;
+                    }
+                    pending.set(true);
+                    error.set(None);
+                    spawn(async move {
+                        let req = CreateTagRequest { name, expression: None };
+                        match api::create_tag(&u, &req).await {
+                            Ok(response) if response.success => { new_tag.set("".to_string()); on_change.call(()); }
+                            Ok(_) => error.set(Some("The server did not save this change.".to_string())),
+                            Err(e) => error.set(Some(e)),
                         }
+                        pending.set(false);
+                    });
+                },
+                input { id: "schedule-new-tag", class: "form-control", required: true, placeholder: "Tag Name (e.g. Pool A Winner)", value: "{new_tag}", oninput: move |e| { new_tag.set(e.value()); error.set(None); } }
+                button { r#type: "submit", class: "btn btn-outline-success", "Create" }
+            }
 
-                        h6 { "Existing Tags" }
-                        ul { class: "list-group",
-                            {data.tags.iter().map(|tag| {
-                                let tag_id = tag.id;
-                                let current_team = tag_teams().get(&tag_id).cloned().unwrap_or_default();
-                                let tag_name = tag.name.clone();
-                                let is_updating = updating_tag_id() == Some(tag_id);
-                                let saved_expr = tag.expression.clone().unwrap_or_default();
-                                let edited_expr = tag_exprs()
-                                    .get(&tag_id)
-                                    .cloned()
-                                    .unwrap_or_else(|| saved_expr.clone());
-                                let expr_dirty = edited_expr.trim() != saved_expr.trim();
-                                let expr_verdict = tag_expr_valid().get(&tag_id).cloned().flatten();
-                                // Clearing (empty) is always saveable; otherwise require a passing validation.
-                                let expr_can_save = expr_dirty
-                                    && (edited_expr.trim().is_empty() || matches!(expr_verdict, Some(Ok(()))));
-                                // Effective resolution hint: override beats expression.
-                                let team_label = |tid: &str| -> String {
-                                    data.team_options
-                                        .iter()
-                                        .find(|t| t.id == tid)
-                                        .and_then(|t| t.pseudonym.clone())
-                                        .unwrap_or_else(|| tid.to_string())
-                                };
-                                let resolution_hint = if let Some(t) = tag.team.as_deref().filter(|t| !t.is_empty()) {
-                                    Some(format!("Resolves to {} (manual override)", team_label(t)))
-                                } else if let Some(t) = tag.resolved_team.as_deref().filter(|t| !t.is_empty()) {
-                                    Some(format!("Resolves to {} (from expression)", team_label(t)))
-                                } else if !saved_expr.trim().is_empty() {
-                                    Some("Expression not resolved yet".to_string())
-                                } else {
-                                    None
-                                };
-                                rsx! {
-                                    li { key: "{tag_id}", class: "list-group-item",
-                                        div { class: "d-flex justify-content-between align-items-center gap-2 flex-wrap",
-                                            span { class: "flex-grow-1 fw-semibold", "{tag_name}" }
-                                            div { class: "d-flex align-items-center gap-1",
-                                                span { class: "text-muted small", "Override:" }
-                                                select {
-                                                    class: "form-select form-select-sm",
-                                                    style: "max-width: 12rem;",
-                                                    value: "{current_team}",
-                                                    disabled: is_updating,
-                                                    onchange: move |e| {
-                                                        let u = url_sig();
-                                                        let team_id = e.value();
-                                                        let on_change = on_change.clone();
-                                                        tag_teams.write().insert(tag_id, team_id.clone());
-                                                        updating_tag_id.set(Some(tag_id));
-                                                        error.set(None);
-                                                        let prev_team = current_team.clone();
-                                                        spawn(async move {
-                                                            let req = UpdateTagsRequest {
-                                                                tag_id,
-                                                                team_id: Some(team_id),
-                                                                expression: None,
-                                                            };
-                                                            match api::update_tags(&u, &req).await {
-                                                                Ok(_) => {
-                                                                    updating_tag_id.set(None);
-                                                                    on_change.call(());
-                                                                }
-                                                                Err(e) => {
-                                                                    tag_teams.write().insert(tag_id, prev_team);
-                                                                    updating_tag_id.set(None);
-                                                                    error.set(Some(e));
-                                                                }
-                                                            }
-                                                        });
-                                                    },
-                                                    option { value: "", "No override" }
-                                                    for opt in &data.team_options {
-                                                        option { value: "{opt.id}", "{opt.pseudonym.as_deref().unwrap_or(&opt.id)}" }
+            h6 { "Existing Tags" }
+            ul { class: "list-group",
+                {data.tags.iter().map(|tag| {
+                    let tag_id = tag.id;
+                    let current_team = tag_teams().get(&tag_id).cloned().unwrap_or_default();
+                    let tag_name = tag.name.clone();
+                    let is_updating = updating_tag_id() == Some(tag_id);
+                    let saved_expr = tag.expression.clone().unwrap_or_default();
+                    let edited_expr = tag_exprs()
+                        .get(&tag_id)
+                        .cloned()
+                        .unwrap_or_else(|| saved_expr.clone());
+                    let expr_dirty = edited_expr.trim() != saved_expr.trim();
+                    let expr_verdict = tag_expr_valid().get(&tag_id).cloned().flatten();
+                    // Clearing (empty) is always saveable; otherwise require a passing validation.
+                    let expr_can_save = expr_dirty
+                        && (edited_expr.trim().is_empty() || matches!(expr_verdict, Some(Ok(()))));
+                    // Effective resolution hint: override beats expression.
+                    let team_label = |tid: &str| -> String {
+                        data.team_options
+                            .iter()
+                            .find(|t| t.id == tid)
+                            .and_then(|t| t.pseudonym.clone())
+                            .unwrap_or_else(|| tid.to_string())
+                    };
+                    let resolution_hint = if let Some(t) = tag.team.as_deref().filter(|t| !t.is_empty()) {
+                        Some(format!("Resolves to {} (manual override)", team_label(t)))
+                    } else if let Some(t) = tag.resolved_team.as_deref().filter(|t| !t.is_empty()) {
+                        Some(format!("Resolves to {} (from expression)", team_label(t)))
+                    } else if !saved_expr.trim().is_empty() {
+                        Some("Expression not resolved yet".to_string())
+                    } else {
+                        None
+                    };
+                    rsx! {
+                        li { key: "{tag_id}", class: "list-group-item",
+                            div { class: "d-flex justify-content-between align-items-center gap-2 flex-wrap",
+                                span { class: "flex-grow-1 fw-semibold", "{tag_name}" }
+                                div { class: "d-flex align-items-center gap-1",
+                                    label { r#for: "schedule-tag-override-{tag_id}", class: "text-muted small", "Override:" }
+                                    select {
+                                        id: "schedule-tag-override-{tag_id}", aria_label: "Override for tag {tag_name}",
+                                        class: "form-select form-select-sm",
+                                        style: "max-width: 12rem;",
+                                        value: "{current_team}",
+                                        disabled: is_updating,
+                                        onchange: move |e| {
+                                            if pending() || blocked { return; }
+                                            let u = url_sig();
+                                            let team_id = e.value();
+                                            let on_change = on_change.clone();
+                                            tag_teams.write().insert(tag_id, team_id.clone());
+                                            updating_tag_id.set(Some(tag_id));
+                                            error.set(None);
+                                            let prev_team = current_team.clone();
+                                            pending.set(true);
+                                            error.set(None);
+                                            spawn(async move {
+                                                let req = UpdateTagsRequest {
+                                                    tag_id,
+                                                    team_id: Some(team_id),
+                                                    expression: None,
+                                                };
+                                                match api::update_tags(&u, &req).await {
+                                                    Ok(_) => {
+                                                        updating_tag_id.set(None);
+                                                        on_change.call(());
+                                                    }
+                                                    Err(e) => {
+                                                        tag_teams.write().insert(tag_id, prev_team);
+                                                        updating_tag_id.set(None);
+                                                        error.set(Some(e));
                                                     }
                                                 }
-                                                if is_updating {
-                                                    span { class: "spinner-border spinner-border-sm text-secondary", role: "status", "aria-hidden": "true" }
-                                                }
-                                            }
-                                            button { class: "btn btn-sm btn-outline-danger",
-                                                disabled: is_updating,
-                                                onclick: move |_| {
-                                                    let u = url_sig();
-                                                    let on_change = on_change.clone();
-                                                    spawn(async move {
-                                                        match api::delete_tag(&u, tag_id).await {
-                                                            Ok(_) => { error.set(None); on_change.call(()); }
-                                                            Err(e) => error.set(Some(e)),
-                                                        }
-                                                    });
-                                                },
-                                                "×"
-                                            }
+                                                pending.set(false);
+                                            });
+                                        },
+                                        option { value: "", "No override" }
+                                        for opt in &data.team_options {
+                                            option { value: "{opt.id}", "{opt.pseudonym.as_deref().unwrap_or(&opt.id)}" }
                                         }
-                                        div { class: "mt-2 d-flex align-items-start gap-2",
-                                            div { class: "flex-grow-1",
-                                                AssEntry {
-                                                    id_suffix: format!("tag-expr-{tag_id}"),
-                                                    value: edited_expr.clone(),
-                                                    on_change: move |v: String| { tag_exprs.write().insert(tag_id, v); },
-                                                    team_options: data.team_options.clone(),
-                                                    tags: data.tags.clone(),
-                                                    matches: data.matches.clone(),
-                                                    tournament_url: url_sig(),
-                                                    placeholder: "Expression, e.g. (winner {Semi A})".to_string(),
-                                                    expected_type: vec!["TEAM".to_string()],
-                                                    on_validity_change: move |v: Option<Result<(), String>>| {
-                                                        tag_expr_valid.write().insert(tag_id, v);
-                                                    },
-                                                }
-                                            }
-                                            button { class: "btn btn-sm btn-outline-primary",
-                                                disabled: !expr_can_save || is_updating,
-                                                onclick: {
-                                                    let expr_to_save = edited_expr.clone();
-                                                    move |_| {
-                                                        let u = url_sig();
-                                                        let on_change = on_change.clone();
-                                                        let expression = expr_to_save.trim().to_string();
-                                                        updating_tag_id.set(Some(tag_id));
-                                                        error.set(None);
-                                                        spawn(async move {
-                                                            let req = UpdateTagsRequest {
-                                                                tag_id,
-                                                                team_id: None,
-                                                                expression: Some(expression),
-                                                            };
-                                                            match api::update_tags(&u, &req).await {
-                                                                Ok(_) => {
-                                                                    updating_tag_id.set(None);
-                                                                    on_change.call(());
-                                                                }
-                                                                Err(e) => {
-                                                                    updating_tag_id.set(None);
-                                                                    error.set(Some(e));
-                                                                }
-                                                            }
-                                                        });
-                                                    }
-                                                },
-                                                "Save"
-                                            }
-                                        }
-                                        if let Some(hint) = resolution_hint {
-                                            div { class: "form-text text-muted", "{hint}" }
-                                        }
+                                    }
+                                    if is_updating {
+                                        span { class: "spinner-border spinner-border-sm text-secondary", role: "status", "aria-hidden": "true" }
                                     }
                                 }
-                            })}
-                        }
-                        div { class: "form-text mt-2",
-                            "A tag resolves to its Override team if set, otherwise by evaluating its expression (which must produce a TEAM)."
+                                button { r#type: "button", class: "btn btn-sm btn-outline-danger", aria_label: "Delete tag {tag_name}",
+                                    disabled: is_updating,
+                                    onclick: move |_| {
+                                        if pending() || blocked { return; }
+                                        let u = url_sig();
+                                        let on_change = on_change.clone();
+                                        pending.set(true);
+                                        error.set(None);
+                                        spawn(async move {
+                                            match api::delete_tag(&u, tag_id).await {
+                                                Ok(_) => { error.set(None); on_change.call(()); }
+                                                Err(e) => error.set(Some(e)),
+                                            }
+                                            pending.set(false);
+                                        });
+                                    },
+                                    "×"
+                                }
+                            }
+                            div { class: "mt-2 d-flex flex-column flex-sm-row align-items-stretch gap-2",
+                                div { class: "flex-grow-1", style: "min-width: 0;",
+                                    AssEntry {
+                                        id_suffix: format!("tag-expr-{tag_id}"),
+                                        aria_label: format!("Expression for tag {tag_name}"),
+                                        value: edited_expr.clone(),
+                                        on_change: move |v: String| { if !pending() && !blocked { tag_exprs.write().insert(tag_id, v); } },
+                                        team_options: data.team_options.clone(),
+                                        tags: data.tags.clone(),
+                                        matches: data.matches.clone(),
+                                        tournament_url: url_sig(),
+                                        placeholder: "Expression, e.g. (winner {Semi A})".to_string(),
+                                        expected_type: vec!["TEAM".to_string()],
+                                        on_validity_change: move |v: Option<Result<(), String>>| {
+                                            tag_expr_valid.write().insert(tag_id, v);
+                                        },
+                                    }
+                                }
+                                button { class: "btn btn-sm btn-outline-primary",
+                                    disabled: !expr_can_save || is_updating,
+                                    onclick: {
+                                        let expr_to_save = edited_expr.clone();
+                                        move |_| {
+                                            if pending() || blocked { return; }
+                                            let u = url_sig();
+                                            let on_change = on_change.clone();
+                                            let expression = expr_to_save.trim().to_string();
+                                            updating_tag_id.set(Some(tag_id));
+                                            error.set(None);
+                                            pending.set(true);
+                                            error.set(None);
+                                            spawn(async move {
+                                                let req = UpdateTagsRequest {
+                                                    tag_id,
+                                                    team_id: None,
+                                                    expression: Some(expression),
+                                                };
+                                                match api::update_tags(&u, &req).await {
+                                                    Ok(_) => {
+                                                        updating_tag_id.set(None);
+                                                        on_change.call(());
+                                                    }
+                                                    Err(e) => {
+                                                        updating_tag_id.set(None);
+                                                        error.set(Some(e));
+                                                    }
+                                                }
+                                                pending.set(false);
+                                            });
+                                        }
+                                    },
+                                    "Save"
+                                }
+                            }
+                            if let Some(hint) = resolution_hint {
+                                div { class: "form-text text-muted", "{hint}" }
+                            }
                         }
                     }
-                }
+                })}
+            }
+            div { class: "form-text mt-2",
+                "A tag resolves to its Override team if set, otherwise by evaluating its expression (which must produce a TEAM)."
             }
         }
     }
@@ -3837,12 +4162,22 @@ fn TagsModal(
 #[component]
 fn ScriptingModal(
     tournament_url: String,
+    reload_error: Option<String>,
+    reloading: bool,
+    on_reload: EventHandler<()>,
     data: ScheduleSetupResponse,
     on_close: EventHandler<()>,
     on_change: EventHandler<()>,
 ) -> Element {
+    let blocked = reloading || reload_error.is_some();
     let url_sig = use_signal(|| tournament_url.clone());
     let mut error = use_signal(|| None::<String>);
+    let mut pending = use_signal(|| false);
+    use_effect(move || {
+        if error().is_some() {
+            crate::form_validation::focus_after_render("schedule-scripting-error");
+        }
+    });
     let mut saving_var_id = use_signal(|| None::<u32>);
     // New-variable form.
     let mut new_name = use_signal(|| "".to_string());
@@ -3853,191 +4188,193 @@ fn ScriptingModal(
     let mut var_exprs = use_signal(|| HashMap::<u32, String>::new());
     let mut var_expr_valid = use_signal(|| HashMap::<u32, Option<Result<(), String>>>::new());
 
-    // Sync drafts from data so inputs show current values on open and after refetch.
-    let data_effect = data.clone();
-    use_effect(move || {
-        let vars = data_effect.script_variables.clone();
-        let mut names = var_names.write();
-        names.clear();
-        let mut exprs = var_exprs.write();
-        exprs.clear();
-        for v in vars {
-            names.insert(v.id, v.name);
-            exprs.insert(v.id, v.expression);
-        }
-    });
+    let mut name_baseline = use_signal(|| HashMap::<u32, String>::new());
+    let mut expression_baseline = use_signal(|| HashMap::<u32, String>::new());
+    use_effect(use_reactive(&data.script_variables, move |variables| {
+        merge_schedule_drafts(&mut var_names.write(), &mut name_baseline.write(),
+            variables.iter().map(|var| (var.id, var.name.clone())).collect());
+        merge_schedule_drafts(&mut var_exprs.write(), &mut expression_baseline.write(),
+            variables.iter().map(|var| (var.id, var.expression.clone())).collect());
+    }));
 
     let new_can_add = !new_name().trim().is_empty()
         && !new_expr().trim().is_empty()
         && matches!(new_expr_valid(), Some(Ok(())));
 
     rsx! {
-        div { class: "modal d-block", tabindex: "-1", style: "background: rgba(0,0,0,0.5)",
-            div { class: "modal-dialog modal-lg",
-                div { class: "modal-content",
-                    div { class: "modal-header d-flex justify-content-between align-items-center",
-                        h5 { class: "modal-title mb-0", "Scripting" }
-                        button { type: "button", class: "btn-close", "aria-label": "Close", onclick: move |_| on_close.call(()) }
-                    }
-                    div { class: "modal-body",
-                        if let Some(err) = error() { div { class: "alert alert-danger", "{err}" } }
-                        p { class: "form-text",
-                            "Variables can be used by name in any ASS expression in this tournament — skip conditions, tag expressions, and other variables."
-                        }
+        ScheduleHelperDialog {
+            id: "schedule-scripting", title: "Scripting",
+            pending: pending(),
+            reload_error, reloading, on_reload,
+            on_close: move |_| { if !pending() { on_close.call(()); } },
+            if let Some(err) = error() { div { id: "schedule-scripting-error", class: "alert alert-danger", role: "alert", tabindex: "-1", "{err}" } }
+            p { class: "form-text",
+                "Variables can be used by name in any ASS expression in this tournament — skip conditions, tag expressions, and other variables."
+            }
 
-                        h6 { "New Variable" }
-                        div { class: "d-flex align-items-start gap-2 mb-3",
-                            input {
-                                class: "form-control",
-                                style: "max-width: 12rem;",
-                                placeholder: "name (e.g. threshold)",
-                                value: "{new_name}",
-                                oninput: move |e| { new_name.set(e.value()); error.set(None); },
+            h6 { "New Variable" }
+            form { class: "d-flex flex-column flex-sm-row align-items-stretch gap-2 mb-3",
+                id: "schedule-create-variable-form",
+                onsubmit: move |event| {
+                    event.prevent_default();
+                    if pending() || blocked || new_name().trim().is_empty()
+                        || new_expr().trim().is_empty() || !matches!(new_expr_valid(), Some(Ok(()))) { return; }
+                    let u = url_sig();
+                    let on_change = on_change.clone();
+                    let req = CreateScriptVariableRequest {
+                        name: new_name().trim().to_string(),
+                        expression: new_expr().trim().to_string(),
+                    };
+                    pending.set(true);
+                    error.set(None);
+                    spawn(async move {
+                        match api::create_script_variable(&u, &req).await {
+                            Ok(response) if response.success => {
+                                new_name.set("".to_string());
+                                new_expr.set("".to_string());
+                                new_expr_valid.set(None);
+                                on_change.call(());
                             }
-                            div { class: "flex-grow-1",
-                                AssEntry {
-                                    id_suffix: "script-var-new".to_string(),
-                                    value: new_expr(),
-                                    on_change: move |v: String| new_expr.set(v),
-                                    team_options: data.team_options.clone(),
-                                    tags: data.tags.clone(),
-                                    matches: data.matches.clone(),
-                                    tournament_url: url_sig(),
-                                    placeholder: "expression, e.g. (+ 1 2)".to_string(),
-                                    on_validity_change: move |v: Option<Result<(), String>>| {
-                                        new_expr_valid.set(v);
-                                    },
-                                }
-                            }
-                            button { class: "btn btn-outline-success",
-                                disabled: !new_can_add,
-                                onclick: move |_| {
-                                    let u = url_sig();
-                                    let on_change = on_change.clone();
-                                    let req = CreateScriptVariableRequest {
-                                        name: new_name().trim().to_string(),
-                                        expression: new_expr().trim().to_string(),
-                                    };
-                                    error.set(None);
-                                    spawn(async move {
-                                        match api::create_script_variable(&u, &req).await {
-                                            Ok(_) => {
-                                                new_name.set("".to_string());
-                                                new_expr.set("".to_string());
-                                                new_expr_valid.set(None);
-                                                on_change.call(());
-                                            }
-                                            Err(e) => error.set(Some(e)),
-                                        }
-                                    });
-                                },
-                                "Add"
-                            }
+                            Ok(_) => error.set(Some("The server did not save this change.".to_string())),
+                            Err(e) => error.set(Some(e)),
                         }
-
-                        h6 { "Variables" }
-                        if data.script_variables.is_empty() {
-                            p { class: "text-muted small", "No variables defined yet." }
-                        }
-                        ul { class: "list-group",
-                            {data.script_variables.iter().map(|var| {
-                                let var_id = var.id;
-                                let saved_name = var.name.clone();
-                                let saved_expr = var.expression.clone();
-                                let edited_name = var_names()
-                                    .get(&var_id)
-                                    .cloned()
-                                    .unwrap_or_else(|| saved_name.clone());
-                                let edited_expr = var_exprs()
-                                    .get(&var_id)
-                                    .cloned()
-                                    .unwrap_or_else(|| saved_expr.clone());
-                                let dirty = edited_name.trim() != saved_name
-                                    || edited_expr.trim() != saved_expr.trim();
-                                let expr_changed = edited_expr.trim() != saved_expr.trim();
-                                let verdict = var_expr_valid().get(&var_id).cloned().flatten();
-                                let can_save = dirty
-                                    && !edited_name.trim().is_empty()
-                                    && !edited_expr.trim().is_empty()
-                                    && (!expr_changed || matches!(verdict, Some(Ok(()))));
-                                let is_saving = saving_var_id() == Some(var_id);
-                                let name_to_save = edited_name.clone();
-                                let expr_to_save = edited_expr.clone();
-                                rsx! {
-                                    li { key: "{var_id}", class: "list-group-item",
-                                        div { class: "d-flex align-items-start gap-2",
-                                            input {
-                                                class: "form-control font-monospace",
-                                                style: "max-width: 12rem;",
-                                                value: "{edited_name}",
-                                                disabled: is_saving,
-                                                oninput: move |e| { var_names.write().insert(var_id, e.value()); },
-                                            }
-                                            div { class: "flex-grow-1",
-                                                AssEntry {
-                                                    id_suffix: format!("script-var-{var_id}"),
-                                                    value: edited_expr.clone(),
-                                                    on_change: move |v: String| { var_exprs.write().insert(var_id, v); },
-                                                    team_options: data.team_options.clone(),
-                                                    tags: data.tags.clone(),
-                                                    matches: data.matches.clone(),
-                                                    tournament_url: url_sig(),
-                                                    placeholder: "expression".to_string(),
-                                                    on_validity_change: move |v: Option<Result<(), String>>| {
-                                                        var_expr_valid.write().insert(var_id, v);
-                                                    },
-                                                }
-                                            }
-                                            button { class: "btn btn-sm btn-outline-primary",
-                                                disabled: !can_save || is_saving,
-                                                onclick: move |_| {
-                                                    let u = url_sig();
-                                                    let on_change = on_change.clone();
-                                                    let req = UpdateScriptVariableRequest {
-                                                        name: name_to_save.trim().to_string(),
-                                                        expression: expr_to_save.trim().to_string(),
-                                                    };
-                                                    saving_var_id.set(Some(var_id));
-                                                    error.set(None);
-                                                    spawn(async move {
-                                                        match api::update_script_variable(&u, var_id, &req).await {
-                                                            Ok(_) => {
-                                                                saving_var_id.set(None);
-                                                                on_change.call(());
-                                                            }
-                                                            Err(e) => {
-                                                                saving_var_id.set(None);
-                                                                error.set(Some(e));
-                                                            }
-                                                        }
-                                                    });
-                                                },
-                                                "Save"
-                                            }
-                                            button { class: "btn btn-sm btn-outline-danger",
-                                                disabled: is_saving,
-                                                onclick: move |_| {
-                                                    let u = url_sig();
-                                                    let on_change = on_change.clone();
-                                                    spawn(async move {
-                                                        match api::delete_script_variable(&u, var_id).await {
-                                                            Ok(_) => { error.set(None); on_change.call(()); }
-                                                            Err(e) => error.set(Some(e)),
-                                                        }
-                                                    });
-                                                },
-                                                "×"
-                                            }
-                                        }
-                                    }
-                                }
-                            })}
-                        }
-                    }
-                    div { class: "modal-footer",
-                        button { class: "btn btn-secondary", onclick: move |_| on_close.call(()), "Close" }
+                        pending.set(false);
+                    });
+                },
+                input {
+                    id: "schedule-new-variable-name", class: "form-control", required: true,
+                    style: "max-width: 12rem;",
+                    placeholder: "name (e.g. threshold)", aria_label: "New variable name",
+                    value: "{new_name}",
+                    oninput: move |e| { new_name.set(e.value()); error.set(None); },
+                }
+                div { class: "flex-grow-1", style: "min-width: 0;",
+                    AssEntry {
+                        id_suffix: "script-var-new".to_string(), aria_label: "New variable expression".to_string(),
+                        value: new_expr(),
+                        on_change: move |v: String| { if !pending() && !blocked { new_expr.set(v); } },
+                        team_options: data.team_options.clone(),
+                        tags: data.tags.clone(),
+                        matches: data.matches.clone(),
+                        tournament_url: url_sig(),
+                        placeholder: "expression, e.g. (+ 1 2)".to_string(),
+                        on_validity_change: move |v: Option<Result<(), String>>| {
+                            new_expr_valid.set(v);
+                        },
                     }
                 }
+                button { r#type: "submit", class: "btn btn-outline-success",
+                    disabled: !new_can_add,
+                    "Add"
+                }
+            }
+
+            h6 { "Variables" }
+            if data.script_variables.is_empty() {
+                p { class: "text-muted small", "No variables defined yet." }
+            }
+            ul { class: "list-group",
+                {data.script_variables.iter().map(|var| {
+                    let var_id = var.id;
+                    let saved_name = var.name.clone();
+                    let saved_expr = var.expression.clone();
+                    let edited_name = var_names()
+                        .get(&var_id)
+                        .cloned()
+                        .unwrap_or_else(|| saved_name.clone());
+                    let edited_expr = var_exprs()
+                        .get(&var_id)
+                        .cloned()
+                        .unwrap_or_else(|| saved_expr.clone());
+                    let dirty = edited_name.trim() != saved_name
+                        || edited_expr.trim() != saved_expr.trim();
+                    let expr_changed = edited_expr.trim() != saved_expr.trim();
+                    let verdict = var_expr_valid().get(&var_id).cloned().flatten();
+                    let can_save = dirty
+                        && !edited_name.trim().is_empty()
+                        && !edited_expr.trim().is_empty()
+                        && (!expr_changed || matches!(verdict, Some(Ok(()))));
+                    let is_saving = saving_var_id() == Some(var_id);
+                    let name_to_save = edited_name.clone();
+                    let expr_to_save = edited_expr.clone();
+                    rsx! {
+                        li { key: "{var_id}", class: "list-group-item",
+                            div { class: "d-flex flex-column flex-sm-row align-items-stretch gap-2",
+                                input {
+                                    class: "form-control font-monospace",
+                                    style: "max-width: 12rem;",
+                                    value: "{edited_name}", aria_label: "Variable name",
+                                    disabled: is_saving,
+                                    oninput: move |e| { var_names.write().insert(var_id, e.value()); },
+                                }
+                                div { class: "flex-grow-1", style: "min-width: 0;",
+                                    AssEntry {
+                                        id_suffix: format!("script-var-{var_id}"),
+                                        aria_label: format!("Expression for variable {saved_name}"),
+                                        value: edited_expr.clone(),
+                                        on_change: move |v: String| { if !pending() && !blocked { var_exprs.write().insert(var_id, v); } },
+                                        team_options: data.team_options.clone(),
+                                        tags: data.tags.clone(),
+                                        matches: data.matches.clone(),
+                                        tournament_url: url_sig(),
+                                        placeholder: "expression".to_string(),
+                                        on_validity_change: move |v: Option<Result<(), String>>| {
+                                            var_expr_valid.write().insert(var_id, v);
+                                        },
+                                    }
+                                }
+                                button { class: "btn btn-sm btn-outline-primary",
+                                    disabled: !can_save || is_saving,
+                                    onclick: move |_| {
+                                        if pending() || blocked { return; }
+                                        let u = url_sig();
+                                        let on_change = on_change.clone();
+                                        let req = UpdateScriptVariableRequest {
+                                            name: name_to_save.trim().to_string(),
+                                            expression: expr_to_save.trim().to_string(),
+                                        };
+                                        saving_var_id.set(Some(var_id));
+                                        error.set(None);
+                                        pending.set(true);
+                                        error.set(None);
+                                        spawn(async move {
+                                            match api::update_script_variable(&u, var_id, &req).await {
+                                                Ok(_) => {
+                                                    saving_var_id.set(None);
+                                                    on_change.call(());
+                                                }
+                                                Err(e) => {
+                                                    saving_var_id.set(None);
+                                                    error.set(Some(e));
+                                                }
+                                            }
+                                            pending.set(false);
+                                        });
+                                    },
+                                    "Save"
+                                }
+                                button { r#type: "button", class: "btn btn-sm btn-outline-danger", aria_label: "Delete variable {saved_name}",
+                                    disabled: is_saving,
+                                    onclick: move |_| {
+                                        if pending() || blocked { return; }
+                                        let u = url_sig();
+                                        let on_change = on_change.clone();
+                                        pending.set(true);
+                                        error.set(None);
+                                        spawn(async move {
+                                            match api::delete_script_variable(&u, var_id).await {
+                                                Ok(_) => { error.set(None); on_change.call(()); }
+                                                Err(e) => error.set(Some(e)),
+                                            }
+                                            pending.set(false);
+                                        });
+                                    },
+                                    "×"
+                                }
+                            }
+                        }
+                    }
+                })}
             }
         }
     }
@@ -4194,23 +4531,23 @@ fn TableView(
                         let structural = is_structural_match(m);
                         // Editor table: structural rows show real statuses like matches.
                         let (status_color, status_label) = if structural && !edit_mode {
-                            ("#e9ecef".to_string(), "—".to_string())
+                            ("var(--ui-surface-hover)".to_string(), "—".to_string())
                         } else if m.status.is_empty() {
-                            ("#e9ecef".to_string(), "-".to_string())
+                            ("var(--ui-surface-hover)".to_string(), "-".to_string())
                         } else {
                             status_color_and_label(&m.status)
                         };
                         rsx! {
                             tr { key: "{m.uuid}", class: "{tr_row_class}",
                                 td {
-                                    if edit_mode {
+                                    if edit_mode || structural {
                                         "{m.name}"
                                     } else {
                                         Link { to: Route::MatchPageById { url: tournament_url.clone(), match_id: m.uuid.clone() }, class: "text-decoration-none", "{m.name}" }
                                     }
                                 }
                                 td { "{m.field.as_deref().unwrap_or(\"\")}" }
-                                td {
+                                td { class: "table-nowrap",
                                     if let Some((start_utc, _)) = display_interval_utc(m, show_as_happened) {
                                         span { "{format_naive_utc_time_local(start_utc, tz_offset)}" }
                                     } else { "-" }
@@ -4249,10 +4586,10 @@ fn TableView(
                                     td { class: "small", "{fmt_str(&m.team1_initial)}" }
                                     td { class: "small", "{fmt_str(&m.team2_initial)}" }
                                     td { class: "small", "{fmt_str(&m.refs_initial)}" }
-                                    td { class: "small", "{fmt_dt(&m.scheduled_start_time)}" }
-                                    td { class: "small", "{fmt_dt(&m.nominal_start_time)}" }
-                                    td { class: "small", "{fmt_dt(&m.confirmed_start_time)}" }
-                                    td { class: "small", "{fmt_dt(&m.completed_time)}" }
+                                    td { class: "small table-nowrap", "{fmt_dt(&m.scheduled_start_time)}" }
+                                    td { class: "small table-nowrap", "{fmt_dt(&m.nominal_start_time)}" }
+                                    td { class: "small table-nowrap", "{fmt_dt(&m.confirmed_start_time)}" }
+                                    td { class: "small table-nowrap", "{fmt_dt(&m.completed_time)}" }
                                     td { class: "small", "{fmt_u32(&m.nominal_length)}" }
                                     td { class: "small", "{fmt_str(&m.set_type)}" }
                                     td { class: "small", "{fmt_u32(&m.nsets)}" }
@@ -4269,9 +4606,11 @@ fn TableView(
                                         // Started/completed rows stay editable too: the edit card
                                         // surfaces the lock and the server rejects disallowed changes.
                                         button {
+                                            r#type: "button",
                                             class: "btn btn-sm btn-link",
+                                            aria_label: "Edit {m.name}",
                                             onclick: move |_| on_edit_match.call(match_id.clone()),
-                                            "✎"
+                                            "Edit"
                                         }
                                     }
                                 }
@@ -4369,6 +4708,8 @@ fn TimelineEventCard(
     /// Selected by the bulk-length tool.
     #[props(default = false)]
     selected: bool,
+    #[props(default = false)]
+    selection_active: bool,
     /// Alt-hover dependency highlight class (source / chain / team / ref).
     #[props(default)]
     dep_class: Option<String>,
@@ -4407,6 +4748,34 @@ fn TimelineEventCard(
         format!("{} - {} vs {}", event.name, event.team1, event.team2)
     };
     let url_clone = tournament_url.clone();
+    let title_action = rsx! {
+        span { class: "schedule-timeline-event-name",
+            onpointerdown: move |event: Event<PointerData>| event.stop_propagation(),
+            onclick: move |event: Event<MouseData>| event.stop_propagation(),
+            if edit_mode {
+                button {
+                    r#type: "button",
+                    class: "schedule-match-action",
+                    aria_label: if selection_active { format!("Select {event_title}") } else { format!("Edit {event_title}") },
+                    aria_pressed: selection_active.then_some(selected),
+                    onclick: {
+                        let id = event.id.clone();
+                        move |_| on_edit_match.call(id.clone())
+                    },
+                    "{event.name}"
+                }
+            } else if !is_structural {
+                Link {
+                    to: Route::MatchPageById { url: tournament_url.clone(), match_id: event.id.clone() },
+                    class: "schedule-match-action",
+                    aria_label: "View {event_title}",
+                    "{event.name}"
+                }
+            } else {
+                "{event.name}"
+            }
+        }
+    };
     let event_class = format!(
         "schedule-timeline-event{}{}{}{}{}{}",
         if event.highlight_playing {
@@ -4503,8 +4872,11 @@ fn TimelineEventCard(
                     on_hover.call((event_id_for_leave.clone(), false, ev.modifiers().alt()));
                 }
             },
-            onclick: move |_| {
-                if is_break && !edit_mode {
+            onclick: move |event: Event<MouseData>| {
+                if event.modifiers().ctrl() || event.modifiers().meta() || event.modifiers().shift() || event.modifiers().alt() {
+                    return;
+                }
+                if is_structural && !edit_mode {
                 } else if edit_mode {
                     on_edit_match.call(event_id_clone.clone());
                 } else {
@@ -4564,7 +4936,7 @@ fn TimelineEventCard(
                 div { class: "schedule-timeline-event-team-row",
                     div { class: "schedule-timeline-event-main",
                         div { class: "schedule-timeline-event-header d-flex align-items-center flex-wrap gap-1",
-                            div { class: "schedule-timeline-event-name", "{event.name}" }
+                            {title_action.clone()}
                             if let Some(opp) = event.opponent_slot.clone() {
                                 span { class: "schedule-timeline-event-teams schedule-timeline-inline-vs d-inline-flex align-items-center flex-wrap gap-1",
                                     span { "vs" }
@@ -4615,7 +4987,7 @@ fn TimelineEventCard(
                 }
             } else if !is_break {
                 div { class: "schedule-timeline-event-header d-flex align-items-center flex-wrap gap-1",
-                    div { class: "schedule-timeline-event-name", "{event.name}" }
+                    {title_action.clone()}
                 }
                 div { class: "schedule-timeline-event-teams d-flex align-items-center flex-wrap gap-1",
                     TeamLabel {
@@ -4645,7 +5017,7 @@ fn TimelineEventCard(
                 }
             } else {
                 div { class: "schedule-timeline-event-header d-flex align-items-center flex-wrap gap-1",
-                    div { class: "schedule-timeline-event-name", "{event.name}" }
+                    {title_action.clone()}
                 }
             }
             if event.ribbon {
@@ -4765,14 +5137,14 @@ fn ref_token_match_name(token: &str) -> Option<&str> {
 /// kind: 0 = chain (blue), 1 = team supplier (green), 2 = ref supplier (orange).
 fn dep_edge_color(kind: u8) -> &'static str {
     match kind {
-        0 => "#0d6efd",
-        1 => "#198754",
-        _ => "#fd7e14",
+        0 => "var(--schedule-dep-chain)",
+        1 => "var(--schedule-dep-team)",
+        _ => "var(--schedule-dep-ref)",
     }
 }
 
 /// Stacked outline rings for a block in the alt-dependency view: one 3px ring
-/// per edge (in order), colored like its line, with 1px translucent-white
+/// per edge (in order), colored like its line, with 1px surface-colored
 /// separators so adjacent same-color rings stay countable. Returns an inline
 /// `box-shadow: …;` declaration.
 fn dep_ring_shadow(kinds: &[u8]) -> String {
@@ -4782,7 +5154,7 @@ fn dep_ring_shadow(kinds: &[u8]) -> String {
         .map(|(i, kind)| {
             let inner = (i as u32) * 4;
             format!(
-                "0 0 0 {}px {}, 0 0 0 {}px rgba(255,255,255,0.9)",
+                "0 0 0 {}px {}, 0 0 0 {}px var(--ui-surface)",
                 inner + 3,
                 dep_edge_color(*kind),
                 inner + 4
@@ -4901,12 +5273,88 @@ mod dep_geometry_tests {
     fn ring_shadow_one_ring_per_distinct_edge_in_order() {
         let css = dep_ring_shadow(&[0, 1, 2]);
         assert!(css.starts_with("box-shadow: "));
-        assert_eq!(css.matches("rgba(255,255,255,0.9)").count(), 3);
+        assert_eq!(css.matches("var(--ui-surface)").count(), 3);
         // Ring order (inner→outer) follows edge order; colors match the lines.
-        let chain = css.find("#0d6efd").unwrap();
-        let team = css.find("#198754").unwrap();
-        let refc = css.find("#fd7e14").unwrap();
+        let chain = css.find("var(--schedule-dep-chain)").unwrap();
+        let team = css.find("var(--schedule-dep-team)").unwrap();
+        let refc = css.find("var(--schedule-dep-ref)").unwrap();
         assert!(chain < team && team < refc);
+    }
+}
+
+/// Round the occupied interval out to half-hour boundaries, clipped to this
+/// local day. Cross-midnight matches contribute to both days.
+fn schedule_day_window(
+    day: chrono::NaiveDate,
+    intervals: impl IntoIterator<Item = (chrono::NaiveDateTime, chrono::NaiveDateTime)>,
+) -> Option<(u32, u32)> {
+    let start = day.and_hms_opt(0, 0, 0)?;
+    let end = start + chrono::Duration::days(1);
+    let mut window: Option<(u32, u32)> = None;
+    for (match_start, match_end) in intervals {
+        if match_end <= start || match_start >= end || match_end <= match_start {
+            continue;
+        }
+        let first = ((match_start.max(start) - start).num_seconds() as u32 / 1800) * 30;
+        let last =
+            (((match_end.min(end) - start).num_seconds() as u32).div_ceil(1800) * 30).min(1440);
+        window = Some(match window {
+            Some((earliest, latest)) => (earliest.min(first), latest.max(last)),
+            None => (first, last),
+        });
+    }
+    window
+}
+
+#[cfg(test)]
+mod schedule_day_window_tests {
+    use super::schedule_day_window;
+    use chrono::{NaiveDate, NaiveDateTime};
+
+    fn time(value: &str) -> NaiveDateTime {
+        value.parse().unwrap()
+    }
+    fn day() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 10, 25).unwrap()
+    }
+
+    #[test]
+    fn includes_all_matches_and_rounds_outward() {
+        assert_eq!(
+            schedule_day_window(
+                day(),
+                [
+                    (time("2026-10-25T09:10:00"), time("2026-10-25T09:40:00")),
+                    (time("2026-10-25T15:00:00"), time("2026-10-25T15:30:01")),
+                ]
+            ),
+            Some((540, 960))
+        );
+    }
+
+    #[test]
+    fn clips_matches_spanning_midnight_to_each_day() {
+        let intervals = [(time("2026-10-25T23:45:00"), time("2026-10-26T00:20:00"))];
+        assert_eq!(schedule_day_window(day(), intervals), Some((1410, 1440)));
+        assert_eq!(
+            schedule_day_window(day().succ_opt().unwrap(), intervals),
+            Some((0, 30))
+        );
+    }
+
+    #[test]
+    fn empty_days_ignore_other_days_and_invalid_intervals() {
+        assert_eq!(
+            schedule_day_window(
+                day(),
+                [
+                    (time("2026-10-24T23:00:00"), time("2026-10-25T00:00:00")),
+                    (time("2026-10-26T09:00:00"), time("2026-10-26T10:00:00")),
+                    (time("2026-10-25T12:00:00"), time("2026-10-25T11:00:00")),
+                ]
+            ),
+            None
+        );
     }
 }
 
@@ -5165,9 +5613,17 @@ fn ScheduleTimeline(
                     dates.push(dt.date());
                 }
             }
-            if let Some((start_utc, _)) = display_interval_utc(m, show_as_happened) {
+            if let Some((start_utc, end_utc)) = display_interval_utc(m, show_as_happened) {
                 let start_dt = start_utc + chrono::Duration::minutes(tz_offset_minutes);
-                dates.push(start_dt.date());
+                let end_dt = end_utc + chrono::Duration::minutes(tz_offset_minutes);
+                let mut day = start_dt.date();
+                dates.push(day);
+                // A match ending exactly at midnight belongs only to its starting day.
+                while let Some(next) = day.succ_opt() {
+                    if next.and_hms_opt(0, 0, 0).unwrap_or_default() >= end_dt { break; }
+                    dates.push(next);
+                    day = next;
+                }
             }
         }
         dates.sort();
@@ -5218,19 +5674,16 @@ fn ScheduleTimeline(
 
     // When filters change the day list, keep the cursor on a day that still has
     // events. The editor may sit on empty days, so it never snaps.
-    {
-        let dates = dates_with_matches.clone();
-        use_effect(move || {
-            let current = visible_date_signal();
-            if !editor && !dates.is_empty() && !dates.contains(&current) {
-                if dates.contains(&today_local) {
-                    visible_date_signal.set(today_local);
-                } else if let Some(&first) = dates.first() {
-                    visible_date_signal.set(first);
-                }
+    use_effect(use_reactive(&dates_with_matches, move |dates| {
+        let current = visible_date_signal();
+        if !editor && !dates.is_empty() && !dates.contains(&current) {
+            if dates.contains(&today_local) {
+                visible_date_signal.set(today_local);
+            } else if let Some(&first) = dates.first() {
+                visible_date_signal.set(first);
             }
-        });
-    }
+        }
+    }));
 
     // React to keyboard nav (n/p/t) from Schedule
     let dates_for_nav = dates_with_matches.clone();
@@ -5350,19 +5803,12 @@ fn ScheduleTimeline(
         && data.matches.is_empty()
         && pending_create.is_none();
 
-    // Time scale: full day (00:00 to 24:00), 30-minute slots.
-    //
-    // Important: the schedule times come back as RFC3339 with offsets. We currently
-    // convert to UTC for layout. If we used a narrow window like 06:00–22:00,
-    // tournaments in some timezones could have all matches fall outside the window
-    // after UTC conversion, making the timeline appear empty with no errors.
     const SLOT_MINUTES: i64 = 30;
-    const FIRST_HOUR: u32 = 0;
-    const LAST_HOUR: u32 = 24;
-    let slots_per_day = ((LAST_HOUR - FIRST_HOUR) * 60 / SLOT_MINUTES as u32) as usize;
 
     // Get current visible date value (reactive - will update when signal changes)
     let current_visible_date = visible_date_signal();
+    let day_start = current_visible_date.and_hms_opt(0, 0, 0).unwrap_or_default();
+    let day_end = day_start + chrono::Duration::days(1);
 
     // Build timeline events (non-join matches).
     // Placement uses `display_interval_utc`: the "planned or earlier" viewer rule,
@@ -5491,7 +5937,7 @@ fn ScheduleTimeline(
             // Status tag palette only (never overwritten for highlight; highlight is on the block).
             // Editor: structural blocks (breaks/joins) show real statuses like matches.
             let (color, _) = if is_structural_match(m) && !editor {
-                ("#e9ecef".to_string(), "—".to_string())
+                ("var(--ui-surface-hover)".to_string(), "—".to_string())
             } else {
                 status_color_and_label(&m.status)
             };
@@ -5585,39 +6031,6 @@ fn ScheduleTimeline(
         })
         .collect();
 
-    // Helper: get start_slot and end_slot for an event (for which row to render in; still slot-based)
-    let _event_slots = |e: &TimelineEvent| -> (usize, usize) {
-        let start_slot = {
-            if e.start_time.date() != current_visible_date {
-                0
-            } else {
-                let hour = e.start_time.hour();
-                let minute = e.start_time.minute();
-                if hour < FIRST_HOUR || hour >= LAST_HOUR {
-                    0
-                } else {
-                    let total_minutes = (hour - FIRST_HOUR) * 60 + minute;
-                    (total_minutes as i64 / SLOT_MINUTES) as usize
-                }
-            }
-        };
-        let end_slot = {
-            if e.end_time.date() != current_visible_date {
-                slots_per_day
-            } else {
-                let hour = e.end_time.hour();
-                let minute = e.end_time.minute();
-                if hour < FIRST_HOUR || hour >= LAST_HOUR {
-                    slots_per_day
-                } else {
-                    let total_minutes = (hour - FIRST_HOUR) * 60 + minute;
-                    ((total_minutes as i64 / SLOT_MINUTES) as usize).max(start_slot + 1)
-                }
-            }
-        };
-        (start_slot, end_slot)
-    };
-
     // True iff two events overlap in time (using exact start/end, not slots)
     let events_overlap = |a: &TimelineEvent, b: &TimelineEvent| -> bool {
         a.start_time < b.end_time && b.start_time < a.end_time
@@ -5630,7 +6043,8 @@ fn ScheduleTimeline(
             .enumerate()
             .filter(|(_, e)| {
                 e.field_id == field.id
-                    && e.start_time.date() == current_visible_date
+                    && e.start_time < day_end
+                    && e.end_time > day_start
                     && e.schedule_type.as_deref() != Some("JOIN")
             })
             .map(|(i, _)| i)
@@ -5731,11 +6145,29 @@ fn ScheduleTimeline(
             .collect()
     };
 
+    // Public schedules show the occupied part of the selected day. The editor
+    // keeps all 24 hours available for adding and moving matches.
+    let occupied_window = schedule_day_window(
+        current_visible_date,
+        timeline_events
+            .iter()
+            .map(|event| (event.start_time, event.end_time))
+            .chain(join_groups.iter().map(|join| {
+                (join.time, join.time + chrono::Duration::minutes(1))
+            })),
+    );
+    let (first_minute, last_minute) = if editor {
+        (0, 1440)
+    } else {
+        occupied_window.unwrap_or((0, 30))
+    };
+    let slots_per_day = ((last_minute - first_minute) as i64 / SLOT_MINUTES) as usize;
+
     // Pre-compute slot time strings
     let slot_times: Vec<String> = (0..slots_per_day)
         .map(|slot| {
-            let minutes = (slot as u32) * SLOT_MINUTES as u32;
-            let hour = FIRST_HOUR + minutes / 60;
+            let minutes = first_minute + (slot as u32) * SLOT_MINUTES as u32;
+            let hour = minutes / 60;
             let minute = minutes % 60;
             format!("{:02}:{:02}", hour, minute)
         })
@@ -5762,12 +6194,11 @@ fn ScheduleTimeline(
             if date != current_visible_date {
                 return None;
             }
-            let hour = join.time.hour();
-            let minute = join.time.minute();
-            if hour < FIRST_HOUR || hour >= LAST_HOUR {
+            let minute_of_day = join.time.hour() * 60 + join.time.minute();
+            if minute_of_day < first_minute || minute_of_day >= last_minute {
                 return None;
             }
-            let total_minutes = (hour - FIRST_HOUR) * 60 + minute;
+            let total_minutes = minute_of_day - first_minute;
             let slot = (total_minutes as i64 / SLOT_MINUTES) as usize;
             let minutes_within_slot = (total_minutes as i64) % SLOT_MINUTES;
             let top_fraction = (minutes_within_slot as f64) / (SLOT_MINUTES as f64);
@@ -5809,9 +6240,7 @@ fn ScheduleTimeline(
             .iter()
             .filter(|e| e.start_time.date() == current_visible_date)
             .map(|e| {
-                let h = e.start_time.hour();
-                let m = e.start_time.minute();
-                ((h - FIRST_HOUR) * 60 + m) as i64 / SLOT_MINUTES
+                ((e.start_time.hour() * 60 + e.start_time.minute()).saturating_sub(first_minute)) as i64 / SLOT_MINUTES
             })
             .map(|s| s as usize);
         let join_slots = join_lines_data.iter().map(|j| j.slot);
@@ -5821,7 +6250,7 @@ fn ScheduleTimeline(
         let now_local = chrono::Utc::now() + chrono::Duration::minutes(tz_offset_minutes);
         let hour = now_local.hour();
         let minute = now_local.minute();
-        let slot = ((hour - FIRST_HOUR) * 60 + minute) as i64 / SLOT_MINUTES;
+        let slot = ((hour * 60 + minute).saturating_sub(first_minute)) as i64 / SLOT_MINUTES;
         (slot as usize).min(slots_per_day.saturating_sub(1))
     } else {
         first_match_slot
@@ -5855,6 +6284,7 @@ fn ScheduleTimeline(
                         if let (Some(scroll_el), Some(target_el)) =
                             (scroll_el, doc.get_element_by_id(&id))
                         {
+                            if timeline_uses_page_scroll(&window, &scroll_el) { return; }
                             let scroll_rect = scroll_el.get_bounding_client_rect();
                             let target_rect = target_el.get_bounding_client_rect();
                             let delta = target_rect.top() - scroll_rect.top();
@@ -5877,13 +6307,11 @@ fn ScheduleTimeline(
     // Now-line: slot index + fraction within the slot when viewing today.
     let now_line_style: Option<String> = if current_visible_date == today_local {
         let now_local = chrono::Utc::now() + chrono::Duration::minutes(tz_offset_minutes);
-        let total_minutes =
-            (now_local.hour().saturating_sub(FIRST_HOUR) as i64) * 60 + (now_local.minute() as i64);
-        let slots_f = total_minutes as f64 / SLOT_MINUTES as f64;
-        Some(format!(
-            "top: calc(var(--header-height) + var(--slot-height) * {:.4});",
-            slots_f.clamp(0.0, slots_per_day as f64)
-        ))
+        let minute_of_day = now_local.hour() * 60 + now_local.minute();
+        if minute_of_day >= first_minute && minute_of_day < last_minute {
+            let slots_f = (minute_of_day - first_minute) as f64 / SLOT_MINUTES as f64;
+            Some(format!("top: calc(var(--header-height) + var(--slot-height) * {slots_f:.4});"))
+        } else { None }
     } else {
         None
     };
@@ -5898,7 +6326,6 @@ fn ScheduleTimeline(
         .enumerate()
         .map(|(i, f)| (f.id, i))
         .collect();
-    let day_start = current_visible_date.and_hms_opt(0, 0, 0).unwrap_or_default();
     // Per-block drag info for today's visible blocks: (schedule_type, name, start_min, duration_min, col).
     let drag_block_info: HashMap<String, (String, String, i64, i64, usize)> = timeline_events
         .iter()
@@ -6393,7 +6820,7 @@ fn ScheduleTimeline(
     };
 
     rsx! {
-        div { class: "schedule-timeline-wrapper", id: "schedule-timeline-wrapper",
+        div { class: if editor { "schedule-timeline-wrapper" } else { "schedule-timeline-wrapper schedule-timeline-viewer" }, id: "schedule-timeline-wrapper",
             div { class: "schedule-timeline-nav",
                 {
                     let current = visible_date_signal();
@@ -6404,7 +6831,8 @@ fn ScheduleTimeline(
                     let dates_next = dates_with_matches.clone();
                     rsx! {
                         button {
-                            class: "btn btn-sm btn-outline-secondary",
+                            class: "btn btn-sm btn-outline-secondary schedule-day-step",
+                            aria_label: "Previous day", title: "Previous day",
                             disabled: !has_prev,
                             onclick: move |_| {
                                 let current = visible_date_signal();
@@ -6412,10 +6840,26 @@ fn ScheduleTimeline(
                                     visible_date_signal.set(prev_date);
                                 }
                             },
-                            "← Prev"
+                            "←"
+                        }
+                        span { class: "schedule-timeline-date", title: visible_date_signal().format("%A, %B %-d, %Y").to_string(),
+                            span { aria_hidden: "true", {visible_date_signal().format("%b %-d").to_string()} }
+                            span { class: "visually-hidden", {visible_date_signal().format("%A, %B %-d, %Y").to_string()} }
                         }
                         button {
-                            class: "btn btn-sm btn-outline-secondary",
+                            class: "btn btn-sm btn-outline-secondary schedule-day-step",
+                            aria_label: "Next day", title: "Next day",
+                            disabled: !has_next,
+                            onclick: move |_| {
+                                let current = visible_date_signal();
+                                if let Some(next_date) = adjacent_date(editor, &dates_next, current, true) {
+                                    visible_date_signal.set(next_date);
+                                }
+                            },
+                            "→"
+                        }
+                        button {
+                            class: "btn btn-sm btn-outline-secondary schedule-today",
                             onclick: move |_| {
                                 if dates_today.contains(&today_local) {
                                     visible_date_signal.set(today_local);
@@ -6425,27 +6869,32 @@ fn ScheduleTimeline(
                             },
                             "Today"
                         }
-                        button {
-                            class: "btn btn-sm btn-outline-secondary",
-                            disabled: !has_next,
-                            onclick: move |_| {
-                                let current = visible_date_signal();
-                                if let Some(next_date) = adjacent_date(editor, &dates_next, current, true) {
-                                    visible_date_signal.set(next_date);
-                                }
-                            },
-                            "Next →"
-                        }
-                        span { class: "schedule-timeline-date",
-                            " {visible_date_signal().format(\"%A, %B %d\")}"
-                        }
-                        span {
-                            class: "ms-auto small text-muted",
-                            title: "Pinch on mobile, or Shift+scroll on desktop, to zoom the time axis",
-                            if (scale - 1.0).abs() > 0.02 {
-                                "{(scale * 100.0) as i32}%"
-                            } else {
-                                ""
+                        details { class: "schedule-scale-menu",
+                            onkeydown: move |event: Event<KeyboardData>| event.stop_propagation(),
+                            summary { aria_label: "Adjust time scale", title: "Adjust time scale", i { class: "fas fa-magnifying-glass", aria_hidden: true } }
+                            div { class: "schedule-scale-controls", role: "group", aria_label: "Time scale",
+                            span { class: "small text-muted", "Time scale" }
+                            button {
+                                r#type: "button", class: "btn btn-sm btn-outline-secondary",
+                                aria_label: "Decrease time scale",
+                                disabled: scale <= MIN_VERTICAL_SCALE,
+                                onclick: move |_| change_time_scale(vertical_scale, pending_scroll_top, scroll_el_id, vertical_scale() / 1.2),
+                                "−"
+                            }
+                            button {
+                                r#type: "button", class: "btn btn-sm btn-outline-secondary schedule-scale-reset",
+                                aria_label: "Time scale {(scale * 100.0).round() as i32}%; reset to 100%",
+                                title: "Reset time scale to 100%",
+                                onclick: move |_| change_time_scale(vertical_scale, pending_scroll_top, scroll_el_id, 1.0),
+                                "{(scale * 100.0).round() as i32}%"
+                            }
+                            button {
+                                r#type: "button", class: "btn btn-sm btn-outline-secondary",
+                                aria_label: "Increase time scale",
+                                disabled: scale >= MAX_VERTICAL_SCALE,
+                                onclick: move |_| change_time_scale(vertical_scale, pending_scroll_top, scroll_el_id, vertical_scale() * 1.2),
+                                "+"
+                            }
                             }
                         }
                     }
@@ -6455,6 +6904,8 @@ fn ScheduleTimeline(
                 div { class: "schedule-timeline-empty-message",
                     "Add a field to start building your schedule."
                 }
+            } else if !editor && occupied_window.is_none() {
+                p { class: "schedule-timeline-empty-message mb-0", "No matches scheduled for this day." }
             } else {
             {
                 let scroll_id = scroll_el_id;
@@ -6641,8 +7092,10 @@ fn ScheduleTimeline(
                                                             style: format!("top: calc(var(--slot-height) * {});", join_top_fraction),
                                                             div { class: "schedule-timeline-join-line-in-cell" }
                                                             if edit_mode {
-                                                                div {
+                                                                button {
+                                                                    r#type: "button",
                                                                     class: "schedule-timeline-join-label",
+                                                                    aria_label: "Edit join {join_name}",
                                                                     // Don't let a click on the join label start a create drag.
                                                                     onpointerdown: move |ev: Event<PointerData>| ev.stop_propagation(),
                                                                     onclick: move |_| on_edit_match.call(match_id.clone()),
@@ -6674,18 +7127,15 @@ fn ScheduleTimeline(
                     let mut geom_by_id: HashMap<String, (f64, f64, f64, f64)> = HashMap::new();
                     let overlay_events: Vec<(TimelineEvent, String)> = timeline_events
                         .iter()
-                        .filter(|e| e.start_time.date() == current_visible_date)
+                        .filter(|e| e.start_time < day_end && e.end_time > day_start)
                         .filter(|e| e.schedule_type.as_deref() != Some("JOIN"))
                         .filter_map(|e| {
                             let col = *field_index.get(&e.field_id)?;
-                            let hour = e.start_time.hour();
-                            let minute = e.start_time.minute();
-                            if hour < FIRST_HOUR || hour >= LAST_HOUR {
-                                return None;
-                            }
-                            let start_min = (hour - FIRST_HOUR) * 60 + minute;
-                            let start_slots = start_min as f64 / SLOT_MINUTES as f64;
-                            let duration_min = (e.end_time - e.start_time).num_minutes().max(1) as f64;
+                            let clipped_start = e.start_time.max(day_start);
+                            let clipped_end = e.end_time.min(day_end);
+                            let start_min = (clipped_start - day_start).num_seconds() as f64 / 60.0 - first_minute as f64;
+                            let start_slots = start_min / SLOT_MINUTES as f64;
+                            let duration_min = (clipped_end - clipped_start).num_seconds().max(60) as f64 / 60.0;
                             let duration_slots = duration_min / SLOT_MINUTES as f64;
                             let lane_w = 100.0 / e.num_lanes.max(1) as f64;
                             let lane_l = e.lane_index as f64 * lane_w;
@@ -6696,7 +7146,7 @@ fn ScheduleTimeline(
                             geom_by_id.insert(e.id.clone(), (left, width, start_slots, duration_slots));
                             let is_structural = is_structural_type(e.schedule_type.as_deref());
                             // Editor: structural blocks look like matches (statuses shown).
-                            let bg = if is_structural && !editor { "#f1f3f5" } else { "#ffffff" };
+                            let bg = if is_structural && !editor { "var(--ui-surface-muted)" } else { "var(--ui-surface)" };
                             let style = format!(
                                 "background-color: {bg}; position: absolute; box-sizing: border-box; \
                                  left: calc({left}% + 1px); width: calc({width}% - 2px); \
@@ -6869,6 +7319,7 @@ fn ScheduleTimeline(
                                         on_edit_match: wrapped_on_edit,
                                         editor: editor,
                                         selected: selected_ids.contains(&ev.id),
+                                        selection_active: bulk_select_active,
                                         dep_class: dep_class_map.get(&ev.id).map(|c| c.to_string()),
                                         // Rings for the hovered source AND every dependency target.
                                         dep_shadow: dep_shadow_by_id.get(&ev.id).cloned(),
@@ -6937,15 +7388,15 @@ fn ScheduleTimeline(
                                 }
                                 div { class: "schedule-dep-legend",
                                     span { class: "schedule-dep-legend-item",
-                                        span { class: "schedule-dep-legend-swatch", style: "background:#0d6efd;" }
+                                        span { class: "schedule-dep-legend-swatch", style: "background:var(--schedule-dep-chain);" }
                                         "previous match"
                                     }
                                     span { class: "schedule-dep-legend-item",
-                                        span { class: "schedule-dep-legend-swatch", style: "background:#198754;" }
+                                        span { class: "schedule-dep-legend-swatch", style: "background:var(--schedule-dep-team);" }
                                         "supplies a team"
                                     }
                                     span { class: "schedule-dep-legend-item",
-                                        span { class: "schedule-dep-legend-swatch", style: "background:#fd7e14;" }
+                                        span { class: "schedule-dep-legend-swatch", style: "background:var(--schedule-dep-ref);" }
                                         "supplies a ref"
                                     }
                                 }
@@ -7033,6 +7484,8 @@ fn EditMatchModal(
 
     let mut error = use_signal(|| None::<String>);
     let mut saving = use_signal(|| false);
+    let mut deleting = use_signal(ActionRecovery::default);
+    let mut confirm_delete = use_signal(|| false);
     let url_sig = use_signal(|| tournament_url.clone());
 
     // Sync field and previous_match_id from match data when modal opens (fixes initial display)
@@ -7092,6 +7545,7 @@ fn EditMatchModal(
     let m_id_save = match_id.clone();
     let data_save = data.clone();
     let do_save_rc: Rc<RefCell<Box<dyn FnMut()>>> = Rc::new(RefCell::new(Box::new(move || {
+        if saving() || deleting().blocks_write() { return; }
         // Validation: BREAK, JOIN, FAST, SAFE require previous match and same field
         let st = schedule_type();
         if st == "BREAK" || st == "JOIN" || st == "FAST" || st == "SAFE" {
@@ -7220,11 +7674,16 @@ fn EditMatchModal(
             }
         }
     };
+    let close_editor = move || {
+        if saving() || deleting().busy() { return; }
+        if matches!(deleting(), ActionRecovery::NeedsCheck(_)) { on_save.call(()); }
+        else { on_close.call(()); }
+    };
     let modal_keydown = move |ev: Event<KeyboardData>| {
         let key = ev.key().to_string();
         if key == "Escape" {
             ev.prevent_default();
-            on_close.call(());
+            close_editor()
         } else if key == "Enter" && ev.modifiers().contains(Modifiers::SHIFT) {
             ev.prevent_default();
             ev.stop_propagation();
@@ -7232,24 +7691,46 @@ fn EditMatchModal(
         }
     };
 
+    let mut delete_action = {
+        let id = match_id.clone();
+        move |send_delete: bool| {
+            if saving() || deleting().busy() || (send_delete && deleting().blocks_write()) { return; }
+            deleting.set(if send_delete { ActionRecovery::Pending } else { ActionRecovery::Checking });
+            let url = url_sig();
+            let id = id.clone();
+            spawn(async move {
+                let result = if send_delete { api::delete_match(&url, &id).await } else { Err("Delete was not confirmed.".into()) };
+                if result.is_ok() { on_save.call(()); return; }
+                let message = result.err().unwrap_or_default();
+                deleting.set(ActionRecovery::Checking);
+                let present = api::schedule_setup(&url).await.map(|current| current.matches.iter().any(|item| item.uuid == id));
+                let next = ActionRecovery::after_check(present, &message);
+                if next == ActionRecovery::Idle { on_save.call(()); }
+                deleting.set(next);
+            });
+        }
+    };
+    let mut check_delete = delete_action.clone();
+
     rsx! {
         div {
             // Docked editor card (not a modal): the schedule stays visible and
             // interactive beside/below it.
             div {
-                class: "card schedule-editor-card",
+                class: "edit-section schedule-editor-card",
                 tabindex: -1,
                 onkeydown: modal_keydown,
-                div { class: "card-header d-flex justify-content-between align-items-center",
-                    h5 { class: "mb-0", "Edit Match: {name}" }
+                div { class: "edit-section-heading d-flex justify-content-between align-items-center",
+                    h5 { class: "mb-0", tabindex: "-1", onmounted: move |event| async move { let _ = event.data.set_focus(true).await; }, "Edit Match: {name}" }
                     button {
                         class: "btn-close",
                         r#type: "button",
                         "aria-label": "Close",
-                        onclick: move |_| on_close.call(()),
+                        disabled: saving() || deleting().busy(),
+                        onclick: move |_| { close_editor() },
                     }
                 }
-                        div { class: "card-body",
+                        div { class: "edit-section-body",
                         // Locked matches stay editable client-side; the server decides
                         // what (if anything) it will accept and the error shows here.
                         if match_locked {
@@ -7258,7 +7739,13 @@ fn EditMatchModal(
                             }
                         }
                         if let Some(err) = error() {
-                            div { class: "alert alert-danger", "{err}" }
+                            div { class: "alert alert-danger", role: "alert", "{err}" }
+                        }
+                        if deleting().busy() { p { role: "status", "Checking match deletion…" } }
+                        if let Some(message) = deleting().message() { p { class: "text-danger", role: "alert", "{message}" } }
+                        if matches!(deleting(), ActionRecovery::NeedsCheck(_)) {
+                            button { r#type: "button", class: "btn btn-outline-secondary mb-2", onclick: move |_| check_delete(false), "Check deletion status" }
+                            p { class: "small text-muted", "Closing reloads the schedule. It does not undo deletion." }
                         }
                         form {
                             onsubmit: onsubmit,
@@ -7267,8 +7754,8 @@ fn EditMatchModal(
                             div { class: "row",
                                 div { class: "col-md-6",
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Match Name" }
-                                        input {
+                                        label { r#for: "schedule-edit-name", class: "form-label", "Match Name" }
+                                        input { id: "schedule-edit-name",
                                             class: "form-control",
                                             "type": "text",
                                             value: "{name}",
@@ -7280,8 +7767,8 @@ fn EditMatchModal(
                                 }
                                 div { class: "col-md-6",
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Field" }
-                                        select {
+                                        label { r#for: "schedule-edit-field", class: "form-label", "Field" }
+                                        select { id: "schedule-edit-field",
                                             class: "form-select",
                                             value: "{field}",
                                             onchange: move |e| on_field_change_edit(e.value()),
@@ -7297,8 +7784,8 @@ fn EditMatchModal(
                             div { class: "row",
                                 div { class: "col-md-6",
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Match Type" }
-                                        select { class: "form-select", value: "{schedule_type}", onchange: move |e| {
+                                        label { r#for: "schedule-edit-type", class: "form-label", "Match Type" }
+                                        select { id: "schedule-edit-type", class: "form-select", value: "{schedule_type}", onchange: move |e| {
                                             let mut schedule_type = schedule_type;
                                             let mut previous_match_id = previous_match_id;
                                             let v = e.value();
@@ -7319,8 +7806,8 @@ fn EditMatchModal(
                                 if schedule_type() != "JOIN" {
                                     div { class: "col-md-6",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Length (min)" }
-                                            input { class: "form-control", "type": "number", min: "0", value: "{length}", oninput: move |e| { let mut length = length; length.set(e.value().parse().unwrap_or(60)); } }
+                                            label { r#for: "schedule-edit-length", class: "form-label", "Length (min)" }
+                                            input { id: "schedule-edit-length", class: "form-control", "type": "number", min: "0", value: "{length}", oninput: move |e| { let mut length = length; length.set(e.value().parse().unwrap_or(60)); } }
                                         }
                                     }
                                 }
@@ -7328,13 +7815,13 @@ fn EditMatchModal(
 
                             if schedule_type() == "STATIC" {
                                 div { class: "mb-3",
-                                    label { class: "form-label", "Start Time" }
-                                    input { class: "form-control", "type": "datetime-local", value: "{start_time}", oninput: move |e| { let mut start_time = start_time; start_time.set(e.value()); } }
+                                    label { r#for: "schedule-edit-start", class: "form-label", "Start Time" }
+                                    input { id: "schedule-edit-start", class: "form-control", "type": "datetime-local", value: "{start_time}", oninput: move |e| { let mut start_time = start_time; start_time.set(e.value()); } }
                                 }
                             } else if schedule_type() == "SAFE" || schedule_type() == "FAST" || schedule_type() == "BREAK" || schedule_type() == "JOIN" {
                                 div { class: "mb-3",
-                                    label { class: "form-label", "Previous Match" }
-                                    select { class: "form-select", value: "{previous_match_id}", onchange: move |e| { let mut previous_match_id = previous_match_id; previous_match_id.set(e.value()); },
+                                    label { r#for: "schedule-edit-previous", class: "form-label", "Previous Match" }
+                                    select { id: "schedule-edit-previous", class: "form-select", value: "{previous_match_id}", onchange: move |e| { let mut previous_match_id = previous_match_id; previous_match_id.set(e.value()); },
                                         option { value: "", "None" }
                                         for m in &matches_on_field_edit {
                                             option { value: "{m.uuid}", "{m.name}" }
@@ -7401,8 +7888,8 @@ fn EditMatchModal(
                                 div { class: "row",
                                     div { class: "col-md-4",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Format" }
-                                            select { class: "form-select", value: "{set_type}", onchange: move |e| { let mut set_type = set_type; set_type.set(e.value()); },
+                                            label { r#for: "schedule-edit-format", class: "form-label", "Format" }
+                                            select { id: "schedule-edit-format", class: "form-select", value: "{set_type}", onchange: move |e| { let mut set_type = set_type; set_type.set(e.value()); },
                                                 option { value: "SETS", "Sets" }
                                                 option { value: "STONES", "Stones" }
                                             }
@@ -7410,15 +7897,15 @@ fn EditMatchModal(
                                     }
                                     div { class: "col-md-4",
                                         div { class: "mb-3",
-                                            label { class: "form-label", "Number of sets" }
-                                            input { class: "form-control", "type": "number", min: "1", value: "{nsets}", oninput: move |e| { let mut nsets = nsets; nsets.set(e.value().parse().unwrap_or(3)); } }
+                                            label { r#for: "schedule-edit-sets", class: "form-label", "Number of sets" }
+                                            input { id: "schedule-edit-sets", class: "form-control", "type": "number", min: "1", value: "{nsets}", oninput: move |e| { let mut nsets = nsets; nsets.set(e.value().parse().unwrap_or(3)); } }
                                         }
                                     }
                                     if set_type() == "STONES" {
                                         div { class: "col-md-4",
                                             div { class: "mb-3",
-                                                label { class: "form-label", "Stones per set" }
-                                                input { class: "form-control", "type": "number", min: "1", value: "{stones_per_set}", oninput: move |e| { let mut stones_per_set = stones_per_set; stones_per_set.set(e.value().parse().unwrap_or(100)); } }
+                                                label { r#for: "schedule-edit-stones", class: "form-label", "Stones per set" }
+                                                input { id: "schedule-edit-stones", class: "form-control", "type": "number", min: "1", value: "{stones_per_set}", oninput: move |e| { let mut stones_per_set = stones_per_set; stones_per_set.set(e.value().parse().unwrap_or(100)); } }
                                             }
                                         }
                                     }
@@ -7431,8 +7918,8 @@ fn EditMatchModal(
                                 }
                                 if schedule_type() == "SAFE" || schedule_type() == "FAST" {
                                     div { class: "mb-3",
-                                        label { class: "form-label", "Skip condition" }
-                                        div { class: "form-text mb-1",
+                                        label { r#for: "ass-entry-edit", class: "form-label", "Skip condition" }
+                                        div { id: "schedule-edit-skip-help", class: "form-text mb-1",
                                             "Optional expression that evaluates to a boolean. If true, this match will be skipped. "
                                             a {
                                                 href: "#",
@@ -7446,6 +7933,7 @@ fn EditMatchModal(
                                         }
                                         AssEntry {
                                             id_suffix: "edit".to_string(),
+                                            described_by: "schedule-edit-skip-help".to_string(),
                                             value: skip_condition(),
                                             on_change: move |v| skip_condition.set(v),
                                             team_options: data.team_options.clone(),
@@ -7460,25 +7948,14 @@ fn EditMatchModal(
                                 }
                             }
 
-                            div { class: "modal-footer",
-                                button { class: "btn btn-secondary", "type": "button", onclick: move |_| on_close.call(()), "Cancel (Esc)" }
-                                button { class: "btn btn-danger", "type": "button",
-                                    onclick: move |_| {
-                                        // Delete match
-                                        let u = url_sig();
-                                        let mid = match_id.clone();
-                                        let cb = on_save.clone();
-                                        async move {
-                                            if let Ok(_) = api::delete_match(&u, &mid).await {
-                                                cb.call(());
-                                            }
-                                        }
-                                    },
-                                    "Delete"
+                            div { class: "modal-footer schedule-editor-actions",
+                                button { class: "btn btn-secondary", r#type: "button", title: "Cancel (Esc)", disabled: saving() || deleting().busy(), onclick: move |_| { close_editor() }, "Cancel" }
+                                button { id: "schedule-delete-trigger", class: "btn btn-danger", r#type: "button", disabled: saving() || deleting().blocks_write(),
+                                    aria_haspopup: "dialog", onclick: move |_| confirm_delete.set(true), "Delete"
                                 }
-                                button { class: "btn btn-primary", "type": "submit", disabled: "{saving}",
+                                button { class: "btn btn-primary", "type": "submit", title: "Save (Shift+Enter)", disabled: saving() || deleting().blocks_write(),
                                     if saving() { span { class: "spinner-border spinner-border-sm me-2" } }
-                                    "Save (⇧↵)"
+                                    "Save"
                                 }
                             }
                         }
@@ -7487,6 +7964,32 @@ fn EditMatchModal(
             if skip_condition_help_open() {
                 SkipConditionHelpModal { on_close: move |_| skip_condition_help_open.set(false) }
             }
+            if confirm_delete() {
+                Modal {
+                    id: "schedule-delete-confirmation",
+                    labelled_by: "schedule-delete-title",
+                    described_by: Some("schedule-delete-description".to_string()),
+                    initial_focus_id: Some("schedule-delete-cancel".to_string()),
+                    return_focus_id: Some("schedule-delete-trigger".to_string()),
+                    kind: ModalKind::AlertDialog,
+                    dismissible: !saving() && !deleting().busy(),
+                    on_close: move |_| { if !saving() && !deleting().busy() { confirm_delete.set(false); } },
+                    div { class: "modal-header",
+                        h2 { id: "schedule-delete-title", class: "modal-title h5", "Delete {name}?" }
+                    }
+                    div { class: "modal-body",
+                        p { id: "schedule-delete-description", "This permanently deletes the match from the schedule. This cannot be undone." }
+                    }
+                    div { class: "modal-footer",
+                        button { id: "schedule-delete-cancel", r#type: "button", class: "btn btn-secondary",
+                            disabled: saving() || deleting().busy(), onclick: move |_| confirm_delete.set(false), "Cancel"
+                        }
+                        button { r#type: "button", class: "btn btn-danger", disabled: saving() || deleting().blocks_write(),
+                            onclick: move |_| { confirm_delete.set(false); delete_action(true); }, "Delete match"
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -7494,12 +7997,12 @@ fn EditMatchModal(
 /// Status color and label for timeline blocks and table status column (same logic in both places).
 fn status_color_and_label(status: &str) -> (String, String) {
     let color = match status {
-        "COMPLETED" => "#7acb8b",
-        "IN_PROGRESS" => "#ffd666",
-        "TIME_FINALIZED" => "#a5adb5",
-        "READY_TO_START" => "#82b1ff",
-        "SKIPPED" => "#adb5bd",
-        _ => "#6cc5d4",
+        "COMPLETED" => "var(--bs-success-bg-subtle)",
+        "IN_PROGRESS" => "var(--bs-warning-bg-subtle)",
+        "TIME_FINALIZED" => "var(--ui-surface-hover)",
+        "READY_TO_START" => "var(--bs-info-bg-subtle)",
+        "SKIPPED" => "var(--ui-surface-hover)",
+        _ => "var(--ui-surface-muted)",
     };
     let label: String = match status {
         "COMPLETED" => "Completed".to_string(),
