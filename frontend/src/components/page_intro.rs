@@ -7,7 +7,7 @@ pub fn PageIntro(
     page_key: String,
     title: String,
     focus_target: String,
-    children: Element,
+    children: Option<Element>,
 ) -> Element {
     let preferences = use_page_banner_preferences();
     let hidden = preferences.read().contains(&page_key);
@@ -16,7 +16,9 @@ pub fn PageIntro(
             id: "page-banner", class: "arctos-page-banner", hidden,
             div { id: "page-banner-content",
                 h1 { id: "page-banner-heading", tabindex: "-1", "{title}" }
-                p { {children} }
+                if let Some(children) = children {
+                    p { {children} }
+                }
             }
             button {
                 id: "page-banner-dismiss", class: "arctos-intro-dismiss", r#type: "button",

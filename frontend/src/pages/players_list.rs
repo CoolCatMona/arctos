@@ -36,7 +36,7 @@ pub fn PlayersList() -> Element {
     let backend = api::base_url();
     rsx! {
         PageIntro { page_key: "players", title: "Players", focus_target: "page-content",
-            "Find players, learn about them, and see their tournament history."
+            "Find players and their tournament history."
         }
         form {
             class: "arctos-directory-search", role: "search",

@@ -30,7 +30,7 @@ pub fn LeaguesIndex() -> Element {
     });
     rsx! {
         PageIntro { page_key: "leagues", title: "Leagues", focus_target: "page-content",
-            "A league connects tournaments across a season, with shared registration and standings."
+            "A league is a long-running series of events with shared registration."
         }
         div { class: "arctos-discovery-toolbar",
             div { class: "arctos-discovery-actions",

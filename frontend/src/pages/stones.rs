@@ -487,9 +487,7 @@ fn StonesPlayerWasm(stones_val: ReadSignal<Option<Result<StonesResponse, String>
         div { class: "container stones-page",
             div { class: "row",
                 div { class: "col-12",
-                    PageIntro { page_key: "stones", title: "Stones", focus_target: "stones-start-pause",
-                        "Stones mark time during a jugger match, with a beat every 1.5 seconds."
-                    }
+                    PageIntro { page_key: "stones", title: "Stones", focus_target: "stones-start-pause" }
                     div { class: "card stones-player-card",
                         div { class: "card-body",
                             div { class: "stones-counter-panel",

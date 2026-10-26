@@ -24,7 +24,7 @@ pub fn TeamsList() -> Element {
     let backend = api::base_url();
     rsx! {
         PageIntro { page_key: "teams", title: "Teams", focus_target: "page-content",
-            "Find teams, meet their players, and see where they’ve competed."
+            "Find teams and their tournament history."
         }
         form {
             class: "arctos-directory-search", role: "search",
