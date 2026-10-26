@@ -1,17 +1,11 @@
 use super::directory_state::{use_directory, use_directory_scroll, Directory};
-use super::index::{final_day_has_passed, format_date_display, listing_date, UserRegBadges};
+use super::index::{format_date_display, listing_date, UserRegBadges};
 use crate::api;
 use crate::components::{OrganizeContext, OrganizeMenu, PageIntro};
 use crate::types::{LeagueEventDates, LeagueInfo, UserRegStatus};
 use crate::Route;
-use chrono::{Local, NaiveDate};
+use chrono::Local;
 use dioxus::prelude::*;
-
-fn league_is_past(dates: Option<&LeagueEventDates>, today: NaiveDate) -> bool {
-    dates.filter(|dates| dates.event_count > 0).is_some_and(|dates| {
-        final_day_has_passed(dates.end_date.as_deref().or(dates.start_date.as_deref()), today)
-    })
-}
 
 #[component]
 pub fn LeaguesIndexWithQuery(q: String, view: String) -> Element {
@@ -21,17 +15,16 @@ pub fn LeaguesIndexWithQuery(q: String, view: String) -> Element {
 #[component]
 pub fn LeaguesIndex() -> Element {
     let mut data = use_resource(move || async move {
-        api::leagues_list().await.map_err(|error| error.to_string())
+        api::leagues_list(Local::now().date_naive()).await.map_err(|error| error.to_string())
     });
     let controls = use_directory(Directory::Leagues, true);
     let mut search = controls.search;
     let show_past = move || (controls.state)().past;
     let val = data.value();
     use_directory_scroll(controls, val.read().as_ref().is_some_and(Result::is_ok));
-    let today = Local::now().date_naive();
     let counts = val.read().as_ref().and_then(|result| result.as_ref().ok()).map(|response| {
         let past = response.leagues.iter().filter(|league| {
-            league_is_past(response.event_dates.get(&league.league_url), today)
+            response.past_leagues.contains(&league.league_url)
         }).count();
         (response.leagues.len() - past, past)
     });
@@ -77,7 +70,7 @@ pub fn LeaguesIndex() -> Element {
             {
                 let query = search().trim().to_lowercase();
                 let mut filtered: Vec<_> = response.leagues.iter().filter(|league| {
-                    league_is_past(response.event_dates.get(&league.league_url), today) == show_past()
+                    response.past_leagues.contains(&league.league_url) == show_past()
                         && league.name.to_lowercase().contains(&query)
                 }).collect();
                 if show_past() {
@@ -193,46 +186,5 @@ fn LeagueCard(
                 Link { to: Route::LeagueHome { league_url: league.league_url }, class: "btn btn-outline-secondary w-100", "View league" i { class: "fas fa-arrow-right", aria_hidden: "true" } }
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn dates(start: Option<&str>, end: Option<&str>, event_count: u32) -> LeagueEventDates {
-        LeagueEventDates {
-            start_date: start.map(str::to_owned),
-            end_date: end.map(str::to_owned),
-            event_count,
-        }
-    }
-
-    #[test]
-    fn final_event_day_remains_active_in_the_viewers_calendar() {
-        let dates = dates(Some("2026-04-01T00:00:00"), Some("2026-10-22T00:00:00"), 3);
-        assert!(!league_is_past(Some(&dates), NaiveDate::from_ymd_opt(2026, 10, 22).unwrap()));
-        assert!(league_is_past(Some(&dates), NaiveDate::from_ymd_opt(2026, 10, 23).unwrap()));
-    }
-
-    #[test]
-    fn a_future_round_keeps_an_already_started_league_active() {
-        let dates = dates(Some("2026-04-01T00:00:00"), Some("2026-12-01T00:00:00"), 4);
-        assert!(!league_is_past(Some(&dates), NaiveDate::from_ymd_opt(2026, 10, 22).unwrap()));
-    }
-
-    #[test]
-    fn a_round_without_an_end_date_uses_its_start_date() {
-        let dates = dates(Some("2026-10-21T00:00:00"), None, 1);
-        assert!(league_is_past(Some(&dates), NaiveDate::from_ymd_opt(2026, 10, 22).unwrap()));
-    }
-
-    #[test]
-    fn missing_or_invalid_dates_and_empty_leagues_remain_active() {
-        let today = NaiveDate::from_ymd_opt(2026, 10, 22).unwrap();
-        assert!(!league_is_past(None, today));
-        assert!(!league_is_past(Some(&dates(None, None, 0)), today));
-        assert!(!league_is_past(Some(&dates(Some("2020-01-01"), Some("invalid"), 1)), today));
-        assert!(!league_is_past(Some(&dates(Some("2020-01-01"), Some("2020-01-01"), 0)), today));
     }
 }

@@ -154,9 +154,12 @@ pub struct LeaguesListResponse {
     pub user_reg_status: std::collections::HashMap<String, UserRegStatus>,
     #[serde(default)]
     pub event_dates: std::collections::HashMap<String, LeagueEventDates>,
+    /// Seasons that have ended, accounting for every round, including drafts.
+    #[serde(default)]
+    pub past_leagues: std::collections::HashSet<String>,
 }
 
-/// The date range and count of a league's published events.
+/// The date range and count of the league events visible to the current viewer.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct LeagueEventDates {
     pub start_date: Option<String>,
@@ -179,6 +182,7 @@ mod league_list_response_tests {
         assert!(response.team_counts.is_empty());
         assert!(response.user_reg_status.is_empty());
         assert!(response.event_dates.is_empty());
+        assert!(response.past_leagues.is_empty());
     }
 }
 

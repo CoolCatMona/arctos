@@ -1,9 +1,9 @@
-"""League season dates and event lists use the caller's round visibility."""
+"""League lifecycle includes every round while visible metadata respects access."""
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import event
+from sqlalchemy import event, text
 
 from models import League, Player, PlayerRegistration, Team, TeamRegistration, TO, Tournament, db
 from tests.utils import login_as, make_registrable_config
@@ -36,8 +36,8 @@ def add_round(league, slug, start, end=None, *, published=True):
     )
 
 
-def listing(client):
-    response = client.get("/_api/leagues")
+def listing(client, today="2026-10-26"):
+    response = client.get("/_api/leagues", query_string={"today": today})
     assert response.status_code == 200
     return response.get_json()
 
@@ -61,6 +61,7 @@ def test_listing_ranges_cover_all_public_rounds_with_missing_end_fallback(client
         }
     }
     assert payload["leagues"][0]["registration_open"] is False
+    assert payload["past_leagues"] == []
 
 
 def test_listing_uses_latest_end_instead_of_latest_start(client):
@@ -91,6 +92,90 @@ def test_listing_empty_and_hidden_rounds_have_unknown_dates_and_private_leagues_
     }
     assert private.url not in payload["team_counts"]
     assert private.url not in payload["user_reg_status"]
+    assert payload["past_leagues"] == [hidden_rounds.url]
+
+
+@pytest.mark.parametrize("published", [True, False])
+@pytest.mark.parametrize(
+    ("end", "today", "past"),
+    [
+        ("2026-10-26T18:00:00", "2026-10-25", False),
+        ("2026-10-26T18:00:00", "2026-10-26", False),
+        ("2026-10-26T18:00:00", "2026-10-27", True),
+        (None, "2026-10-24", False),
+        (None, "2026-10-25", False),
+        (None, "2026-10-26", True),
+    ],
+)
+def test_season_becomes_past_only_after_its_last_round_day(client, published, end, today, past):
+    league = add_league("season")
+    add_round(league, "first-round", "2026-04-01")
+    add_round(league, "final-round", "2026-10-25T09:00:00", end, published=published)
+    db.session.commit()
+
+    payload = listing(client, today)
+    assert payload["past_leagues"] == ([league.url] if past else [])
+    if not published:
+        assert payload["event_dates"][league.url] == {
+            "start_date": "2026-04-01T00:00:00",
+            "end_date": "2026-04-01T00:00:00",
+            "event_count": 1,
+        }
+
+
+@pytest.mark.parametrize("has_finished_round", [False, True])
+def test_unknown_round_dates_keep_a_season_active(client, has_finished_round):
+    league = add_league("undated-season")
+    add_league("empty-season")
+    if has_finished_round:
+        add_round(league, "finished-round", "2025-04-01")
+    add_round(league, "undated-draft", "2025-05-01", published=False)
+    db.session.flush()
+    # Legacy SQLite rows can contain an empty date even though model-created
+    # rounds require a datetime. Missing draft dates cannot prove a season ended.
+    db.session.execute(text("UPDATE tournaments SET start_date = '' WHERE url = 'undated-draft'"))
+    db.session.commit()
+
+    payload = listing(client)
+    assert payload["past_leagues"] == []
+    assert payload["event_dates"][league.url]["event_count"] == int(has_finished_round)
+
+
+def test_listing_without_today_uses_the_current_utc_calendar_day(client):
+    today = datetime.now(timezone.utc).date()
+    ended = add_league("ended-yesterday")
+    ongoing = add_league("ends-today")
+    add_round(ended, "yesterday", (today - timedelta(days=1)).isoformat())
+    add_round(ongoing, "today", today.isoformat())
+    db.session.commit()
+
+    response = client.get("/_api/leagues")
+    assert response.status_code == 200
+    assert response.get_json()["past_leagues"] == [ended.url]
+
+
+@pytest.mark.parametrize(
+    "today",
+    [
+        "",
+        "20261026",
+        "2026-1-1",
+        "2026-02-29",
+        "2026-13-01",
+        "2026-10-26T00:00:00",
+        "2026-W44-1",
+        " 2026-10-26",
+        "0000-01-01",
+    ],
+)
+def test_listing_rejects_invalid_calendar_day(client, today):
+    response = client.get("/_api/leagues", query_string={"today": today})
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "today must be a valid calendar date in YYYY-MM-DD format."}
+
+
+def test_listing_accepts_a_valid_leap_day(client):
+    assert listing(client, "2028-02-29")["past_leagues"] == []
 
 
 @pytest.mark.parametrize("owner_kind", ["player", "team"])
@@ -134,6 +219,10 @@ def test_league_season_dates_match_the_rounds_visible_on_its_page(
         "end_date": "2028-12-31T00:00:00" if can_see_drafts else "2025-06-01T00:00:00",
         "event_count": len(events),
     }
+    assert payload["past_leagues"] == []
+    # The lifecycle is identical for visitors and organizers; only event
+    # metadata differs. Once the unpublished final round ends, both see Past.
+    assert listing(client, "2029-01-01")["past_leagues"] == [league.url]
 
 
 @pytest.mark.parametrize("league_count", [0, 1, 5])
@@ -154,8 +243,9 @@ def test_listing_batches_round_aggregation_for_the_directory(client, league_coun
     finally:
         event.remove(db.engine, "before_cursor_execute", capture)
     assert len(payload["event_dates"]) == league_count
-    assert len(round_queries) == (1 if league_count else 0)
+    assert len(round_queries) == (2 if league_count else 0)
     assert all(summary["event_count"] == 1 for summary in payload["event_dates"].values())
+    assert set(payload["past_leagues"]) == {f"season-{index}" for index in range(league_count)}
 
 
 @pytest.mark.parametrize("kind", ["player", "team"])
@@ -180,6 +270,7 @@ def test_listing_retains_user_registration_payment_waiver_and_team_counts(client
         "waiver_status": "NOT_SIGNED" if kind == "player" else None,
     }
     assert payload["event_dates"][league.url]["event_count"] == 0
+    assert payload["past_leagues"] == []
 
 
 @pytest.mark.parametrize("kind", ["player", "team"])
@@ -197,6 +288,7 @@ def test_new_private_league_remains_discoverable_to_its_creator(client, player, 
     assert [(league["league_url"], league["published"]) for league in payload["leagues"]] == [(slug, False)]
     assert payload["event_dates"][slug] == {"start_date": None, "end_date": None, "event_count": 0}
     assert payload["team_counts"][slug] == 0
+    assert payload["past_leagues"] == []
 
 
 @pytest.mark.parametrize("owner_kind", ["player", "team"])
@@ -212,7 +304,8 @@ def test_private_league_discovery_requires_typed_organizer_membership(
     db.session.add_all([colliding, assigned, unrelated])
     public = add_league("public-season")
     private = add_league("private-season", published=False)
-    add_league("other-private-season", published=False)
+    other_private = add_league("other-private-season", published=False)
+    add_round(other_private, "finished-private-round", "2025-01-01", published=False)
     db.session.add_all(
         [
             TO(league_id=private.url, user_id=owner.id, user_type=owner_kind),
@@ -239,6 +332,8 @@ def test_private_league_discovery_requires_typed_organizer_membership(
     assert {league["league_url"] for league in payload["leagues"]} == expected
     assert set(payload["event_dates"]) == set(payload["team_counts"]) == expected
     assert set(payload["user_reg_status"]) <= expected
+    assert payload["past_leagues"] == []
+    assert listing(client, "2029-01-01")["past_leagues"] == ([private.url] if viewer == "assigned_to" else [])
     detail = client.get(f"/_api/leagues/{private.url}")
     if viewer == "assigned_to":
         assert detail.status_code == 200

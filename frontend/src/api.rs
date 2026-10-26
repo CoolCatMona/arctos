@@ -701,9 +701,10 @@ pub async fn create_league(
     response_json(r).await
 }
 
-pub async fn leagues_list() -> Result<crate::types::LeaguesListResponse, String> {
+pub async fn leagues_list(today: chrono::NaiveDate) -> Result<crate::types::LeaguesListResponse, String> {
     let c = client();
     let r = with_credentials(c.get(format!("{}/_api/leagues", base())))
+        .query(&[("today", today.to_string())])
         .send()
         .await
         .map_err(|e| e.to_string())?;

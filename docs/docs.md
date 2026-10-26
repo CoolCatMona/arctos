@@ -10,6 +10,11 @@
 - **Run a side event:** see [Running a Side Comp](#running-a-side-comp).
 - **Play the stone beat:** open [Stones](/stones); see [Stones](#stones) for synchronization and calibration.
 
+Leagues stay **Active** while any event is current or upcoming, including events
+the organizer has not published yet. A league moves to **Past** after its final
+event's end date has passed in your local calendar. Event dates and counts show
+only the events you have access to; league organizers can also see drafts.
+
 ## Table of Contents
 
 About Arctos

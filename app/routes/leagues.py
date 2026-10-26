@@ -23,6 +23,8 @@ in their dedicated blueprints, not here.
 from __future__ import annotations
 
 import collections
+from datetime import date, datetime, timezone
+import re
 
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
@@ -108,7 +110,23 @@ def league_banner_photo(league_url):
 
 @bp.route("/leagues", methods=["GET"])
 def leagues_list():
-    """List public leagues and the caller's drafts, with visible round metadata."""
+    """List viewable leagues, visible round metadata, and whole-season lifecycle.
+
+    ``today`` accepts the viewer's ISO calendar day; other callers use the
+    current UTC day. A season stays active through every round's final day,
+    including unpublished rounds, without exposing those rounds' details.
+    """
+    today_value = request.args.get("today")
+    if today_value is None:
+        today = datetime.now(timezone.utc).date()
+    else:
+        try:
+            if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", today_value):
+                raise ValueError
+            today = date.fromisoformat(today_value)
+        except ValueError:
+            return jsonify({"error": "today must be a valid calendar date in YYYY-MM-DD format."}), 400
+
     visible = League.published == True
     if current_user.is_authenticated:
         organized_ids = db.session.query(TO.league_id).filter(
@@ -121,8 +139,26 @@ def leagues_list():
 
     team_counts = {l.url: 0 for l in leagues}
     event_dates = {l.url: {"start_date": None, "end_date": None, "event_count": 0} for l in leagues}
+    past_leagues = []
     if leagues:
         league_ids = [l.url for l in leagues]
+        # Lifecycle uses every round. Only the league URL is returned, so a
+        # future draft can keep a season active without publishing its date.
+        # Unknown dates prevent the season from being classified as finished.
+        final_day = func.date(func.coalesce(Tournament.end_date, Tournament.start_date))
+        past_leagues = [
+            row.league_id
+            for row in (
+                db.session.query(Tournament.league_id)
+                .filter(Tournament.league_id.in_(league_ids))
+                .group_by(Tournament.league_id)
+                .having(
+                    func.count(Tournament.url) == func.count(final_day),
+                    func.max(final_day) < today.isoformat(),
+                )
+                .all()
+            )
+        ]
         # Match the events shown on each league page. Organizers can see draft
         # rounds, so those rounds also contribute to their league's season dates.
         # An empty league has no inferred end date.
@@ -190,6 +226,7 @@ def leagues_list():
         {
             "leagues": [league_to_dict(l) for l in leagues],
             "event_dates": event_dates,
+            "past_leagues": past_leagues,
             "team_counts": team_counts,
             "user_reg_status": user_reg_status,
         }
