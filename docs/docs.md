@@ -52,6 +52,7 @@ For tournament organizers
     - [Head Ref Options](#head-ref-options)
     - [Visibility and Access Control](#visibility-and-access-control)
  - [Match Schedule Setup](#match-schedule-setup)
+    - [Activities and Side Competitions](#activities-and-side-competitions)
     - [Tags and References: Specifying Teams](#tags-and-references-specifying-teams)
     - [Static Scheduling](#static-scheduling)
     - [Dynamic Matches](#dynamic-matches)
@@ -630,17 +631,39 @@ called Arctos Schedule Script (ASS).
 
 You can see the full ASS docs [here](arctos-schedule-script.md).
 
+### Activities and Side Competitions
+
+Use **Add to schedule** in the schedule editor for announcements, check-in,
+awards, or other activities. Enter a name, start and end time, and any description
+or location players need. A field is optional. Each entry can span up to 31 days.
+
+Choose a side competition to schedule one that already exists, or create a new
+competition from the same form. You can also schedule a competition from its
+own page. Its schedule entry uses the competition's current name and description.
+Players can tap the entry to read the details or open the competition.
+
+Activity times stay fixed when matches run early or late. They do not delay
+matches or reserve a field in the match scheduler. Use a [break](#breaks) when
+the following matches must wait. Activities follow the event's schedule
+publication setting and can be used before any matches have been added.
+
 ### Exporting and Importing Schedules
 
 The schedule editor offers **Export TOML** and **Import TOML**. An export contains
 schedule definitions: fields, tags, script variables, match types, planned times,
-and team/referee references. It is not a backup of scores, points, or footage.
+team/referee references, and activities. It is not a backup of scores, points,
+or footage.
 
 An import is authoritative for the destination schedule. Fields, tags, variables,
 and matches omitted from the file can be removed. Export the current schedule
 and back up important event data before replacing it. Review import warnings and
 resolved team/tag references before using the result. Do not treat an exported
 schedule as a complete event backup.
+
+The `schedule_items` collection contains activities. Importing that collection
+replaces the event's activities; `schedule_items = []` clears them. Files without
+`schedule_items` leave existing activities in place. A linked side competition
+must belong to the destination event.
 
 ## Side Comps
 
