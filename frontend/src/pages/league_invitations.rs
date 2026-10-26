@@ -44,7 +44,7 @@ pub fn LeagueInvitations(league_url: String) -> Element {
                                 p { class: "data-section-summary",
                                     strong { "Current Team Size: " }
                                     "{d.current_team_size}"
-                                    if let Some(max) = d.tournament.max_team_size_roster {
+                                    if let Some(max) = d.tournament.max_team_size_roster.filter(|max| *max > 0) {
                                         " / {max} (max)"
                                     }
                                 }
@@ -62,7 +62,10 @@ pub fn LeagueInvitations(league_url: String) -> Element {
                                             for invitation in d.invitations.iter() {
                                                 {
                                                     let inv_id = invitation.registration.id;
-                                                    let at_cap = d.tournament.max_team_size_roster.map(|max| d.current_team_size >= max).unwrap_or(false);
+                                                    let at_cap = d.tournament
+                                                        .max_team_size_roster
+                                                        .filter(|max| *max > 0)
+                                                        .is_some_and(|max| d.current_team_size >= max);
                                                     rsx! {
                                                         tr { key: "{invitation.registration.id}",
                                                             td { class: "table-copy",
