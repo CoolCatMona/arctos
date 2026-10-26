@@ -12,9 +12,15 @@ use crate::time_format::{
     datetime_local_input as schedule_item_local_input, datetime_local_to_utc as local_input_utc,
 };
 
+fn activity_date_time_label(iso: &str) -> String {
+    chrono::NaiveDateTime::parse_from_str(&schedule_item_local_input(iso), "%Y-%m-%dT%H:%M")
+        .map(|dt| dt.format("%a, %b %-d · %H:%M").to_string())
+        .unwrap_or_else(|_| iso.to_string())
+}
+
 pub fn activity_time_label(iso: &str) -> String {
     chrono::NaiveDateTime::parse_from_str(&schedule_item_local_input(iso), "%Y-%m-%dT%H:%M")
-        .map(|dt| dt.format("%a, %b %-d · %-I:%M %p").to_string())
+        .map(|dt| dt.format("%H:%M").to_string())
         .unwrap_or_else(|_| iso.to_string())
 }
 
@@ -23,13 +29,11 @@ pub fn activity_time_range(start: &str, end: &str) -> String {
     let end_local = schedule_item_local_input(end);
     let same_day = start_local.get(..10) == end_local.get(..10);
     let end_label = if same_day {
-        chrono::NaiveDateTime::parse_from_str(&end_local, "%Y-%m-%dT%H:%M")
-            .map(|dt| dt.format("%-I:%M %p").to_string())
-            .unwrap_or_else(|_| activity_time_label(end))
-    } else {
         activity_time_label(end)
+    } else {
+        activity_date_time_label(end)
     };
-    format!("{} – {}", activity_time_label(start), end_label)
+    format!("{} – {}", activity_date_time_label(start), end_label)
 }
 
 fn input_utc_preserving_offset(value: &str, original: Option<&str>) -> Option<String> {
@@ -402,9 +406,9 @@ pub fn ScheduleItemDialog(
                                         value: "{mode}",
                                         disabled: busy(),
                                         onchange: move |e| mode.set(e.value()),
-                                        option { value: "activity", "Activity or announcement" }
-                                        option { value: "existing", "Existing side competition" }
-                                        option { value: "new", "New side competition" }
+                                        option { value: "activity", selected: mode() == "activity", "Activity or announcement" }
+                                        option { value: "existing", selected: mode() == "existing", "Existing side competition" }
+                                        option { value: "new", selected: mode() == "new", "New side competition" }
                                     }
                                 }
                             }
@@ -418,10 +422,10 @@ pub fn ScheduleItemDialog(
                                         required: true,
                                         disabled: busy() || editing_id.is_some() || initial_sidecomp.is_some(),
                                         onchange: move |e| competition_id.set(e.value()),
-                                        option { value: "", "Choose a competition" }
+                                        option { value: "", selected: competition_id().is_empty(), "Choose a competition" }
                                         if let Some(Ok(items)) = competitions.read().as_ref() {
                                             for item in items {
-                                                option { value: "{item.id}", "{item.name}" }
+                                                option { value: "{item.id}", selected: competition_id() == item.id.to_string(), "{item.name}" }
                                             }
                                         }
                                     }
@@ -465,9 +469,9 @@ pub fn ScheduleItemDialog(
                                             value: "{kind}",
                                             disabled: busy(),
                                             onchange: move |e| kind.set(e.value()),
-                                            option { value: "DUELING", "Dueling" }
-                                            option { value: "CHAIN_BREAKING", "Chain / Breaking" }
-                                            option { value: "OTHER", "Other" }
+                                            option { value: "DUELING", selected: kind() == "DUELING", "Dueling" }
+                                            option { value: "CHAIN_BREAKING", selected: kind() == "CHAIN_BREAKING", "Chain / Breaking" }
+                                            option { value: "OTHER", selected: kind() == "OTHER", "Other" }
                                         }
                                     }
                                 }
@@ -525,9 +529,9 @@ pub fn ScheduleItemDialog(
                                     value: "{field}",
                                     disabled: busy(),
                                     onchange: move |e| field.set(e.value()),
-                                    option { value: "", "No field" }
-                                    for field in &data.fields {
-                                        option { value: "{field.name}", "{field.name}" }
+                                    option { value: "", selected: field().is_empty(), "No field" }
+                                    for option in &data.fields {
+                                        option { value: "{option.name}", selected: field() == option.name, "{option.name}" }
                                     }
                                 }
                             }
@@ -689,13 +693,14 @@ mod tests {
 
     #[test]
     fn overnight_range_keeps_both_dates() {
+        assert_eq!(activity_time_label("2026-10-26T14:00:00Z"), "14:00");
         assert_eq!(
             activity_time_range("2026-10-26T23:00:00Z", "2026-10-27T01:00:00Z"),
-            "Mon, Oct 26 · 11:00 PM – Tue, Oct 27 · 1:00 AM"
+            "Mon, Oct 26 · 23:00 – Tue, Oct 27 · 01:00"
         );
         assert_eq!(
             activity_time_range("2026-10-26T09:00:00Z", "2026-10-26T10:00:00Z"),
-            "Mon, Oct 26 · 9:00 AM – 10:00 AM"
+            "Mon, Oct 26 · 09:00 – 10:00"
         );
     }
 }

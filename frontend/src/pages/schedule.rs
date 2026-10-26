@@ -7393,7 +7393,7 @@ fn ScheduleTimeline(
                                             let item = item.clone();
                                             let label = if item.sidecomp_id.is_some() { "Side competition" } else { "Activity" };
                                             let icon = if item.sidecomp_id.is_some() { "fas fa-trophy" } else { "far fa-calendar" };
-                                            let time = format!("{} – {}", ev.start_time.format("%-I:%M %p"), ev.end_time.format("%-I:%M %p"));
+                                            let time = format!("{} – {}", ev.start_time.format("%H:%M"), ev.end_time.format("%H:%M"));
                                             rsx! {
                                                 button { r#type: "button", class: "schedule-activity-block", style,
                                                     aria_label: format!("{}: {}, {}", label, item.title, time), aria_haspopup: "dialog",
