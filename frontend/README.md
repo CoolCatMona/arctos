@@ -83,7 +83,9 @@ Use semantic color variables rather than hardcoded brand colors:
 - `--ui-bg`, `--ui-surface`, and `--ui-border` for containers.
 - `--ui-text` and `--ui-muted` for copy.
 - `--ui-link` for links and focus indicators.
-- `--ui-accent` with `--ui-accent-contrast` for filled actions.
+- `--ui-accent` with `--ui-accent-contrast` for filled actions and selected states.
+- `--ui-primary-*` overrides for primary buttons when they need a different fill
+  from other indicators, as in Monokai Dark.
 - Status tokens for success, warning, and error states.
 
 Keep primary actions visible, give icon buttons accessible names, and use

@@ -243,45 +243,84 @@
   --ui-shadow-strong: #37322c30;
 
 }
+/* Classic Monokai keeps interface chrome neutral and reserves bright hues for
+   meaningful content. Light is a companion adaptation of the dark palette.
+   Source: https://github.com/microsoft/vscode/blob/main/extensions/theme-monokai/themes/monokai-color-theme.json */
 .arctos-app[data-palette="monokai"] {
-  --ui-bg: #f8f8f2;
-  --ui-surface: #fffffa;
-  --ui-surface-muted: #e8e8dc;
-  --ui-surface-hover: #dddecf;
-  --ui-border: #c6c7b6;
-  --ui-control-border: #777865;
-  --ui-text: #272822;
-  --ui-muted: #595b4d;
-  --ui-inverse-bg: #171814;
-  --ui-accent: #a8134b;
-  --ui-accent-hover: #8f1041;
-  --ui-accent-active: #760d35;
-  --ui-accent-soft: #f5dce5;
-  --ui-accent-text: #941344;
+  --ui-bg: #faf8f2;
+  --ui-surface: #fffdf7;
+  --ui-surface-muted: #eeece4;
+  --ui-surface-hover: #e3e0d6;
+  --ui-border: #d9d5cb;
+  --ui-control-border: #7c786c;
+  --ui-text: #292923;
+  --ui-muted: #625f53;
+  --ui-inverse-bg: #1e1f1c;
+  --ui-accent: #625f53;
+  --ui-accent-hover: #514f45;
+  --ui-accent-active: #454239;
+  --ui-accent-soft: #e7e4db;
+  --ui-accent-text: #47463d;
   --ui-accent-contrast: #ffffff;
   --ui-link: #036573;
   --ui-link-hover: #034e5a;
   --ui-gradient-start: #1e1f1c;
-  --ui-gradient-end: #514059;
-  --ui-nav-surface: #e8e8dc;
-  --ui-nav-text: #272822;
-  --ui-nav-muted: #595b4d;
-  --ui-nav-border: #c6c7b6;
-  --ui-text-rgb: 39, 40, 34;
-  --ui-muted-rgb: 89, 91, 77;
-  --ui-surface-rgb: 255, 255, 250;
-  --ui-accent-rgb: 168, 19, 75;
+  --ui-gradient-end: #414339;
+  --ui-nav-surface: #f0eee7;
+  --ui-nav-text: #292923;
+  --ui-nav-muted: #625f53;
+  --ui-nav-border: #d9d5cb;
+  --ui-text-rgb: 41, 41, 35;
+  --ui-muted-rgb: 98, 95, 83;
+  --ui-surface-rgb: 255, 253, 247;
+  --ui-accent-rgb: 98, 95, 83;
   --ui-link-rgb: 3, 101, 115;
   --ui-link-hover-rgb: 3, 78, 90;
-  --ui-accent-border: #941344;
-  --ui-nav-active-bg: #a8134b;
-  --ui-nav-active-text: #ffffff;
-  --ui-gradient-contrast: #ffffff;
+  --ui-accent-border: #625f53;
+  --ui-nav-active-bg: #dedad0;
+  --ui-nav-active-text: #292923;
+  --ui-gradient-contrast: #f8f8f2;
   --ui-inverse-text: #ffffff;
-  --ui-neutral-fill: #595b4d;
-  --ui-media-bg: #171814;
-  --ui-shadow: #27282218;
-  --ui-shadow-strong: #27282230;
+  --ui-neutral-fill: #625f53;
+  --ui-media-bg: #1e1f1c;
+  --ui-shadow: #29292312;
+  --ui-shadow-strong: #29292328;
+  --ui-success: #4a6515;
+  --ui-success-rgb: 74, 101, 21;
+  --ui-success-hover: #3e5512;
+  --ui-success-active: #33450f;
+  --ui-success-text: #4a6515;
+  --ui-success-soft: #eef4da;
+  --ui-success-border: #a6b777;
+  --ui-success-contrast: #ffffff;
+  --ui-success-fill: #4a6515;
+  --ui-warning: #e6db74;
+  --ui-warning-rgb: 230, 219, 116;
+  --ui-warning-hover: #dbcd59;
+  --ui-warning-active: #cbbd46;
+  --ui-warning-text: #785d0c;
+  --ui-warning-soft: #fbf5d5;
+  --ui-warning-border: #b7a151;
+  --ui-warning-contrast: #292923;
+  --ui-warning-fill: #e6db74;
+  --ui-danger: #b52855;
+  --ui-danger-rgb: 181, 40, 85;
+  --ui-danger-hover: #9b2048;
+  --ui-danger-active: #801b3b;
+  --ui-danger-text: #a51f4a;
+  --ui-danger-soft: #fae8ed;
+  --ui-danger-border: #d495a8;
+  --ui-danger-contrast: #ffffff;
+  --ui-danger-fill: #b52855;
+  --ui-info: #036573;
+  --ui-info-rgb: 3, 101, 115;
+  --ui-info-hover: #034e5a;
+  --ui-info-active: #033f49;
+  --ui-info-text: #036573;
+  --ui-info-soft: #e2f4f5;
+  --ui-info-border: #80b1b7;
+  --ui-info-contrast: #ffffff;
+  --ui-info-fill: #036573;
 }
 .arctos-app[data-bs-theme="dark"] {
   color-scheme: dark;
@@ -453,44 +492,86 @@
   --ui-bg: #272822;
   --ui-surface: #2f3029;
   --ui-surface-muted: #3e3d32;
-  --ui-surface-hover: #49483d;
-  --ui-border: #6c6d5d;
-  --ui-control-border: #969783;
+  --ui-surface-hover: #414339;
+  --ui-border: #464741;
+  --ui-control-border: #99947c;
   --ui-text: #f8f8f2;
-  --ui-muted: #c4c2ad;
-  --ui-inverse-bg: #171814;
-  --ui-accent: #f92672;
-  --ui-accent-hover: #ff5791;
-  --ui-accent-active: #ff83ad;
-  --ui-accent-soft: #472c38;
-  --ui-accent-text: #ffa0c4;
+  --ui-muted: #c2c2bf;
+  --ui-inverse-bg: #1e1f1c;
+  --ui-accent: #99947c;
+  --ui-accent-hover: #aaa48c;
+  --ui-accent-active: #bdb59d;
+  --ui-accent-soft: #414339;
+  --ui-accent-text: #f8f8f2;
   --ui-accent-contrast: #171814;
+  /* Buttons need darker fills than progress, selection, and drag indicators. */
+  --ui-primary-bg: #75715e;
+  --ui-primary-hover-bg: #686552;
+  --ui-primary-active-bg: #5c5948;
+  --ui-primary-color: #f8f8f2;
   --ui-link: #66d9ef;
   --ui-link-hover: #a1e8f5;
   --ui-gradient-start: #1e1f1c;
-  --ui-gradient-end: #514059;
+  --ui-gradient-end: #414339;
   --ui-nav-surface: #1e1f1c;
   --ui-nav-text: #f8f8f2;
-  --ui-nav-muted: #c4c2ad;
-  --ui-nav-border: #6c6d5d;
+  --ui-nav-muted: #c2c2bf;
+  --ui-nav-border: #414339;
   --ui-text-rgb: 248, 248, 242;
-  --ui-muted-rgb: 196, 194, 173;
+  --ui-muted-rgb: 194, 194, 191;
   --ui-surface-rgb: 47, 48, 41;
-  --ui-accent-rgb: 249, 38, 114;
+  --ui-accent-rgb: 153, 148, 124;
   --ui-link-rgb: 102, 217, 239;
   --ui-link-hover-rgb: 161, 232, 245;
-  --ui-accent-border: #ffa0c4;
-  --ui-nav-active-bg: #f92672;
-  --ui-nav-active-text: #171814;
-  --ui-gradient-contrast: #ffffff;
-  --ui-inverse-text: #ffffff;
-  --ui-neutral-fill: #595b4d;
-  --ui-media-bg: #171814;
-  --ui-shadow: #00000040;
-  --ui-shadow-strong: #00000070;
+  --ui-accent-border: #99947c;
+  --ui-nav-active-bg: #414339;
+  --ui-nav-active-text: #f8f8f2;
+  --ui-gradient-contrast: #f8f8f2;
+  --ui-inverse-text: #f8f8f2;
+  --ui-neutral-fill: #75715e;
+  --ui-media-bg: #1e1f1c;
+  --ui-shadow: #00000030;
+  --ui-shadow-strong: #00000060;
+  --ui-success: #a6e22e;
+  --ui-success-rgb: 166, 226, 46;
+  --ui-success-hover: #bbea65;
+  --ui-success-active: #d0f19b;
+  --ui-success-text: #a6e22e;
+  --ui-success-soft: #303b21;
+  --ui-success-border: #6f8c33;
+  --ui-success-contrast: #1e1f1c;
+  --ui-success-fill: #4a6515;
+  --ui-warning: #e6db74;
+  --ui-warning-rgb: 230, 219, 116;
+  --ui-warning-hover: #eee69b;
+  --ui-warning-active: #f5efbf;
+  --ui-warning-text: #e6db74;
+  --ui-warning-soft: #3b371e;
+  --ui-warning-border: #968b43;
+  --ui-warning-contrast: #292923;
+  --ui-warning-fill: #e6db74;
+  --ui-danger: #f92672;
+  --ui-danger-rgb: 249, 38, 114;
+  --ui-danger-hover: #ff5791;
+  --ui-danger-active: #ff83ad;
+  --ui-danger-text: #ff9ab9;
+  --ui-danger-soft: #442631;
+  --ui-danger-border: #ad4e6e;
+  --ui-danger-contrast: #171814;
+  --ui-danger-fill: #b52855;
+  --ui-info: #66d9ef;
+  --ui-info-rgb: 102, 217, 239;
+  --ui-info-hover: #8fe3f3;
+  --ui-info-active: #b2edf7;
+  --ui-info-text: #66d9ef;
+  --ui-info-soft: #233c40;
+  --ui-info-border: #488c99;
+  --ui-info-contrast: #171814;
+  --ui-info-fill: #036573;
 }
 .arctos-app *, .arctos-app *::before, .arctos-app *::after { box-sizing: border-box; }
 .arctos-app :focus-visible { outline: 3px solid var(--ui-link); outline-offset: 3px; }
+.arctos-app[data-palette="monokai"] :is(:focus-visible, .schedule-timeline-event:focus-within) { outline-color: var(--ui-link); }
 .arctos-app [id] { scroll-margin-top: calc(var(--header-height) + 16px); }
 .arctos-app h1, .arctos-app h2, .arctos-app h3, .arctos-app h4, .arctos-app h5, .arctos-app h6 {
   color: inherit; font-weight: 650; line-height: 1.3; letter-spacing: -.025em; overflow-wrap: anywhere;
@@ -517,6 +598,7 @@
 .arctos-app .app-nav-link { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border-radius: 8px; color: var(--ui-nav-muted); text-decoration: none; font-size: .875rem; font-weight: 550; white-space: nowrap; }
 .arctos-app .app-nav-link:hover:not(.active) { background: var(--ui-surface-hover); color: var(--ui-text); }
 .arctos-app .app-nav-link.active { background: var(--ui-nav-active-bg); color: var(--ui-nav-active-text); }
+.arctos-app[data-palette="monokai"] .app-nav-link.active { box-shadow: inset 0 -2px 0 var(--ui-control-border); }
 .arctos-app .app-brand:focus-visible, .arctos-app .app-nav-link:focus-visible, .arctos-app .account-trigger:focus-visible { outline-color: var(--ui-nav-text); }
 .arctos-app .app-header-actions { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
 .arctos-app .app-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--ui-text); text-decoration: none; }
@@ -575,16 +657,16 @@
 .arctos-app .btn-sm { min-height: 40px; padding: 7px 12px; font-size: .8125rem; }
 .arctos-app .btn-lg { min-height: 48px; padding: 12px 20px; font-size: 1rem; }
 .arctos-app .btn-primary {
-  --bs-btn-color: var(--ui-accent-contrast); --bs-btn-bg: var(--ui-accent); --bs-btn-border-color: var(--ui-accent-border);
-  --bs-btn-hover-color: var(--ui-accent-contrast); --bs-btn-hover-bg: var(--ui-accent-hover); --bs-btn-hover-border-color: var(--ui-accent-border);
-  --bs-btn-active-color: var(--ui-accent-contrast); --bs-btn-active-bg: var(--ui-accent-active); --bs-btn-active-border-color: var(--ui-accent-border);
-  --bs-btn-disabled-color: var(--ui-accent-contrast); --bs-btn-disabled-bg: var(--ui-accent); --bs-btn-disabled-border-color: var(--ui-accent-border);
+  --bs-btn-color: var(--ui-primary-color, var(--ui-accent-contrast)); --bs-btn-bg: var(--ui-primary-bg, var(--ui-accent)); --bs-btn-border-color: var(--ui-accent-border);
+  --bs-btn-hover-color: var(--ui-primary-color, var(--ui-accent-contrast)); --bs-btn-hover-bg: var(--ui-primary-hover-bg, var(--ui-accent-hover)); --bs-btn-hover-border-color: var(--ui-accent-border);
+  --bs-btn-active-color: var(--ui-primary-color, var(--ui-accent-contrast)); --bs-btn-active-bg: var(--ui-primary-active-bg, var(--ui-accent-active)); --bs-btn-active-border-color: var(--ui-accent-border);
+  --bs-btn-disabled-color: var(--ui-primary-color, var(--ui-accent-contrast)); --bs-btn-disabled-bg: var(--ui-primary-bg, var(--ui-accent)); --bs-btn-disabled-border-color: var(--ui-accent-border);
   --bs-btn-focus-shadow-rgb: var(--ui-accent-rgb);
 }
 .arctos-app .btn-outline-primary {
   --bs-btn-color: var(--ui-accent-text); --bs-btn-border-color: var(--ui-accent-border);
   --bs-btn-hover-color: var(--ui-accent-text); --bs-btn-hover-bg: var(--ui-accent-soft); --bs-btn-hover-border-color: var(--ui-accent-border);
-  --bs-btn-active-color: var(--ui-accent-contrast); --bs-btn-active-bg: var(--ui-accent); --bs-btn-active-border-color: var(--ui-accent-border);
+  --bs-btn-active-color: var(--ui-primary-color, var(--ui-accent-contrast)); --bs-btn-active-bg: var(--ui-primary-bg, var(--ui-accent)); --bs-btn-active-border-color: var(--ui-accent-border);
   --bs-btn-disabled-color: var(--ui-accent-text); --bs-btn-disabled-border-color: var(--ui-accent-border);
 }
 .arctos-app .btn-success {
@@ -632,6 +714,16 @@
   --bs-btn-active-color: var(--ui-info-contrast); --bs-btn-active-bg: var(--ui-info-active); --bs-btn-active-border-color: var(--ui-info-active);
   --bs-btn-disabled-color: var(--ui-info-contrast); --bs-btn-disabled-bg: var(--ui-info); --bs-btn-disabled-border-color: var(--ui-info);
   --bs-btn-focus-shadow-rgb: var(--ui-info-rgb);
+}
+.arctos-app[data-palette="monokai"] :is(.btn-warning, .btn-outline-warning) {
+  --bs-btn-border-color: var(--ui-warning-text);
+  --bs-btn-hover-border-color: var(--ui-warning-text);
+  --bs-btn-active-border-color: var(--ui-warning-text);
+}
+.arctos-app[data-palette="monokai"] :is(.btn-danger, .btn-outline-danger) {
+  --bs-btn-border-color: var(--ui-danger-text);
+  --bs-btn-hover-border-color: var(--ui-danger-text);
+  --bs-btn-active-border-color: var(--ui-danger-text);
 }
 .arctos-app .btn-outline-info {
   --bs-btn-color: var(--ui-info-text); --bs-btn-border-color: var(--ui-info);
