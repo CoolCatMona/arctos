@@ -74,7 +74,7 @@ Layout provides the shared retry notice.
 ## UI conventions
 
 The normal app wrapper owns the theme through `data-palette` and
-`data-bs-theme`. California Jugger and Neutral each support Light, Dark,
+`data-bs-theme`. California Jugger, Neutral, and Monokai each support Light, Dark,
 and System mode. Preferences are local to the browser and synchronize across
 its tabs. OBS and fixed-size output routes keep their own presentation.
 

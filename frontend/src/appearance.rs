@@ -11,15 +11,17 @@ pub enum Palette {
     #[default]
     California,
     Neutral,
+    Monokai,
 }
 
 impl Palette {
-    pub const ALL: [Self; 2] = [Self::California, Self::Neutral];
+    pub const ALL: [Self; 3] = [Self::California, Self::Neutral, Self::Monokai];
 
     pub fn id(self) -> &'static str {
         match self {
             Self::California => "california",
             Self::Neutral => "neutral",
+            Self::Monokai => "monokai",
         }
     }
 
@@ -27,6 +29,7 @@ impl Palette {
         match self {
             Self::California => "California Jugger",
             Self::Neutral => "Neutral",
+            Self::Monokai => "Monokai",
         }
     }
 

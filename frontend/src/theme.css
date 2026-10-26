@@ -243,6 +243,46 @@
   --ui-shadow-strong: #37322c30;
 
 }
+.arctos-app[data-palette="monokai"] {
+  --ui-bg: #f8f8f2;
+  --ui-surface: #fffffa;
+  --ui-surface-muted: #e8e8dc;
+  --ui-surface-hover: #dddecf;
+  --ui-border: #c6c7b6;
+  --ui-control-border: #777865;
+  --ui-text: #272822;
+  --ui-muted: #595b4d;
+  --ui-inverse-bg: #171814;
+  --ui-accent: #a8134b;
+  --ui-accent-hover: #8f1041;
+  --ui-accent-active: #760d35;
+  --ui-accent-soft: #f5dce5;
+  --ui-accent-text: #941344;
+  --ui-accent-contrast: #ffffff;
+  --ui-link: #036573;
+  --ui-link-hover: #034e5a;
+  --ui-gradient-start: #1e1f1c;
+  --ui-gradient-end: #514059;
+  --ui-nav-surface: #e8e8dc;
+  --ui-nav-text: #272822;
+  --ui-nav-muted: #595b4d;
+  --ui-nav-border: #c6c7b6;
+  --ui-text-rgb: 39, 40, 34;
+  --ui-muted-rgb: 89, 91, 77;
+  --ui-surface-rgb: 255, 255, 250;
+  --ui-accent-rgb: 168, 19, 75;
+  --ui-link-rgb: 3, 101, 115;
+  --ui-link-hover-rgb: 3, 78, 90;
+  --ui-accent-border: #941344;
+  --ui-nav-active-bg: #a8134b;
+  --ui-nav-active-text: #ffffff;
+  --ui-gradient-contrast: #ffffff;
+  --ui-inverse-text: #ffffff;
+  --ui-neutral-fill: #595b4d;
+  --ui-media-bg: #171814;
+  --ui-shadow: #27282218;
+  --ui-shadow-strong: #27282230;
+}
 .arctos-app[data-bs-theme="dark"] {
   color-scheme: dark;
   --ui-icon-filter: brightness(0) invert(1);
@@ -408,6 +448,46 @@
   --ui-shadow: #00000040;
   --ui-shadow-strong: #00000070;
 
+}
+.arctos-app[data-bs-theme="dark"][data-palette="monokai"] {
+  --ui-bg: #272822;
+  --ui-surface: #2f3029;
+  --ui-surface-muted: #3e3d32;
+  --ui-surface-hover: #49483d;
+  --ui-border: #6c6d5d;
+  --ui-control-border: #969783;
+  --ui-text: #f8f8f2;
+  --ui-muted: #c4c2ad;
+  --ui-inverse-bg: #171814;
+  --ui-accent: #f92672;
+  --ui-accent-hover: #ff5791;
+  --ui-accent-active: #ff83ad;
+  --ui-accent-soft: #472c38;
+  --ui-accent-text: #ffa0c4;
+  --ui-accent-contrast: #171814;
+  --ui-link: #66d9ef;
+  --ui-link-hover: #a1e8f5;
+  --ui-gradient-start: #1e1f1c;
+  --ui-gradient-end: #514059;
+  --ui-nav-surface: #1e1f1c;
+  --ui-nav-text: #f8f8f2;
+  --ui-nav-muted: #c4c2ad;
+  --ui-nav-border: #6c6d5d;
+  --ui-text-rgb: 248, 248, 242;
+  --ui-muted-rgb: 196, 194, 173;
+  --ui-surface-rgb: 47, 48, 41;
+  --ui-accent-rgb: 249, 38, 114;
+  --ui-link-rgb: 102, 217, 239;
+  --ui-link-hover-rgb: 161, 232, 245;
+  --ui-accent-border: #ffa0c4;
+  --ui-nav-active-bg: #f92672;
+  --ui-nav-active-text: #171814;
+  --ui-gradient-contrast: #ffffff;
+  --ui-inverse-text: #ffffff;
+  --ui-neutral-fill: #595b4d;
+  --ui-media-bg: #171814;
+  --ui-shadow: #00000040;
+  --ui-shadow-strong: #00000070;
 }
 .arctos-app *, .arctos-app *::before, .arctos-app *::after { box-sizing: border-box; }
 .arctos-app :focus-visible { outline: 3px solid var(--ui-link); outline-offset: 3px; }

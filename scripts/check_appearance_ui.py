@@ -29,6 +29,7 @@ WIDTH = 360
 PALETTES = {
     "california": "California Jugger",
     "neutral": "Neutral",
+    "monokai": "Monokai",
 }
 LEGACY_PALETTES = {
     "field": "california",
