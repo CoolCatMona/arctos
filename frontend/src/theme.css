@@ -598,7 +598,6 @@
 .arctos-app .app-nav-link { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border-radius: 8px; color: var(--ui-nav-muted); text-decoration: none; font-size: .875rem; font-weight: 550; white-space: nowrap; }
 .arctos-app .app-nav-link:hover:not(.active) { background: var(--ui-surface-hover); color: var(--ui-text); }
 .arctos-app .app-nav-link.active { background: var(--ui-nav-active-bg); color: var(--ui-nav-active-text); }
-.arctos-app[data-palette="monokai"] .app-nav-link.active { box-shadow: inset 0 -2px 0 var(--ui-control-border); }
 .arctos-app .app-brand:focus-visible, .arctos-app .app-nav-link:focus-visible, .arctos-app .account-trigger:focus-visible { outline-color: var(--ui-nav-text); }
 .arctos-app .app-header-actions { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
 .arctos-app .app-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--ui-text); text-decoration: none; }
