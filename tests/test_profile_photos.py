@@ -59,6 +59,7 @@ def test_replace_uses_new_url_and_bounded_image_then_remove_is_idempotent(client
     with Image.open(BytesIO(public.data)) as image:
         assert image.size == (1024, 512)
     assert client.get(f"/_api/{kind}s/{account.id}").get_json()[kind]["profile_photo"] == original
+    assert client.get("/_api/me").get_json()["profile_photo"] == original
 
     second = upload(client, kind, account, image_bytes(mode="RGBA", size=(80, 40))).get_json()["path"]
     assert second != original and second.endswith(".png")
@@ -67,10 +68,12 @@ def test_replace_uses_new_url_and_bounded_image_then_remove_is_idempotent(client
         assert image.size == (80, 40) and image.getpixel((0, 0))[3] == 100
     third = upload(client, kind, account).get_json()["path"]
     assert third not in (original, second) and not (storage / second).exists()
+    assert client.get("/_api/me").get_json()["profile_photo"] == third
     assert client.delete(endpoint(kind, account)).get_json() == {"success": True}
     assert client.delete(endpoint(kind, account)).status_code == 200
     assert not (storage / third).exists() and account.profile_photo is None
     assert account.banner_photo == "uploads/banners/keep.jpg"
+    assert client.get("/_api/me").get_json()["profile_photo"] is None
 
 
 @pytest.mark.parametrize("viewer", ["guest", "unrelated", "wrong_type"])

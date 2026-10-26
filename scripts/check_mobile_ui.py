@@ -219,6 +219,40 @@ class SmokeCheck:
                 f"Both teams must remain available on each point: {points}"
             )
             assert not points["inaccessible"], f"Phone point controls are clipped or smaller than 44px: {points}"
+            live_layout = await page.evaluate("""() => {
+                const score = document.querySelector('#score-stones-card').getBoundingClientRect();
+                const point = document.querySelector('#points-table .point-entry').getBoundingClientRect();
+                const bar = document.querySelector('.live-match-action-bar').getBoundingClientRect();
+                const steppers = [...document.querySelectorAll('.set-number-controls')].map(el => ({
+                    decrease: el.querySelector('[aria-label="Decrease set number"]').getBoundingClientRect().left,
+                    value: el.querySelector('.set-number-display').getBoundingClientRect().left,
+                    increase: el.querySelector('[aria-label="Increase set number"]').getBoundingClientRect().left
+                }));
+                const end = [...document.querySelectorAll('.live-match-action-bar button')]
+                    .find(el => el.textContent.trim() === 'End point');
+                return {
+                    scoreTop: score.top, pointBottom: point.bottom, actionTop: bar.top, steppers,
+                    running: Boolean(end), actionCount: document.querySelectorAll('.live-match-action-bar button').length,
+                    endWidth: end?.getBoundingClientRect().width, barWidth: bar.width
+                };
+            }""")
+            assert live_layout["scoreTop"] >= 0 and live_layout["pointBottom"] <= live_layout["actionTop"], (
+                f"The score and newest point should fit above the phone action bar: {live_layout}"
+            )
+            assert all(step["decrease"] < step["value"] < step["increase"] for step in live_layout["steppers"]), (
+                f"Set controls must read minus, value, plus from left to right: {live_layout}"
+            )
+            if live_layout["running"]:
+                assert live_layout["actionCount"] == 1 and live_layout["endWidth"] >= live_layout["barWidth"] - 32, (
+                    f"End point should span the action bar while a point is running: {live_layout}"
+                )
+        if name == "finalize-match" and width < 576:
+            summary = await page.locator(".finalize-points-scroll").evaluate(
+                "el => ({width: el.clientWidth, contentWidth: el.scrollWidth})"
+            )
+            assert summary["contentWidth"] <= summary["width"] + 1, (
+                f"Point summary should fit the phone viewport: {summary}"
+            )
         invalid_patterns = await page.evaluate("""() => [...document.querySelectorAll('input[pattern]')].flatMap(el => {
             try { new RegExp(el.pattern, 'v'); return []; }
             catch (error) { return [{id: el.id, pattern: el.pattern, error: String(error)}]; }

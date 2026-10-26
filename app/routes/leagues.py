@@ -76,6 +76,19 @@ from models import (
 bp = Blueprint("leagues", __name__, url_prefix="/_api")
 
 
+def _visible_league_rounds():
+    """Query published rounds and drafts belonging to leagues the caller organizes."""
+    visible = Tournament.published == True
+    if current_user.is_authenticated:
+        organized_ids = db.session.query(TO.league_id).filter(
+            TO.user_id == current_user.id,
+            TO.user_type == current_user_type(),
+            TO.league_id.isnot(None),
+        )
+        visible = or_(visible, Tournament.league_id.in_(organized_ids))
+    return Tournament.query.filter(visible)
+
+
 @bp.route("/leagues/<league_url>/banner-photo", methods=["POST", "DELETE"])
 @login_required
 def league_banner_photo(league_url):
@@ -95,7 +108,7 @@ def league_banner_photo(league_url):
 
 @bp.route("/leagues", methods=["GET"])
 def leagues_list():
-    """List public leagues and the caller's drafts, with public round metadata."""
+    """List public leagues and the caller's drafts, with visible round metadata."""
     visible = League.published == True
     if current_user.is_authenticated:
         organized_ids = db.session.query(TO.league_id).filter(
@@ -110,16 +123,18 @@ def leagues_list():
     event_dates = {l.url: {"start_date": None, "end_date": None, "event_count": 0} for l in leagues}
     if leagues:
         league_ids = [l.url for l in leagues]
-        # Derive season ranges from public rounds only, in one query for the
-        # entire directory. An empty league has no inferred end date.
+        # Match the events shown on each league page. Organizers can see draft
+        # rounds, so those rounds also contribute to their league's season dates.
+        # An empty league has no inferred end date.
         ranges = (
-            db.session.query(
+            _visible_league_rounds()
+            .with_entities(
                 Tournament.league_id,
                 func.min(Tournament.start_date),
                 func.max(func.coalesce(Tournament.end_date, Tournament.start_date)),
                 func.count(Tournament.url),
             )
-            .filter(Tournament.league_id.in_(league_ids), Tournament.published == True)
+            .filter(Tournament.league_id.in_(league_ids))
             .group_by(Tournament.league_id)
             .all()
         )
@@ -213,8 +228,9 @@ def league_detail(league_url):
     if err:
         return jsonify({"error": "Not found" if err == 404 else "Forbidden"}), err
 
-    # Tournaments in this league
-    tournaments_in_league = Tournament.query.filter_by(league_id=league_url).order_by(Tournament.start_date).all()
+    tournaments_in_league = (
+        _visible_league_rounds().filter_by(league_id=league_url).order_by(Tournament.start_date).all()
+    )
     events = [tournament_to_dict(t) for t in tournaments_in_league]
 
     # Create a simple object with league_id for resolvers that lack a _for_scope variant

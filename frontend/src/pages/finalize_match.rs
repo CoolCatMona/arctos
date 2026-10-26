@@ -69,7 +69,6 @@ pub fn FinalizeMatch(url: String, match_id: String) -> Element {
             div { class: "row",
                 div { class: "col-12",
                     h1 { "Finalize match" }
-                    p { class: "text-muted", "Review the score, select the winner, and collect both captains’ signatures." }
                     nav { aria_label: "breadcrumb",
                         ol { class: "breadcrumb",
                             li { class: "breadcrumb-item",
@@ -105,65 +104,57 @@ pub fn FinalizeMatch(url: String, match_id: String) -> Element {
 
             div { class: "row",
                 div { class: "col-lg-9 operator-finalize",
-                    div { class: "card",
-                        div { class: "card-header",
-                            h2 { id: "finalize-points-heading", class: "h5 mb-0", "Points Summary" }
-                        }
-                        div { class: "card-body",
-                            div { class: "table-responsive", role: "region", aria_labelledby: "finalize-points-heading", tabindex: "0",
-                                table { class: "table table-sm",
-                                    thead {
-                                        tr {
-                                            th { scope: "col", class: "table-number", "Set" }
-                                            th { scope: "col", class: "table-number", "Point" }
-                                            th { scope: "col", "Winner" }
-                                            th { scope: "col", class: "table-number", "Stones" }
-                                            th { scope: "col", "Rerun?" }
-                                            th { scope: "col", "Notes" }
-                                        }
+                    section { class: "finalize-points-section", aria_labelledby: "finalize-points-heading",
+                        h2 { id: "finalize-points-heading", class: "h5", "Points" }
+                        div { class: "table-responsive finalize-points-scroll", role: "region", aria_labelledby: "finalize-points-heading", tabindex: "0",
+                            table { class: "table table-sm finalize-points-table",
+                                thead {
+                                    tr {
+                                        th { scope: "col", class: "table-number", "Set" }
+                                        th { scope: "col", class: "table-number", "Point" }
+                                        th { scope: "col", "Winner" }
+                                        th { scope: "col", class: "table-number", "Stones" }
+                                        th { scope: "col", "Rerun" }
                                     }
-                                    tbody {
-                                        for (idx , point) in d.points.iter().enumerate() {
-                                            {
-                                                let stones = d.stones_elapsed_map.get(&point.uuid).copied().unwrap_or(0);
-                                                let notes = d.point_notes_map.get(&point.uuid).cloned().unwrap_or_default();
-                                                rsx! {
-                                                    tr { key: "{point.uuid}",
-                                                        td { class: "table-number", "{point.set_number.unwrap_or(1)}" }
-                                                        td { class: "table-number", "{idx + 1}" }
-                                                        td {
-                                                            if point.winner.as_deref() == Some("TEAM1") {
-                                                                "{d.match_info.team1_name}"
-                                                            } else if point.winner.as_deref() == Some("TEAM2") {
-                                                                "{d.match_info.team2_name}"
-                                                            } else {
-                                                                "None"
-                                                            }
+                                }
+                                tbody {
+                                    for (idx, point) in d.points.iter().enumerate() {
+                                        {
+                                            let stones = d.stones_elapsed_map.get(&point.uuid).copied().unwrap_or(0);
+                                            let notes = d.point_notes_map.get(&point.uuid).cloned().unwrap_or_default();
+                                            rsx! {
+                                                tr { key: "{point.uuid}",
+                                                    td { class: "table-number", "{point.set_number.unwrap_or(1)}" }
+                                                    td { class: "table-number", "{idx + 1}" }
+                                                    td { class: "finalize-point-winner",
+                                                        if point.winner.as_deref() == Some("TEAM1") {
+                                                            "{d.match_info.team1_name}"
+                                                        } else if point.winner.as_deref() == Some("TEAM2") {
+                                                            "{d.match_info.team2_name}"
+                                                        } else {
+                                                            "None"
                                                         }
-                                                        td { class: "table-number", "{stones}" }
-                                                        td {
-                                                            if point.rerolled {
-                                                                span { class: "badge bg-warning", "Rerun" }
-                                                            } else {
-                                                                span { class: "badge bg-success", "Valid" }
-                                                            }
-                                                        }
-                                                        td {
-                                                            if notes.is_empty() {
-                                                                span { class: "text-muted", "—" }
-                                                            } else {
-                                                                for note in notes.iter() {
-                                                                    {
-                                                                        let target_display = note
-                                                                            .player_display
-                                                                            .clone()
-                                                                            .or(note.player_name.clone())
-                                                                            .or(note.target.clone())
-                                                                            .unwrap_or_else(|| "Match".to_string());
-                                                                        rsx! {
-                                                                            div { class: "small text-muted border-start border-3 ps-2 mb-1",
-                                                                                "{target_display}: {note.text.clone().unwrap_or_default()}"
-                                                                            }
+                                                    }
+                                                    td { class: "table-number", "{stones}" }
+                                                    td {
+                                                        if point.rerolled { "Yes" } else { "No" }
+                                                    }
+                                                }
+                                                if !notes.is_empty() {
+                                                    tr { key: "notes-{point.uuid}", class: "finalize-point-notes",
+                                                        td { colspan: "5",
+                                                            span { class: "visually-hidden", "Notes for point {idx + 1}: " }
+                                                            for note in notes.iter() {
+                                                                {
+                                                                    let target_display = note
+                                                                        .player_display
+                                                                        .clone()
+                                                                        .or(note.player_name.clone())
+                                                                        .or(note.target.clone())
+                                                                        .unwrap_or_else(|| "Match".to_string());
+                                                                    rsx! {
+                                                                        p { class: "small text-muted mb-1",
+                                                                            "{target_display}: {note.text.clone().unwrap_or_default()}"
                                                                         }
                                                                     }
                                                                 }
@@ -179,11 +170,9 @@ pub fn FinalizeMatch(url: String, match_id: String) -> Element {
                         }
                     }
 
-                    div { class: "card mt-3",
-                        div { class: "card-header",
-                            h2 { class: "h5 mb-0", "Score by Set" }
-                        }
-                        div { class: "card-body",
+                    section { class: "finalize-score-section mt-3", aria_labelledby: "finalize-score-heading",
+                        h2 { id: "finalize-score-heading", class: "h5", "Score by set" }
+                        div {
                             if d.points.is_empty() {
                                 div { class: "text-muted text-center", "No points yet" }
                             } else {

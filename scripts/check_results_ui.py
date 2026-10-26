@@ -1,6 +1,8 @@
-"""Check standings, ties, sorting, and ribbon filtering in the local demo.
+"""Check result statistics, sorting, and match details against the local demo.
 
-Uses GET response fixtures and the shared loopback/demo mutation guard.
+Reads actual results and uses the shared loopback/demo mutation guard. Start
+scripts.dev_demo first: it seeds a completed demo-open match and unplayed summer
+and league events. Practice data from scripts.dev_practice is not required.
     uv run python scripts/check_results_ui.py --base-url http://127.0.0.1:8444 \
         --browser-executable /usr/bin/google-chrome
 """
@@ -8,157 +10,144 @@ Uses GET response fixtures and the shared loopback/demo mutation guard.
 from __future__ import annotations
 
 import asyncio
-import copy
+from fractions import Fraction
 import sys
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
-from playwright.async_api import Page, Route, async_playwright, expect
+from playwright.async_api import Page, async_playwright, expect
 
-from check_appearance_ui import PALETTES, check_contrast, choose, close_menu
 from check_mobile_ui import DEMO_USER, TIMEOUT_MS, SmokeCheck, api_json, arguments
 
-
-def team(name, wins, losses, points_won, points_lost):
-    return dict(
-        id=name.lower(),
-        pseudonym=name,
-        profile_photo=None,
-        matches_won=wins,
-        matches_lost=losses,
-        points_won=points_won,
-        points_lost=points_lost,
-    )
+SUMMARY_ROWS = ".results-summary-table > tbody > tr:has(> td.table-identity)"
 
 
-TEAMS = [
-    team("Unplayed", 0, 0, 99, 0),
-    team("Delta", 6, 2, 8, 12),
-    team("Alpha", 3, 1, 4, 6),
-    team("Zeta", 1, 2, 9, 1),
-    team("Gamma", 2, 0, 4, 4),
-    team("Beta", 1, 0, 6, 4),
-]
-EXPECTED = {
-    "Beta": "Gold, rank 1",
-    "Gamma": "Silver, rank 2",
-    "Alpha": "Bronze, rank 3",
-    "Delta": "Bronze, rank 3",
-    "Zeta": "Rank 5",
-    "Unplayed": "—Unranked",
-}
+async def rows(page: Page) -> list[dict]:
+    return await page.locator(SUMMARY_ROWS).evaluate_all("""rows => rows.map(row => {
+        const cells = row.querySelectorAll(':scope > td');
+        const link = row.querySelector('td.table-identity a');
+        return {
+            id: decodeURIComponent(new URL(link.href).pathname.split('/').pop()),
+            name: link.lastElementChild.textContent.trim(),
+            matches: cells[2].textContent.trim(), points: cells[3].textContent.trim()
+        };
+    })""")
 
 
-async def standings(page: Page) -> dict[str, str]:
-    return await page.locator("tr:has(.results-rank)").evaluate_all("""rows => Object.fromEntries(rows.map(row => [
-        row.querySelector('a > span:last-child').textContent.trim(), row.querySelector('.results-rank').textContent.trim()
-    ]))""")
+async def verify_stats(page: Page, teams: list[dict]) -> None:
+    await expect(page.locator(SUMMARY_ROWS)).to_have_count(len(teams))
+    for team in teams:
+        row = page.locator(SUMMARY_ROWS).filter(has=page.locator(f'a[href="/teams/{quote(team["id"], safe="")}"]'))
+        await expect(row.locator(":scope > td").nth(2)).to_have_text(f"{team['matches_won']}–{team['matches_lost']}")
+        await expect(row.locator(":scope > td").nth(3)).to_have_text(f"{team['points_won']}–{team['points_lost']}")
+    assert {row["id"]: row["name"] for row in await rows(page)} == {team["id"]: team["pseudonym"] for team in teams}
 
 
-async def verify(check: SmokeCheck, page: Page, path: str, endpoint: str, payload: dict) -> None:
-    mode = "normal"
+async def verify_match_links(page: Page, matches: list[dict], include_ribbon: bool) -> None:
+    visible = [match for match in matches if include_ribbon or not match["ribbon"]]
+    links = page.locator(".results-games-table td.match a")
+    await expect(links).to_have_count(len(visible))
+    actual = await links.evaluate_all("links => links.map(link => new URL(link.href).pathname.split('/').pop())")
+    assert sorted(actual) == sorted(match["uuid"] for match in visible), (actual, visible)
 
-    async def fixture(route: Route):
-        if route.request.method != "GET":
-            await route.fallback()
-            return
-        data = copy.deepcopy(payload)
-        data["teams"] = copy.deepcopy(TEAMS) if mode == "normal" else []
-        if mode == "unplayed":
-            data["teams"] = [TEAMS[0]]
-        if mode == "normal" and parse_qs(urlsplit(route.request.url).query).get("include_ribbon") == ["true"]:
-            data["teams"][-1]["matches_lost"] = 3  # Beta falls from first to fifth.
-        await route.fulfill(json=data)
 
-    async def detail(route: Route):
-        await route.fulfill(
-            json={
-                "matches": [
-                    dict(
-                        uuid="standings-played",
-                        name="Pool match",
-                        team1_name="Beta",
-                        team2_name="Gamma",
-                        match_winner="TEAM1",
-                        your_side="TEAM1",
-                        sets=[dict(set_number=1, team1_points=6, team2_points=4)],
-                        ribbon=False,
-                        event="demo-open",
-                    ),
-                    dict(
-                        uuid="standings-ribbon",
-                        name="Exhibition match",
-                        team1_name="Beta",
-                        team2_name="Gamma",
-                        match_winner="TEAM2",
-                        your_side="TEAM1",
-                        sets=[dict(set_number=1, team1_points=1, team2_points=3)],
-                        ribbon=True,
-                        event="demo-open",
-                    ),
-                ]
-            }
+async def set_ribbon(page: Page, endpoint: str, enabled: bool) -> None:
+    async with page.expect_response(
+        lambda response: (
+            urlsplit(response.url).path == endpoint
+            and parse_qs(urlsplit(response.url).query).get("include_ribbon") == [str(enabled).lower()]
         )
+    ) as response:
+        await page.locator("#results-include-ribbon").set_checked(enabled)
+    assert (await response.value).ok, "Ribbon filter could not load results"
 
-    await page.route(f"**{endpoint}?*", fixture)
-    await page.route(f"**{endpoint}/team/*", detail)
-    try:
-        await page.goto(check.base_url + path)
-        await expect(page.locator(".results-rank")).to_have_count(6)
-        assert await standings(page) == EXPECTED, await standings(page)
-        assert list((await standings(page))) == ["Beta", "Gamma", "Alpha", "Delta", "Zeta", "Unplayed"]
-        await expect(page.locator(".results-rank .fa-trophy")).to_have_count(4)
-        # Keyboard sorting changes display order without changing placement.
-        await page.get_by_role("button", name="Team", exact=True).focus()
-        await page.keyboard.press("Enter")
-        assert list((await standings(page))) == ["Alpha", "Beta", "Delta", "Gamma", "Unplayed", "Zeta"]
-        assert await standings(page) == EXPECTED, await standings(page)
-        await expect(page.get_by_role("columnheader", name="Team")).to_have_attribute("aria-sort", "ascending")
-        await page.get_by_role("button", name="Rank", exact=True).click()
-        await page.get_by_role("button", name="Rank", exact=True).click()
-        assert list((await standings(page))) == ["Zeta", "Alpha", "Delta", "Gamma", "Beta", "Unplayed"]
-        assert await standings(page) == EXPECTED, await standings(page)
-        # Expand remains usable with the extra column, and the same ribbon filter applies to detail.
-        beta = page.locator("tr:has(.results-rank)").filter(has=page.locator('a[href="/teams/beta"]'))
-        await beta.get_by_role("button", name="Expand", exact=True).click()
-        await expect(page.locator("td[colspan='5']").get_by_text("Pool match", exact=True)).to_be_visible()
-        await expect(page.get_by_text("Exhibition match", exact=True)).to_have_count(0)
-        await page.locator("#results-include-ribbon").check()
-        await expect(beta.locator(".results-rank")).to_have_text("Rank 5")
-        await expect(page.get_by_text("Exhibition match", exact=True)).to_be_visible()
-        await page.locator("#results-include-ribbon").uncheck()
-        await expect(beta.locator(".results-rank")).to_have_text("Gold, rank 1")
-        await expect(page.get_by_text("Exhibition match", exact=True)).to_have_count(0)
-        await beta.get_by_role("button", name="Collapse", exact=True).click()
-        await page.get_by_role("button", name="Rank", exact=True).click()
-        for width in (320, 360, 768, 1280):
-            await page.set_viewport_size({"width": width, "height": 900})
-            await check.check_layout(page, "standings-" + path.split("/")[1], width)
-            check.visited += 1
-        await page.set_viewport_size({"width": 360, "height": 900})
-        for palette in PALETTES:
-            for theme in ("light", "dark"):
-                await choose(page, palette, theme)
-                await close_menu(page)
-                await check_contrast(page, ".results-rank .fa-trophy", minimum=3)
-                await check_contrast(page, ".results-rank")
-                await check.check_layout(page, f"standings-{palette}-{theme}", 360)
-                check.visited += 1
-        mode = "unplayed"
-        await page.reload()
-        await expect(page.locator(".results-rank")).to_have_count(1)
-        await expect(page.locator(".results-rank")).to_have_text("—Unranked")
-        await expect(page.locator(".results-rank .fa-trophy")).to_have_count(0)
-        mode = "empty"
-        await page.reload()
-        await expect(page.get_by_role("heading", name="No results yet")).to_be_visible()
-        await expect(page.locator(".results-rank")).to_have_count(0)
-    finally:
-        await page.unroute(f"**{endpoint}?*", fixture)
-        await page.unroute(f"**{endpoint}/team/*", detail)
+
+async def verify_empty(page: Page) -> None:
+    await expect(page.get_by_role("heading", name="No results yet", exact=True)).to_be_visible()
+    await expect(page.locator(".results-summary-table")).to_have_count(0)
+
+
+async def check_widths(check: SmokeCheck, page: Page, path: str) -> None:
+    for width in (320, 360, 768, 1280):
+        await page.set_viewport_size({"width": width, "height": 900})
+        await check.check_layout(page, "results-" + path.strip("/").replace("/", "-"), width)
+        check.visited += 1
+
+
+async def verify(check: SmokeCheck, page: Page, path: str, endpoint: str, coverage: set[str]) -> None:
+    payload = await api_json(page.context, check.base_url, endpoint + "?include_ribbon=false")
+    teams = payload["teams"]
+    ribbon_payload = await api_json(page.context, check.base_url, endpoint + "?include_ribbon=true")
+    await page.goto(check.base_url + path)
+    if not teams:
+        await verify_empty(page)
+        await set_ribbon(page, endpoint, True)
+        if ribbon_payload["teams"]:
+            await verify_stats(page, ribbon_payload["teams"])
+        else:
+            await verify_empty(page)
+        await set_ribbon(page, endpoint, False)
+        await verify_empty(page)
+        await check_widths(check, page, path)
+        coverage.add("empty")
+        return
+    await verify_stats(page, teams)
+    expected_names = sorted(team["pseudonym"].lower() for team in teams)
+    assert [row["name"].lower() for row in await rows(page)] == expected_names
+    await expect(page.get_by_role("columnheader", name="Team", exact=False)).to_have_attribute("aria-sort", "ascending")
+
+    # Native header buttons support keyboard sorting and announce direction.
+    await page.get_by_role("button", name="Team", exact=False).focus()
+    await page.keyboard.press("Enter")
+    await expect(page.get_by_role("columnheader", name="Team", exact=False)).to_have_attribute(
+        "aria-sort", "descending"
+    )
+    assert [row["name"].lower() for row in await rows(page)] == list(reversed(expected_names))
+    for label, field in (("Matches (W–L)", "matches"), ("Points (W–L)", "points")):
+        button = page.get_by_role("button", name=label, exact=False)
+        for direction in ("descending", "ascending"):
+            await button.click()
+            await expect(page.get_by_role("columnheader", name=label, exact=False)).to_have_attribute(
+                "aria-sort", direction
+            )
+            values = [
+                Fraction(int(value.split("–")[0]), max(1, sum(map(int, value.split("–")))))
+                for value in (row[field] for row in await rows(page))
+            ]
+            assert values == sorted(values, reverse=direction == "descending"), (field, direction, values)
+    await page.get_by_role("button", name="Team", exact=False).click()
+
+    # Prefer a team with ribbon games, so inclusion is checked against both the
+    # summary and its real match list. No responses or match data are replaced.
+    details = await asyncio.gather(
+        *(api_json(page.context, check.base_url, endpoint + "/team/" + quote(team["id"], safe="")) for team in teams)
+    )
+    team, detail = max(
+        zip(teams, details, strict=True),
+        key=lambda pair: (any(match["ribbon"] for match in pair[1]["matches"]), len(pair[1]["matches"])),
+    )
+    assert detail["matches"], f"The demo needs per-team matches to check {path}"
+    row = page.locator(SUMMARY_ROWS).filter(has=page.locator(f'a[href="/teams/{quote(team["id"], safe="")}"]'))
+    toggle = row.get_by_role("button")
+    await toggle.focus()
+    await page.keyboard.press("Enter")
+    await expect(toggle).to_have_attribute("aria-expanded", "true")
+    await verify_match_links(page, detail["matches"], False)
+    await set_ribbon(page, endpoint, True)
+    await verify_stats(page, ribbon_payload["teams"])
+    await verify_match_links(page, detail["matches"], True)
+    await set_ribbon(page, endpoint, False)
+    await verify_stats(page, teams)
+    await verify_match_links(page, detail["matches"], False)
+    await check_widths(check, page, path)
+    await toggle.click()
+    await expect(toggle).to_have_attribute("aria-expanded", "false")
+    await expect(page.locator(".results-games-table")).to_have_count(0)
+    coverage.add("populated")
 
 
 async def run(args) -> int:
     check = SmokeCheck(args.base_url, args.screenshots)
+    coverage: set[str] = set()
     async with async_playwright() as playwright:
         launch = {"headless": True, "args": ["--mute-audio"]}
         if args.browser_executable:
@@ -174,16 +163,24 @@ async def run(args) -> int:
             check.observe(page)
             for path, endpoint in (
                 ("/demo-open/results", "/_api/tournaments/demo-open/results"),
+                ("/demo-summer-cup/results", "/_api/tournaments/demo-summer-cup/results"),
                 ("/leagues/demo-coast-league/results", "/_api/leagues/demo-coast-league/results"),
             ):
-                payload = await api_json(context, check.base_url, endpoint)
                 await check.workflow(
-                    page, path.strip("/").replace("/", "-"), 360, lambda: verify(check, page, path, endpoint, payload)
+                    page, path.strip("/").replace("/", "-"), 360, lambda: verify(check, page, path, endpoint, coverage)
                 )
         finally:
             await context.close()
             await browser.close()
-    print(f"{check.visited} standings screens; {check.workflows} workflows; {len(check.failures)} failures.")
+    missing = {"populated", "empty"} - coverage
+    if missing:
+        check.failures.append(
+            "Results checks did not cover "
+            + ", ".join(sorted(missing))
+            + " results. Use a separate scripts.dev_demo database with its completed demo-open match "
+            "and an unplayed demo-summer-cup or demo-coast-league; existing demo edits are not reset."
+        )
+    print(f"{check.visited} results screens; {check.workflows} workflows; {len(check.failures)} failures.")
     if check.failures:
         print("\n".join(check.failures), file=sys.stderr)
     return int(bool(check.failures))

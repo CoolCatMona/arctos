@@ -6,6 +6,8 @@ pub struct User {
     pub name: String,
     #[serde(rename = "type")]
     pub user_type: String,
+    #[serde(default)]
+    pub profile_photo: Option<String>,
     /// True if the account has a password set (can change password). False for Google-only accounts.
     #[serde(default)]
     pub has_password: bool,

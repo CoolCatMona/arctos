@@ -10,17 +10,15 @@ pub const STORAGE_KEY: &str = "arctos.appearance.v1";
 pub enum Palette {
     #[default]
     California,
-    Field,
     Neutral,
 }
 
 impl Palette {
-    pub const ALL: [Self; 3] = [Self::California, Self::Field, Self::Neutral];
+    pub const ALL: [Self; 2] = [Self::California, Self::Neutral];
 
     pub fn id(self) -> &'static str {
         match self {
             Self::California => "california",
-            Self::Field => "field",
             Self::Neutral => "neutral",
         }
     }
@@ -28,18 +26,12 @@ impl Palette {
     pub fn name(self) -> &'static str {
         match self {
             Self::California => "California Jugger",
-            Self::Field => "Field",
             Self::Neutral => "Neutral",
         }
     }
 
     fn parse(value: &str) -> Option<Self> {
-        // Preserve this earlier public storage ID; removed and unknown choices
-        // fall back to the default through Preferences::from_storage.
-        match value {
-            "field-chalk" => Some(Self::Field),
-            _ => Self::ALL.into_iter().find(|palette| palette.id() == value),
-        }
+        Self::ALL.into_iter().find(|palette| palette.id() == value)
     }
 }
 
@@ -325,38 +317,21 @@ mod tests {
                 mode: ColorMode::Dark
             }
         );
-        assert_eq!(
-            Preferences::from_storage(Some(r#"{"palette":"field"}"#)),
-            Preferences {
-                palette: Palette::Field,
-                mode: ColorMode::System
-            }
-        );
     }
 
     #[test]
-    fn legacy_field_id_migrates_and_removed_palettes_use_california() {
-        let field = Preferences {
-            palette: Palette::Field,
-            mode: ColorMode::Light,
-        };
-        assert_eq!(
-            Preferences::from_storage(Some(r#"{"palette":"field-chalk","mode":"light"}"#)),
-            field
-        );
-        assert_eq!(
-            serde_json::to_string(&field).unwrap(),
-            r#"{"palette":"field","mode":"light"}"#
-        );
-        for palette in ["forest", "ocean", "plum", "ember"] {
-            let raw = format!(r#"{{"palette":"{palette}","mode":"dark"}}"#);
-            assert_eq!(
-                Preferences::from_storage(Some(&raw)),
-                Preferences {
-                    palette: Palette::California,
-                    mode: ColorMode::Dark
-                }
-            );
+    fn removed_palettes_use_california_and_preserve_display_mode() {
+        for palette in ["field", "field-chalk", "forest", "ocean", "plum", "ember"] {
+            for mode in ColorMode::ALL {
+                let raw = format!(r#"{{"palette":"{palette}","mode":"{}"}}"#, mode.id());
+                assert_eq!(
+                    Preferences::from_storage(Some(&raw)),
+                    Preferences {
+                        palette: Palette::California,
+                        mode,
+                    }
+                );
+            }
         }
     }
 

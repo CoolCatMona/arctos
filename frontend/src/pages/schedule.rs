@@ -462,6 +462,45 @@ fn ls_set(key: &str, val: &str) {
     }
 }
 
+/// Public schedules use the page scroll on small screens. The editor retains
+/// its own viewport so drag and drop can reach every hour of the day.
+#[cfg(target_arch = "wasm32")]
+fn timeline_uses_page_scroll(window: &web_sys::Window, element: &web_sys::Element) -> bool {
+    window
+        .get_computed_style(element)
+        .ok()
+        .flatten()
+        .and_then(|style| style.get_property_value("overflow-y").ok())
+        .is_some_and(|overflow| overflow == "visible")
+}
+
+fn scroll_selected_schedule_into_view() {
+    #[cfg(target_arch = "wasm32")]
+    wasm_bindgen_futures::spawn_local(async move {
+        // Let the chosen team's day and timeline finish rendering first.
+        gloo_timers::future::TimeoutFuture::new(100).await;
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let Some(document) = window.document() else {
+            return;
+        };
+        let Some(timeline) = document.get_element_by_id("schedule-timeline-wrapper") else {
+            return;
+        };
+        let header_height = document
+            .query_selector(".app-header")
+            .ok()
+            .flatten()
+            .map(|header| header.get_bounding_client_rect().height())
+            .unwrap_or(0.0);
+        let top = timeline.get_bounding_client_rect().top() + window.scroll_y().unwrap_or(0.0)
+            - header_height
+            - 12.0;
+        window.scroll_to_with_x_and_y(0.0, top.max(0.0));
+    });
+}
+
 /// Compute the scrollTop that keeps the current viewport center fixed after a
 /// uniform content-height scale of `ratio` (new/old). Returns None if the
 /// scroll element is missing.
@@ -473,6 +512,18 @@ fn scroll_top_after_centered_zoom(scroll_el_id: &str, ratio: f64) -> Option<i32>
         let doc = window.document()?;
         let el = doc.get_element_by_id(scroll_el_id)?;
         let html_el = el.dyn_ref::<web_sys::HtmlElement>()?;
+        if timeline_uses_page_scroll(&window, &el) {
+            let viewport_center = window.inner_height().ok()?.as_f64()? / 2.0;
+            let top = el.get_bounding_client_rect().top();
+            let grid_header = el
+                .query_selector(".schedule-timeline-header > div")
+                .ok()
+                .flatten()
+                .map(|header| header.get_bounding_client_rect().height())
+                .unwrap_or(0.0);
+            let distance = (viewport_center - top - grid_header).max(0.0);
+            return Some((window.scroll_y().ok()? + distance * (ratio - 1.0)).max(0.0) as i32);
+        }
         let client_h = html_el.client_height() as f64;
         let scroll_top = html_el.scroll_top() as f64;
         let center = scroll_top + client_h / 2.0;
@@ -492,7 +543,9 @@ fn apply_scroll_top(scroll_el_id: &str, scroll_top: i32) {
         if let Some(window) = web_sys::window() {
             if let Some(doc) = window.document() {
                 if let Some(el) = doc.get_element_by_id(scroll_el_id) {
-                    if let Some(html_el) = el.dyn_ref::<web_sys::HtmlElement>() {
+                    if timeline_uses_page_scroll(&window, &el) {
+                        window.scroll_to_with_x_and_y(0.0, scroll_top as f64);
+                    } else if let Some(html_el) = el.dyn_ref::<web_sys::HtmlElement>() {
                         html_el.set_scroll_top(scroll_top);
                     }
                 }
@@ -1218,9 +1271,8 @@ fn SchedulePage(
             rsx! {
                 style { {SCHEDULE_PAGE_CSS} }
                 div {
-                    // The editor gets the full viewport width (escapes the layout's
-                    // centered max-width container via the full-bleed class).
-                    class: if editor && !embedded { "container-fluid mt-3 position-relative schedule-keyboard-focus schedule-editor-fullbleed" } else if embedded { "mt-3 position-relative schedule-keyboard-focus" } else { "container-fluid mt-3 position-relative schedule-keyboard-focus" },
+                    // Keep the editor within the available page width, including scrollbars.
+                    class: if editor && !embedded { "container-fluid mt-3 position-relative schedule-keyboard-focus schedule-editor-page" } else if embedded { "mt-3 position-relative schedule-keyboard-focus" } else { "container-fluid mt-3 position-relative schedule-keyboard-focus" },
                     tabindex: 0,
                     onkeydown: handle_keydown,
                     onmounted: move |_| focus_schedule_root(),
@@ -1291,16 +1343,16 @@ fn SchedulePage(
                         }
                     }
 
-                    div { class: if editor { "edit-toolbar mb-3" } else { "card mb-3 bg-light" },
-                        div { class: if editor { "edit-toolbar-body p-2" } else { "card-body p-2" },
-                            div { class: "d-flex flex-wrap justify-content-between align-items-center gap-2",
-                                div { class: "d-flex flex-wrap align-items-center gap-2",
+                    div { class: if editor { "edit-toolbar mb-3" } else { "schedule-view-toolbar mb-2" },
+                        div { class: if editor { "edit-toolbar-body p-2" } else { "schedule-view-toolbar-body" },
+                            div { class: "schedule-toolbar-layout d-flex flex-wrap justify-content-between align-items-center gap-2",
+                                div { class: "schedule-view-filters d-flex flex-wrap align-items-center gap-2",
                                     if view_mode() != "team" {
                                         div { class: "schedule-filter",
                                         label { r#for: "schedule-field", "Field" }
                                         select {
                                             id: "schedule-field",
-                                            class: "form-select form-select-sm d-inline-block w-auto",
+                                            class: "form-select form-select-sm",
                                             value: "{selected_field}",
                                             onchange: move |e| selected_field.set(e.value()),
                                             onkeydown: move |ev: Event<KeyboardData>| ev.stop_propagation(),
@@ -1338,7 +1390,7 @@ fn SchedulePage(
                                                 label { r#for: "schedule-team", "Your team" }
                                                 select {
                                                     id: "schedule-team",
-                                                    class: "form-select form-select-sm d-inline-block w-auto",
+                                                    class: "form-select form-select-sm",
                                                     // Controlled value + per-option selected so default team shows correctly.
                                                     value: "{selected}",
                                                     onkeydown: move |ev: Event<KeyboardData>| ev.stop_propagation(),
@@ -1348,6 +1400,7 @@ fn SchedulePage(
                                                             let v = e.value();
                                                             focus_team_id.set(v.clone());
                                                             ls_set(&focus_team_storage_key(&u), &v);
+                                                            if !v.is_empty() { scroll_selected_schedule_into_view(); }
                                                         }
                                                     },
                                                     option {
@@ -1380,7 +1433,7 @@ fn SchedulePage(
                                             }
                                         }
                                     }
-                                    div { class: "btn-group btn-group-sm", role: "group", aria_label: "Schedule view",
+                                    div { class: "btn-group btn-group-sm schedule-view-switch", role: "group", aria_label: "Schedule view",
                                         if !editor {
                                             button {
                                                 class: if view_mode() == "team" { "btn btn-primary" } else { "btn btn-outline-primary" },
@@ -3125,11 +3178,11 @@ fn CreateMatchModal(
                                 }
                             }
 
-                            div { class: "modal-footer",
-                                button { class: "btn btn-secondary", "type": "button", onclick: move |_| on_close.call(()), "Cancel (Esc)" }
-                                button { class: "btn btn-success", "type": "submit", disabled: "{saving}",
+                            div { class: "modal-footer schedule-editor-actions",
+                                button { class: "btn btn-secondary", "type": "button", title: "Cancel (Esc)", onclick: move |_| on_close.call(()), "Cancel" }
+                                button { class: "btn btn-success", "type": "submit", title: "Save (Shift+Enter)", disabled: "{saving}",
                                     if saving() { span { class: "spinner-border spinner-border-sm me-2" } }
-                                    "Save (⇧↵)"
+                                    "Save"
                                 }
                             }
                         }
@@ -3449,14 +3502,14 @@ fn BreakGroupModal(
                                 "Checking a new field adds this {type_noun} there; unchecking removes that field's copy."
                             }
                         }
-                        div { class: "modal-footer",
-                            button { class: "btn btn-secondary", "type": "button", onclick: move |_| on_close.call(()), "Cancel (Esc)" }
+                        div { class: "modal-footer schedule-editor-actions",
+                            button { class: "btn btn-secondary", "type": "button", title: "Cancel (Esc)", onclick: move |_| on_close.call(()), "Cancel" }
                             button {
                                 class: "btn btn-danger",
                                 "type": "button",
                                 disabled: saving() || edit_locked,
                                 onclick: do_delete,
-                                "Delete Group"
+                                "Delete"
                             }
                             button {
                                 class: "btn btn-primary",
@@ -5229,6 +5282,82 @@ mod dep_geometry_tests {
     }
 }
 
+/// Round the occupied interval out to half-hour boundaries, clipped to this
+/// local day. Cross-midnight matches contribute to both days.
+fn schedule_day_window(
+    day: chrono::NaiveDate,
+    intervals: impl IntoIterator<Item = (chrono::NaiveDateTime, chrono::NaiveDateTime)>,
+) -> Option<(u32, u32)> {
+    let start = day.and_hms_opt(0, 0, 0)?;
+    let end = start + chrono::Duration::days(1);
+    let mut window: Option<(u32, u32)> = None;
+    for (match_start, match_end) in intervals {
+        if match_end <= start || match_start >= end || match_end <= match_start {
+            continue;
+        }
+        let first = ((match_start.max(start) - start).num_seconds() as u32 / 1800) * 30;
+        let last =
+            (((match_end.min(end) - start).num_seconds() as u32).div_ceil(1800) * 30).min(1440);
+        window = Some(match window {
+            Some((earliest, latest)) => (earliest.min(first), latest.max(last)),
+            None => (first, last),
+        });
+    }
+    window
+}
+
+#[cfg(test)]
+mod schedule_day_window_tests {
+    use super::schedule_day_window;
+    use chrono::{NaiveDate, NaiveDateTime};
+
+    fn time(value: &str) -> NaiveDateTime {
+        value.parse().unwrap()
+    }
+    fn day() -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 10, 25).unwrap()
+    }
+
+    #[test]
+    fn includes_all_matches_and_rounds_outward() {
+        assert_eq!(
+            schedule_day_window(
+                day(),
+                [
+                    (time("2026-10-25T09:10:00"), time("2026-10-25T09:40:00")),
+                    (time("2026-10-25T15:00:00"), time("2026-10-25T15:30:01")),
+                ]
+            ),
+            Some((540, 960))
+        );
+    }
+
+    #[test]
+    fn clips_matches_spanning_midnight_to_each_day() {
+        let intervals = [(time("2026-10-25T23:45:00"), time("2026-10-26T00:20:00"))];
+        assert_eq!(schedule_day_window(day(), intervals), Some((1410, 1440)));
+        assert_eq!(
+            schedule_day_window(day().succ_opt().unwrap(), intervals),
+            Some((0, 30))
+        );
+    }
+
+    #[test]
+    fn empty_days_ignore_other_days_and_invalid_intervals() {
+        assert_eq!(
+            schedule_day_window(
+                day(),
+                [
+                    (time("2026-10-24T23:00:00"), time("2026-10-25T00:00:00")),
+                    (time("2026-10-26T09:00:00"), time("2026-10-26T10:00:00")),
+                    (time("2026-10-25T12:00:00"), time("2026-10-25T11:00:00")),
+                ]
+            ),
+            None
+        );
+    }
+}
+
 #[component]
 fn ScheduleTimeline(
     data: ScheduleSetupResponse,
@@ -5484,9 +5613,17 @@ fn ScheduleTimeline(
                     dates.push(dt.date());
                 }
             }
-            if let Some((start_utc, _)) = display_interval_utc(m, show_as_happened) {
+            if let Some((start_utc, end_utc)) = display_interval_utc(m, show_as_happened) {
                 let start_dt = start_utc + chrono::Duration::minutes(tz_offset_minutes);
-                dates.push(start_dt.date());
+                let end_dt = end_utc + chrono::Duration::minutes(tz_offset_minutes);
+                let mut day = start_dt.date();
+                dates.push(day);
+                // A match ending exactly at midnight belongs only to its starting day.
+                while let Some(next) = day.succ_opt() {
+                    if next.and_hms_opt(0, 0, 0).unwrap_or_default() >= end_dt { break; }
+                    dates.push(next);
+                    day = next;
+                }
             }
         }
         dates.sort();
@@ -5537,19 +5674,16 @@ fn ScheduleTimeline(
 
     // When filters change the day list, keep the cursor on a day that still has
     // events. The editor may sit on empty days, so it never snaps.
-    {
-        let dates = dates_with_matches.clone();
-        use_effect(move || {
-            let current = visible_date_signal();
-            if !editor && !dates.is_empty() && !dates.contains(&current) {
-                if dates.contains(&today_local) {
-                    visible_date_signal.set(today_local);
-                } else if let Some(&first) = dates.first() {
-                    visible_date_signal.set(first);
-                }
+    use_effect(use_reactive(&dates_with_matches, move |dates| {
+        let current = visible_date_signal();
+        if !editor && !dates.is_empty() && !dates.contains(&current) {
+            if dates.contains(&today_local) {
+                visible_date_signal.set(today_local);
+            } else if let Some(&first) = dates.first() {
+                visible_date_signal.set(first);
             }
-        });
-    }
+        }
+    }));
 
     // React to keyboard nav (n/p/t) from Schedule
     let dates_for_nav = dates_with_matches.clone();
@@ -5669,19 +5803,12 @@ fn ScheduleTimeline(
         && data.matches.is_empty()
         && pending_create.is_none();
 
-    // Time scale: full day (00:00 to 24:00), 30-minute slots.
-    //
-    // Important: the schedule times come back as RFC3339 with offsets. We currently
-    // convert to UTC for layout. If we used a narrow window like 06:00–22:00,
-    // tournaments in some timezones could have all matches fall outside the window
-    // after UTC conversion, making the timeline appear empty with no errors.
     const SLOT_MINUTES: i64 = 30;
-    const FIRST_HOUR: u32 = 0;
-    const LAST_HOUR: u32 = 24;
-    let slots_per_day = ((LAST_HOUR - FIRST_HOUR) * 60 / SLOT_MINUTES as u32) as usize;
 
     // Get current visible date value (reactive - will update when signal changes)
     let current_visible_date = visible_date_signal();
+    let day_start = current_visible_date.and_hms_opt(0, 0, 0).unwrap_or_default();
+    let day_end = day_start + chrono::Duration::days(1);
 
     // Build timeline events (non-join matches).
     // Placement uses `display_interval_utc`: the "planned or earlier" viewer rule,
@@ -5904,39 +6031,6 @@ fn ScheduleTimeline(
         })
         .collect();
 
-    // Helper: get start_slot and end_slot for an event (for which row to render in; still slot-based)
-    let _event_slots = |e: &TimelineEvent| -> (usize, usize) {
-        let start_slot = {
-            if e.start_time.date() != current_visible_date {
-                0
-            } else {
-                let hour = e.start_time.hour();
-                let minute = e.start_time.minute();
-                if hour < FIRST_HOUR || hour >= LAST_HOUR {
-                    0
-                } else {
-                    let total_minutes = (hour - FIRST_HOUR) * 60 + minute;
-                    (total_minutes as i64 / SLOT_MINUTES) as usize
-                }
-            }
-        };
-        let end_slot = {
-            if e.end_time.date() != current_visible_date {
-                slots_per_day
-            } else {
-                let hour = e.end_time.hour();
-                let minute = e.end_time.minute();
-                if hour < FIRST_HOUR || hour >= LAST_HOUR {
-                    slots_per_day
-                } else {
-                    let total_minutes = (hour - FIRST_HOUR) * 60 + minute;
-                    ((total_minutes as i64 / SLOT_MINUTES) as usize).max(start_slot + 1)
-                }
-            }
-        };
-        (start_slot, end_slot)
-    };
-
     // True iff two events overlap in time (using exact start/end, not slots)
     let events_overlap = |a: &TimelineEvent, b: &TimelineEvent| -> bool {
         a.start_time < b.end_time && b.start_time < a.end_time
@@ -5949,7 +6043,8 @@ fn ScheduleTimeline(
             .enumerate()
             .filter(|(_, e)| {
                 e.field_id == field.id
-                    && e.start_time.date() == current_visible_date
+                    && e.start_time < day_end
+                    && e.end_time > day_start
                     && e.schedule_type.as_deref() != Some("JOIN")
             })
             .map(|(i, _)| i)
@@ -6050,11 +6145,29 @@ fn ScheduleTimeline(
             .collect()
     };
 
+    // Public schedules show the occupied part of the selected day. The editor
+    // keeps all 24 hours available for adding and moving matches.
+    let occupied_window = schedule_day_window(
+        current_visible_date,
+        timeline_events
+            .iter()
+            .map(|event| (event.start_time, event.end_time))
+            .chain(join_groups.iter().map(|join| {
+                (join.time, join.time + chrono::Duration::minutes(1))
+            })),
+    );
+    let (first_minute, last_minute) = if editor {
+        (0, 1440)
+    } else {
+        occupied_window.unwrap_or((0, 30))
+    };
+    let slots_per_day = ((last_minute - first_minute) as i64 / SLOT_MINUTES) as usize;
+
     // Pre-compute slot time strings
     let slot_times: Vec<String> = (0..slots_per_day)
         .map(|slot| {
-            let minutes = (slot as u32) * SLOT_MINUTES as u32;
-            let hour = FIRST_HOUR + minutes / 60;
+            let minutes = first_minute + (slot as u32) * SLOT_MINUTES as u32;
+            let hour = minutes / 60;
             let minute = minutes % 60;
             format!("{:02}:{:02}", hour, minute)
         })
@@ -6081,12 +6194,11 @@ fn ScheduleTimeline(
             if date != current_visible_date {
                 return None;
             }
-            let hour = join.time.hour();
-            let minute = join.time.minute();
-            if hour < FIRST_HOUR || hour >= LAST_HOUR {
+            let minute_of_day = join.time.hour() * 60 + join.time.minute();
+            if minute_of_day < first_minute || minute_of_day >= last_minute {
                 return None;
             }
-            let total_minutes = (hour - FIRST_HOUR) * 60 + minute;
+            let total_minutes = minute_of_day - first_minute;
             let slot = (total_minutes as i64 / SLOT_MINUTES) as usize;
             let minutes_within_slot = (total_minutes as i64) % SLOT_MINUTES;
             let top_fraction = (minutes_within_slot as f64) / (SLOT_MINUTES as f64);
@@ -6128,9 +6240,7 @@ fn ScheduleTimeline(
             .iter()
             .filter(|e| e.start_time.date() == current_visible_date)
             .map(|e| {
-                let h = e.start_time.hour();
-                let m = e.start_time.minute();
-                ((h - FIRST_HOUR) * 60 + m) as i64 / SLOT_MINUTES
+                ((e.start_time.hour() * 60 + e.start_time.minute()).saturating_sub(first_minute)) as i64 / SLOT_MINUTES
             })
             .map(|s| s as usize);
         let join_slots = join_lines_data.iter().map(|j| j.slot);
@@ -6140,7 +6250,7 @@ fn ScheduleTimeline(
         let now_local = chrono::Utc::now() + chrono::Duration::minutes(tz_offset_minutes);
         let hour = now_local.hour();
         let minute = now_local.minute();
-        let slot = ((hour - FIRST_HOUR) * 60 + minute) as i64 / SLOT_MINUTES;
+        let slot = ((hour * 60 + minute).saturating_sub(first_minute)) as i64 / SLOT_MINUTES;
         (slot as usize).min(slots_per_day.saturating_sub(1))
     } else {
         first_match_slot
@@ -6174,6 +6284,7 @@ fn ScheduleTimeline(
                         if let (Some(scroll_el), Some(target_el)) =
                             (scroll_el, doc.get_element_by_id(&id))
                         {
+                            if timeline_uses_page_scroll(&window, &scroll_el) { return; }
                             let scroll_rect = scroll_el.get_bounding_client_rect();
                             let target_rect = target_el.get_bounding_client_rect();
                             let delta = target_rect.top() - scroll_rect.top();
@@ -6196,13 +6307,11 @@ fn ScheduleTimeline(
     // Now-line: slot index + fraction within the slot when viewing today.
     let now_line_style: Option<String> = if current_visible_date == today_local {
         let now_local = chrono::Utc::now() + chrono::Duration::minutes(tz_offset_minutes);
-        let total_minutes =
-            (now_local.hour().saturating_sub(FIRST_HOUR) as i64) * 60 + (now_local.minute() as i64);
-        let slots_f = total_minutes as f64 / SLOT_MINUTES as f64;
-        Some(format!(
-            "top: calc(var(--header-height) + var(--slot-height) * {:.4});",
-            slots_f.clamp(0.0, slots_per_day as f64)
-        ))
+        let minute_of_day = now_local.hour() * 60 + now_local.minute();
+        if minute_of_day >= first_minute && minute_of_day < last_minute {
+            let slots_f = (minute_of_day - first_minute) as f64 / SLOT_MINUTES as f64;
+            Some(format!("top: calc(var(--header-height) + var(--slot-height) * {slots_f:.4});"))
+        } else { None }
     } else {
         None
     };
@@ -6217,7 +6326,6 @@ fn ScheduleTimeline(
         .enumerate()
         .map(|(i, f)| (f.id, i))
         .collect();
-    let day_start = current_visible_date.and_hms_opt(0, 0, 0).unwrap_or_default();
     // Per-block drag info for today's visible blocks: (schedule_type, name, start_min, duration_min, col).
     let drag_block_info: HashMap<String, (String, String, i64, i64, usize)> = timeline_events
         .iter()
@@ -6712,7 +6820,7 @@ fn ScheduleTimeline(
     };
 
     rsx! {
-        div { class: "schedule-timeline-wrapper", id: "schedule-timeline-wrapper",
+        div { class: if editor { "schedule-timeline-wrapper" } else { "schedule-timeline-wrapper schedule-timeline-viewer" }, id: "schedule-timeline-wrapper",
             div { class: "schedule-timeline-nav",
                 {
                     let current = visible_date_signal();
@@ -6723,7 +6831,8 @@ fn ScheduleTimeline(
                     let dates_next = dates_with_matches.clone();
                     rsx! {
                         button {
-                            class: "btn btn-sm btn-outline-secondary",
+                            class: "btn btn-sm btn-outline-secondary schedule-day-step",
+                            aria_label: "Previous day", title: "Previous day",
                             disabled: !has_prev,
                             onclick: move |_| {
                                 let current = visible_date_signal();
@@ -6731,10 +6840,26 @@ fn ScheduleTimeline(
                                     visible_date_signal.set(prev_date);
                                 }
                             },
-                            "← Prev"
+                            "←"
+                        }
+                        span { class: "schedule-timeline-date", title: visible_date_signal().format("%A, %B %-d, %Y").to_string(),
+                            span { aria_hidden: "true", {visible_date_signal().format("%b %-d").to_string()} }
+                            span { class: "visually-hidden", {visible_date_signal().format("%A, %B %-d, %Y").to_string()} }
                         }
                         button {
-                            class: "btn btn-sm btn-outline-secondary",
+                            class: "btn btn-sm btn-outline-secondary schedule-day-step",
+                            aria_label: "Next day", title: "Next day",
+                            disabled: !has_next,
+                            onclick: move |_| {
+                                let current = visible_date_signal();
+                                if let Some(next_date) = adjacent_date(editor, &dates_next, current, true) {
+                                    visible_date_signal.set(next_date);
+                                }
+                            },
+                            "→"
+                        }
+                        button {
+                            class: "btn btn-sm btn-outline-secondary schedule-today",
                             onclick: move |_| {
                                 if dates_today.contains(&today_local) {
                                     visible_date_signal.set(today_local);
@@ -6744,21 +6869,10 @@ fn ScheduleTimeline(
                             },
                             "Today"
                         }
-                        button {
-                            class: "btn btn-sm btn-outline-secondary",
-                            disabled: !has_next,
-                            onclick: move |_| {
-                                let current = visible_date_signal();
-                                if let Some(next_date) = adjacent_date(editor, &dates_next, current, true) {
-                                    visible_date_signal.set(next_date);
-                                }
-                            },
-                            "Next →"
-                        }
-                        span { class: "schedule-timeline-date",
-                            " {visible_date_signal().format(\"%A, %B %d\")}"
-                        }
-                        div { class: "schedule-scale-controls", role: "group", aria_label: "Time scale",
+                        details { class: "schedule-scale-menu",
+                            onkeydown: move |event: Event<KeyboardData>| event.stop_propagation(),
+                            summary { aria_label: "Adjust time scale", title: "Adjust time scale", i { class: "fas fa-magnifying-glass", aria_hidden: true } }
+                            div { class: "schedule-scale-controls", role: "group", aria_label: "Time scale",
                             span { class: "small text-muted", "Time scale" }
                             button {
                                 r#type: "button", class: "btn btn-sm btn-outline-secondary",
@@ -6781,6 +6895,7 @@ fn ScheduleTimeline(
                                 onclick: move |_| change_time_scale(vertical_scale, pending_scroll_top, scroll_el_id, vertical_scale() * 1.2),
                                 "+"
                             }
+                            }
                         }
                     }
                 }
@@ -6789,6 +6904,8 @@ fn ScheduleTimeline(
                 div { class: "schedule-timeline-empty-message",
                     "Add a field to start building your schedule."
                 }
+            } else if !editor && occupied_window.is_none() {
+                p { class: "schedule-timeline-empty-message mb-0", "No matches scheduled for this day." }
             } else {
             {
                 let scroll_id = scroll_el_id;
@@ -7010,18 +7127,15 @@ fn ScheduleTimeline(
                     let mut geom_by_id: HashMap<String, (f64, f64, f64, f64)> = HashMap::new();
                     let overlay_events: Vec<(TimelineEvent, String)> = timeline_events
                         .iter()
-                        .filter(|e| e.start_time.date() == current_visible_date)
+                        .filter(|e| e.start_time < day_end && e.end_time > day_start)
                         .filter(|e| e.schedule_type.as_deref() != Some("JOIN"))
                         .filter_map(|e| {
                             let col = *field_index.get(&e.field_id)?;
-                            let hour = e.start_time.hour();
-                            let minute = e.start_time.minute();
-                            if hour < FIRST_HOUR || hour >= LAST_HOUR {
-                                return None;
-                            }
-                            let start_min = (hour - FIRST_HOUR) * 60 + minute;
-                            let start_slots = start_min as f64 / SLOT_MINUTES as f64;
-                            let duration_min = (e.end_time - e.start_time).num_minutes().max(1) as f64;
+                            let clipped_start = e.start_time.max(day_start);
+                            let clipped_end = e.end_time.min(day_end);
+                            let start_min = (clipped_start - day_start).num_seconds() as f64 / 60.0 - first_minute as f64;
+                            let start_slots = start_min / SLOT_MINUTES as f64;
+                            let duration_min = (clipped_end - clipped_start).num_seconds().max(60) as f64 / 60.0;
                             let duration_slots = duration_min / SLOT_MINUTES as f64;
                             let lane_w = 100.0 / e.num_lanes.max(1) as f64;
                             let lane_l = e.lane_index as f64 * lane_w;
@@ -7834,14 +7948,14 @@ fn EditMatchModal(
                                 }
                             }
 
-                            div { class: "modal-footer",
-                                button { class: "btn btn-secondary", r#type: "button", disabled: saving() || deleting().busy(), onclick: move |_| { close_editor() }, "Cancel (Esc)" }
+                            div { class: "modal-footer schedule-editor-actions",
+                                button { class: "btn btn-secondary", r#type: "button", title: "Cancel (Esc)", disabled: saving() || deleting().busy(), onclick: move |_| { close_editor() }, "Cancel" }
                                 button { id: "schedule-delete-trigger", class: "btn btn-danger", r#type: "button", disabled: saving() || deleting().blocks_write(),
                                     aria_haspopup: "dialog", onclick: move |_| confirm_delete.set(true), "Delete"
                                 }
-                                button { class: "btn btn-primary", "type": "submit", disabled: saving() || deleting().blocks_write(),
+                                button { class: "btn btn-primary", "type": "submit", title: "Save (Shift+Enter)", disabled: saving() || deleting().blocks_write(),
                                     if saving() { span { class: "spinner-border spinner-border-sm me-2" } }
-                                    "Save (⇧↵)"
+                                    "Save"
                                 }
                             }
                         }

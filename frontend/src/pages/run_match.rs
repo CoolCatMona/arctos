@@ -477,45 +477,6 @@ fn SetNumberControls(
             button {
                 class: "set-step-btn",
                 r#type: "button",
-                aria_label: "Increase set number",
-                disabled: point_pending() || stone_save.blocks_point_actions(),
-                onclick: move |_| {
-                    if point_pending() || stone_save.blocks_point_actions() { return; }
-                    let prev = state_signal().clone();
-                    let current = shown();
-                    let new_set = current.saturating_add(1).max(1);
-                    point_pending.set(true);
-                    shown.set(new_set);
-                    if let Some(Ok(ref state)) = prev.clone() {
-                        let mut state = state.clone();
-                        if set_number_in_state(&mut state, pid_inc.as_str(), new_set) {
-                            state_signal.set(Some(Ok(state)));
-                        }
-                    }
-                    let u = u_inc.clone();
-                    let p = pid_inc.clone();
-                    let mut state_signal = state_signal;
-                    let mut action_error = action_error;
-                    let mut shown = shown;
-                    spawn(async move {
-                        let body = serde_json::json!({ "point_id": p, "set_number": new_set });
-                        match api::update_point(&u, &p, &body).await {
-                            Ok(_) => { action_error.set(None); }
-                            Err(e) => {
-                                action_error.set(Some(e));
-                                shown.set(current);
-                                state_signal.set(prev);
-                            }
-                        }
-                        point_pending.set(false);
-                    });
-                },
-                "+"
-            }
-            span { class: "set-number-display", "{displayed}" }
-            button {
-                class: "set-step-btn",
-                r#type: "button",
                 aria_label: "Decrease set number",
                 disabled: point_pending() || stone_save.blocks_point_actions(),
                 onclick: move |_| {
@@ -553,6 +514,45 @@ fn SetNumberControls(
                     });
                 },
                 "−"
+            }
+            span { class: "set-number-display", "{displayed}" }
+            button {
+                class: "set-step-btn",
+                r#type: "button",
+                aria_label: "Increase set number",
+                disabled: point_pending() || stone_save.blocks_point_actions(),
+                onclick: move |_| {
+                    if point_pending() || stone_save.blocks_point_actions() { return; }
+                    let prev = state_signal().clone();
+                    let current = shown();
+                    let new_set = current.saturating_add(1).max(1);
+                    point_pending.set(true);
+                    shown.set(new_set);
+                    if let Some(Ok(ref state)) = prev.clone() {
+                        let mut state = state.clone();
+                        if set_number_in_state(&mut state, pid_inc.as_str(), new_set) {
+                            state_signal.set(Some(Ok(state)));
+                        }
+                    }
+                    let u = u_inc.clone();
+                    let p = pid_inc.clone();
+                    let mut state_signal = state_signal;
+                    let mut action_error = action_error;
+                    let mut shown = shown;
+                    spawn(async move {
+                        let body = serde_json::json!({ "point_id": p, "set_number": new_set });
+                        match api::update_point(&u, &p, &body).await {
+                            Ok(_) => { action_error.set(None); }
+                            Err(e) => {
+                                action_error.set(Some(e));
+                                shown.set(current);
+                                state_signal.set(prev);
+                            }
+                        }
+                        point_pending.set(false);
+                    });
+                },
+                "+"
             }
         }
     }
@@ -1329,9 +1329,9 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                     "Start point"
                 };
                 let point_button_class = if has_in_progress {
-                    "btn btn-primary btn-lg w-100 mobile-sticky-button"
+                    "btn btn-danger w-100 mobile-sticky-button"
                 } else {
-                    "btn btn-primary btn-lg w-100 mobile-sticky-button"
+                    "btn btn-success w-100 mobile-sticky-button"
                 };
                 // Block starting a point until the stone count is known (can't record stones_at_start otherwise).
                 let needs_stone_count = set_type_stones && !stones_known && !has_in_progress;
@@ -1357,7 +1357,7 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                     point_button_text
                 };
 
-                let run_match_css = ".set-number-controls{display:flex;flex-direction:column;align-items:center;gap:0;width:40px}\
+                let run_match_css = ".set-number-controls{display:flex;flex-direction:row;align-items:center;gap:0;width:112px}\
                     .set-number-controls .set-number-display{font-size:1rem;font-weight:600;text-align:center;min-width:30px;padding:0}\
                     .set-number-controls button.set-step-btn{width:32px;height:26px;padding:0;font-size:13px;line-height:1;border:none;background:transparent;color:#6c757d;cursor:pointer;touch-action:manipulation}\
                     .set-number-controls button.set-step-btn:hover{color:#212529}\
@@ -1464,7 +1464,7 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                     "{elapsed}"
                                 }
                                 td { class: "point-winner",
-                                    span { class: "point-mobile-label", aria_hidden: "true", "Winner of point {point_index}" }
+                                    span { class: "point-mobile-label", aria_hidden: "true", "Winner" }
                                     div { class: "winner-cell",
                                         div { class: "winner-options-group",
                                         button {
@@ -1838,8 +1838,7 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                 };
                 let quick_timer_is_idle = quick_timer_label.is_none();
                 let quick_timer_dragging = matches!(quick_timer(), QuickTimer::Dragging { .. });
-                // Single quick-timer element; CSS positions it (right of the Start Point button on
-                // wide screens, fixed top-right corner on narrow). Rendered for all match types.
+                // Keep the timer beside the match heading without adding a separate row.
                 // While dragging it gets `qt-dragging` to lift above the full-screen scrim.
                 #[cfg(target_arch = "wasm32")]
                 let quick_timer_el = rsx! {
@@ -1904,69 +1903,39 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                 };
 
                 rsx! {
-                    div { class: "container mt-4 run-match-page",
+                    div { class: "container run-match-page",
                         style { "{run_match_css}" }
                         style { {include_str!("live_match_actions.css")} }
                         if quick_timer_dragging {
                             div { id: "quick-timer-scrim",
                                 div { class: "qt-scrim-text",
-                                    div { class: "qt-scrim-title", "Stone Timer Utility" }
-                                    div { "drag to set time" }
+                                    div { class: "qt-scrim-title", "Quick timer" }
+                                    div { "Drag to set stones" }
                                 }
                             }
                         }
                         div { class: "row",
                             div { class: "col-md-12",
-                                h2 { "{m.name}" }
-                                p { class: "text-muted mb-3", "Record each point, then review and finalize the result." }
-                                div { class: "row d-none d-md-flex",
-                                    div { class: "col-md-4",
-                                        p { class: "mb-0",
-                                            strong { "Teams: " }
-                                            "{team1} vs {team2}"
-                                        }
-                                    }
-                                    div { class: "col-md-4",
-                                        p { class: "mb-0",
-                                            strong { "Refs: " }
-                                            "{refs_display}"
-                                        }
-                                    }
-                                    div { class: "col-md-2",
-                                        if let Some(len) = length_display {
-                                            p { class: "mb-0",
-                                                strong { "Length: " }
-                                                "{len}"
-                                            }
-                                        }
-                                    }
-                                    div { class: "col-md-2",
-                                        p { class: "mb-0",
-                                            strong { "Field: " }
-                                            "{field_display}"
-                                        }
-                                    }
+                                div { class: "live-match-heading",
+                                    h2 { "{m.name}" }
+                                    {quick_timer_el}
                                 }
-                                div { class: "row d-md-none",
-                                    div { class: "col-12",
-                                        p { class: "small mb-0",
-                                            "Refs: {refs_display}"
-                                            if let Some(len) = m.nominal_length {
-                                                " | {len}m"
-                                            }
-                                            " | Field: {field_display}"
-                                        }
+                                div { class: "live-match-metadata",
+                                    span { "Refs: {refs_display}" }
+                                    if let Some(len) = length_display {
+                                        span { "{len}" }
                                     }
+                                    span { "Field: {field_display}" }
                                 }
                             }
                         }
 
-                        div { class: "row mb-4",
+                        div { class: "row live-score-row",
                             div { class: "col-md-12",
                                 div { class: "card", id: "score-stones-card",
                                     div { class: "card-body",
                                         div { class: "row",
-                                            div { class: "col-md-6 mb-4 mb-md-0",
+                                            div { class: if set_type_stones { "col-md-6" } else { "col-12" },
                                                 div { id: "score-by-set",
                                                     div { class: "d-flex align-items-center mb-1 gap-2",
                                                         div { class: "flex-grow-1 text-center live-match-team",
@@ -1998,7 +1967,7 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                                     }
                                                 }
                                             }
-                                            div { class: "col-md-6",
+                                            div { class: if set_type_stones { "col-md-6 live-stone-panel" } else { "col-12" },
                                                 if set_type_stones {
                                                     div { class: "live-stone-summary",
                                                         div {
@@ -2015,13 +1984,13 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                                                     let value = display_stones.map(|count| count.to_string()).unwrap_or_default();
                                                                     stones_original.set(value.clone()); stones_edit_value.set(value);
                                                                     stone_save.draft.set(false); stone_save.error.set(None); stone_save.editing.set(true);
-                                                                }, "Correct count"
+                                                                }, "Adjust count"
                                                             }
                                                         }
                                                     }
                                                     if (stone_save.editing)() {
                                                         div { class: "live-stone-editor", id: "stone-correction-editor",
-                                                            label { r#for: "stones-remaining", class: "form-label", "Correct stone count" }
+                                                            label { r#for: "stones-remaining", class: "form-label", "Adjust stone count" }
                                                             p { id: "stone-correction-help", class: "small text-muted",
                                                                 "Save applies this count immediately."
                                                                 if has_in_progress { " The active point keeps counting while you edit." }
@@ -2093,25 +2062,17 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                                                         }
                                                     }
                                                 }
-                                                p { class: if (stone_save.editing)() { "live-point-context mt-3 mb-1" } else { "live-point-context mt-3 mb-1 d-none d-md-block" }, "{point_context}" }
-                                                p { id: "point-action-help", class: "small text-muted mb-2",
-                                                    if let Some(reason) = action_block_reason { "{reason}" }
-                                                    else if has_in_progress { "End this point when play stops, then record the winner below." }
-                                                    else { "Start the next point when both teams and referees are ready." }
+                                                if let Some(reason) = action_block_reason {
+                                                    p { id: "point-action-help", class: "small text-muted mb-2", "{reason}" }
                                                 }
-                                                div { class: "row mt-3",
-                                                    div { class: "col-12 d-flex align-items-stretch gap-2",
-                                                        div { class: "flex-grow-1 d-none d-md-block",
-                                                            button {
-                                                                id: "point-button",
-                                                                aria_describedby: "point-action-help",
-                                                                class: "{point_button_class}",
-                                                                onclick: on_start_end_point,
-                                                                disabled: point_button_disabled,
-                                                                "{point_button_text}"
-                                                            }
-                                                        }
-                                                        {quick_timer_el}
+                                                div { class: "live-desktop-point-action d-none d-md-block",
+                                                    button {
+                                                        id: "point-button",
+                                                        aria_describedby: action_block_reason.map(|_| "point-action-help"),
+                                                        class: "{point_button_class}",
+                                                        onclick: on_start_end_point,
+                                                        disabled: point_button_disabled,
+                                                        "{point_button_text}"
                                                     }
                                                 }
                                             }
@@ -2125,54 +2086,49 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                             div { class: "alert alert-danger mt-2", role: "alert", "{e}" }
                         }
 
-                        div { class: "row",
-                            div { class: "col-md-12",
-                                div { class: "card",
-                                    div { class: "card-header",
-                                        h5 { class: "mb-0", "Points" }
+                        section { class: "live-points-section", aria_labelledby: "live-points-heading",
+                            h3 { id: "live-points-heading", "Points" }
+                            div { class: "table-responsive point-history",
+                                table { class: "table table-sm", id: "points-table",
+                                    thead {
+                                        tr {
+                                            th { scope: "col", "#" }
+                                            th { scope: "col", "Set" }
+                                            th { scope: "col", "Stones" }
+                                            th { scope: "col", "Winner" }
+                                            th { scope: "col", "Rerun" }
+                                            th { scope: "col", "Notes" }
+                                            th { scope: "col", span { class: "visually-hidden", "Delete" } }
+                                        }
                                     }
-                                    div { class: "card-body",
-                                        div { class: "table-responsive point-history",
-                                            table { class: "table table-sm", id: "points-table",
-                                                thead {
-                                                    tr {
-                                                        th { scope: "col", "#" }
-                                                        th { scope: "col", "Set" }
-                                                        th { scope: "col", "Stones" }
-                                                        th { scope: "col", "Winner" }
-                                                        th { scope: "col", "Rerun" }
-                                                        th { scope: "col", "Notes" }
-                                                        th { scope: "col", span { class: "visually-hidden", "Delete" } }
-                                                    }
-                                                }
-                                                tbody { id: "points-table-body",
-                                                    for node in point_table_rows.into_iter() {
-                                                        {node}
-                                                    }
-                                                }
-                                            }
+                                    tbody { id: "points-table-body",
+                                        for node in point_table_rows.into_iter() {
+                                            {node}
                                         }
                                     }
                                 }
                             }
                         }
 
-                        div { class: "live-match-review mt-4",
-                            p { id: "review-result-help", class: "small text-muted mb-2",
-                                if let Some(reason) = review_block_reason { "{reason}" }
-                                else { "Review the final score and collect both captains’ signatures when the match is finished." }
+                        div { class: "live-match-review mt-3",
+                            if !has_in_progress {
+                                if let Some(reason) = review_block_reason {
+                                    p { id: "review-result-help", class: "small text-muted mb-2", "{reason}" }
+                                }
                             }
                             div { class: "live-match-actions",
-                                button { r#type: "button", id: "finalize-match-btn", class: "btn btn-outline-primary d-none d-md-inline-flex",
-                                    aria_describedby: "review-result-help", disabled: review_block_reason.is_some(),
-                                    onclick: move |_| {
-                                        if point_pending() || stone_save.blocks_point_actions() || current_point().is_some() { return; }
-                                        navigator.push(Route::FinalizeMatch { url: url_finalize_btn.clone(), match_id: id_finalize_btn.clone() });
-                                    }, "Review result"
+                                if !has_in_progress {
+                                    button { r#type: "button", id: "finalize-match-btn", class: "btn btn-outline-primary d-none d-md-inline-flex",
+                                        aria_describedby: review_block_reason.map(|_| "review-result-help"), disabled: review_block_reason.is_some(),
+                                        onclick: move |_| {
+                                            if point_pending() || stone_save.blocks_point_actions() || current_point().is_some() { return; }
+                                            navigator.push(Route::FinalizeMatch { url: url_finalize_btn.clone(), match_id: id_finalize_btn.clone() });
+                                        }, "Review results"
+                                    }
                                 }
                                 if point_pending() || (stone_save.pending)() || (stone_save.retry)().is_some() {
                                     button { r#type: "button", class: "btn btn-outline-secondary", disabled: true,
-                                        aria_describedby: "point-action-help", "Back to match"
+                                        aria_describedby: action_block_reason.map(|_| "point-action-help"), "Back to match"
                                     }
                                 } else {
                                     Link { to: Route::MatchPageById { url: url.clone(), match_id: match_id.clone() }, class: "btn btn-outline-secondary", "Back to match" }
@@ -2181,18 +2137,22 @@ pub fn RunMatch(url: String, match_id: String) -> Element {
                         }
                     }
 
-                    div { class: if (stone_save.editing)() { "mobile-button-wrapper operator-match-controls live-match-action-bar live-correction-open d-md-none" } else { "mobile-button-wrapper operator-match-controls live-match-action-bar d-md-none" },
+                    div { class: format!("mobile-button-wrapper operator-match-controls live-match-action-bar d-md-none{}{}",
+                        if (stone_save.editing)() { " live-correction-open" } else { "" },
+                        if has_in_progress { " live-point-running" } else { "" }),
                         p { class: "live-action-status", role: "status",
                             if let Some(reason) = action_block_reason { "{reason}" } else { "{point_context}" }
                         }
-                        button { r#type: "button", class: "btn btn-outline-primary", aria_describedby: "review-result-help",
-                            disabled: review_block_reason.is_some(),
-                            onclick: move |_| {
-                                if point_pending() || stone_save.blocks_point_actions() || current_point().is_some() { return; }
-                                navigator.push(Route::FinalizeMatch { url: url_finalize_mobile.clone(), match_id: id_finalize_mobile.clone() });
-                            }, "Review result"
+                        if !has_in_progress {
+                            button { r#type: "button", class: "btn btn-outline-primary", aria_describedby: review_block_reason.map(|_| "review-result-help"),
+                                disabled: review_block_reason.is_some(),
+                                onclick: move |_| {
+                                    if point_pending() || stone_save.blocks_point_actions() || current_point().is_some() { return; }
+                                    navigator.push(Route::FinalizeMatch { url: url_finalize_mobile.clone(), match_id: id_finalize_mobile.clone() });
+                                }, "Review results"
+                            }
                         }
-                        button { r#type: "button", class: "{point_button_class}", aria_describedby: "point-action-help",
+                        button { r#type: "button", class: "{point_button_class}", aria_describedby: action_block_reason.map(|_| "point-action-help"),
                             onclick: on_start_end_point_mobile, disabled: point_button_disabled,
                             "{point_button_text}"
                         }

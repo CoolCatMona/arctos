@@ -169,6 +169,18 @@ const BOOTSTRAP: Asset = asset!("/assets/vendor/bootstrap.min.css");
 const ICONS: Asset = asset!("/assets/vendor/fontawesome");
 
 #[component]
+fn AccountAvatar(photo: Option<String>) -> Element {
+    let mut failed = use_signal(|| false);
+    rsx! {
+        if let Some(path) = photo.filter(|_| !failed()) {
+            img { class: "account-avatar", src: "{api::base_url()}/static/{path}", alt: "", onerror: move |_| failed.set(true) }
+        } else {
+            i { class: "fa-regular fa-user", aria_hidden: "true" }
+        }
+    }
+}
+
+#[component]
 pub fn Layout() -> Element {
     let auth_version = use_signal(|| 0u32);
     provide_context(auth_version);
@@ -305,7 +317,7 @@ pub fn Layout() -> Element {
                                         let was_open = account_open();
                                         account_open.set(!was_open);
                                     },
-                                    i { class: "fa-regular fa-user", aria_hidden: "true" }
+                                    AccountAvatar { key: "{u.profile_photo:?}", photo: u.profile_photo.clone() }
                                 }
                                 if account_open() {
                                     button {

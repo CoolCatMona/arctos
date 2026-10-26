@@ -124,22 +124,20 @@ pub fn TournamentHomeContent(
                     EventTab { id: "results".into(), label: "Results".into(), icon: "fas fa-trophy".into(), href: Some(format!("/{url}/results")) },
                 ];
                 if d.tournament.bracket_published || viewer_is_to {
-                    tabs.push(EventTab { id: "bracket".into(), label: if d.tournament.bracket_published { "Bracket" } else { "Preview bracket" }.into(), icon: "fas fa-sitemap".into(), href: Some(format!("/{url}/bracket")) });
+                    tabs.push(EventTab { id: "bracket".into(), label: "Bracket".into(), icon: "fas fa-sitemap".into(), href: Some(format!("/{url}/bracket")) });
                 }
                 tabs.push(EventTab { id: "sidecomps".into(), label: "Side events".into(), icon: "fas fa-medal".into(), href: Some(format!("/{url}?tab=sidecomps")) });
                 if let Some(title) = section_title.as_ref() {
                     tabs.push(EventTab { id: active_tab.clone(), label: title.clone(), icon: "fas fa-sliders-h".into(), href: Some(route.to_string()) });
                 }
-                let wide = content.is_some() && matches!(active_tab.as_str(), "schedule" | "results" | "bracket" | "schedule-edit" | "manage");
                 let league = d.tournament.league.as_ref();
                 let team_open = league.map_or(d.tournament.team_registration_open, |l| l.team_registration_open);
                 let player_open = league.map_or(d.tournament.player_registration_open, |l| l.player_registration_open);
                 rsx! {
-            div { class: if wide { "event-detail-page is-wide" } else { "event-detail-page" },
+            div { class: "event-detail-page",
                 EventHeader {
                     banner: banner_photo(),
                     title: d.tournament.name.clone(),
-                    kind: if league.is_some() { "League event".to_string() } else { "Tournament".to_string() },
                     date: Some(format_date_display(&d.tournament.start_date, d.tournament.end_date.as_ref())),
                     location: Some(d.tournament.location.clone().filter(|s| !s.trim().is_empty()).unwrap_or_else(|| "Location to be announced".into())),
                     team_count: d.teams_with_counts.len(),

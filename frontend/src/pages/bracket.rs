@@ -1829,54 +1829,119 @@ fn BracketContent(url: String) -> Element {
         }
     });
 
-    // Re-focus the hotkey root when the browser tab/window regains focus so
-    // shortcuts work without needing to click the center column first.
+    // Restore shortcuts only inside this bracket, without taking focus away
+    // from controls. Remove native listeners when the bracket is unmounted.
     #[cfg(target_arch = "wasm32")]
     {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        use wasm_bindgen::closure::Closure;
+
+        const INTERACTIVE: &str = "summary, a[href], button, input, textarea, select, label, \
+            [contenteditable]:not([contenteditable='false']), dialog, [role='dialog'], \
+            [role='button'], [role='link'], [role='menuitem'], [tabindex]:not([tabindex='-1'])";
+
+        fn is_interactive(element: &web_sys::Element) -> bool {
+            // The shortcut root itself is focusable, but is not a control.
+            element
+                .closest(INTERACTIVE)
+                .ok()
+                .flatten()
+                .is_some_and(|ancestor| ancestor.id() != "bracket-keyboard-focus")
+        }
+
+        fn can_restore_focus(document: &web_sys::Document) -> bool {
+            if document.hidden() {
+                return false;
+            }
+            let Some(root) = document.get_element_by_id("bracket-keyboard-focus") else {
+                return false;
+            };
+            let Some(active) = document.active_element() else {
+                return true;
+            };
+            if is_interactive(&active) {
+                return false;
+            }
+            active.tag_name() == "BODY" || root.contains(Some(&active))
+        }
+
+        struct FocusListeners {
+            window: web_sys::Window,
+            document: web_sys::Document,
+            focus: Closure<dyn FnMut(web_sys::Event)>,
+            click: Closure<dyn FnMut(web_sys::Event)>,
+        }
+        impl Drop for FocusListeners {
+            fn drop(&mut self) {
+                let _ = self.window.remove_event_listener_with_callback(
+                    "focus",
+                    self.focus.as_ref().unchecked_ref(),
+                );
+                let _ = self.document.remove_event_listener_with_callback(
+                    "visibilitychange",
+                    self.focus.as_ref().unchecked_ref(),
+                );
+                let _ = self.document.remove_event_listener_with_callback(
+                    "click",
+                    self.click.as_ref().unchecked_ref(),
+                );
+            }
+        }
+
+        let listeners = use_hook(|| Rc::new(RefCell::new(None::<FocusListeners>)));
+        let mounted = listeners.clone();
         use_effect(move || {
-            let window = match web_sys::window() {
-                Some(w) => w,
-                None => return,
+            if mounted.borrow().is_some() {
+                return;
+            }
+            let Some(window) = web_sys::window() else {
+                return;
             };
-            let doc = match window.document() {
-                Some(d) => d,
-                None => return,
+            let Some(document) = window.document() else {
+                return;
             };
-            let focus_cb =
-                wasm_bindgen::closure::Closure::wrap(Box::new(move |_ev: web_sys::Event| {
+            let focus_document = document.clone();
+            let focus = Closure::wrap(Box::new(move |_: web_sys::Event| {
+                if can_restore_focus(&focus_document) {
                     focus_bracket_root();
-                }) as Box<dyn FnMut(_)>);
-            let click_cb =
-                wasm_bindgen::closure::Closure::wrap(Box::new(move |ev: web_sys::Event| {
-                    // Don't steal focus from real form controls.
-                    if let Some(t) = ev.target() {
-                        if let Some(el) = t.dyn_ref::<web_sys::Element>() {
-                            let tag = el.tag_name().to_ascii_lowercase();
-                            if matches!(
-                                tag.as_str(),
-                                "input" | "textarea" | "select" | "button" | "a"
-                            ) {
-                                return;
-                            }
-                            // contenteditable
-                            if el.get_attribute("contenteditable").as_deref() == Some("true") {
-                                return;
-                            }
-                        }
-                    }
+                }
+            }) as Box<dyn FnMut(_)>);
+            let click_document = document.clone();
+            let click = Closure::wrap(Box::new(move |event: web_sys::Event| {
+                let Some(target) = event
+                    .target()
+                    .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+                else {
+                    return;
+                };
+                let Some(root) = click_document.get_element_by_id("bracket-keyboard-focus") else {
+                    return;
+                };
+                if root.contains(Some(&target))
+                    && !is_interactive(&target)
+                    && can_restore_focus(&click_document)
+                {
                     focus_bracket_root();
-                }) as Box<dyn FnMut(_)>);
+                }
+            }) as Box<dyn FnMut(_)>);
             let _ =
-                window.add_event_listener_with_callback("focus", focus_cb.as_ref().unchecked_ref());
-            let _ = doc.add_event_listener_with_callback(
+                window.add_event_listener_with_callback("focus", focus.as_ref().unchecked_ref());
+            let _ = document.add_event_listener_with_callback(
                 "visibilitychange",
-                focus_cb.as_ref().unchecked_ref(),
+                focus.as_ref().unchecked_ref(),
             );
             let _ =
-                doc.add_event_listener_with_callback("click", click_cb.as_ref().unchecked_ref());
-            // Leak listeners for the page lifetime (component is long-lived).
-            focus_cb.forget();
-            click_cb.forget();
+                document.add_event_listener_with_callback("click", click.as_ref().unchecked_ref());
+            *mounted.borrow_mut() = Some(FocusListeners {
+                window,
+                document,
+                focus,
+                click,
+            });
+        });
+        use_drop(move || {
+            listeners.borrow_mut().take();
         });
     }
 
@@ -2733,12 +2798,43 @@ fn BracketContent(url: String) -> Element {
                                                 }
                                             }
                                         }
+                                        details { class: "bracket-view-menu",
+                                            onclick: move |event: Event<MouseData>| event.stop_propagation(),
+                                            onkeydown: move |event: Event<KeyboardData>| event.stop_propagation(),
+                                            summary { class: "btn btn-outline-secondary btn-sm", "View controls" }
+                                            div { class: "bracket-view-controls", role: "group", aria_label: "Bracket canvas view",
+                                                // Keep controls keyboard-focusable; the canvas root otherwise reclaims focus on clicks.
+                                                onclick: move |event: Event<MouseData>| event.stop_propagation(),
+                                                onkeydown: move |event: Event<KeyboardData>| event.stop_propagation(),
+                                                div { class: "bracket-zoom-controls", role: "group", aria_label: "Zoom controls",
+                                                    button {
+                                                        r#type: "button", class: "btn btn-outline-secondary btn-sm",
+                                                        aria_label: "Zoom out", title: "Zoom out",
+                                                        disabled: zoom() <= MIN_ZOOM,
+                                                        onclick: move |_| { zoom.set((zoom() / 1.2).clamp(MIN_ZOOM, MAX_ZOOM)); },
+                                                        "−"
+                                                    }
+                                                    output { class: "bracket-zoom-value", aria_label: "Zoom level", "{(zoom() * 100.0).round()}%" }
+                                                    button {
+                                                        r#type: "button", class: "btn btn-outline-secondary btn-sm",
+                                                        aria_label: "Zoom in", title: "Zoom in",
+                                                        disabled: zoom() >= MAX_ZOOM,
+                                                        onclick: move |_| { zoom.set((zoom() * 1.2).clamp(MIN_ZOOM, MAX_ZOOM)); },
+                                                        "+"
+                                                    }
+                                                }
+                                                div { class: "bracket-pan-controls", role: "group", aria_label: "Move diagram",
+                                                    button { r#type: "button", class: "btn btn-outline-secondary btn-sm", aria_label: "Move diagram left", title: "Move diagram left", onclick: move |_| { let (x, y) = pan(); pan.set((x - 120.0, y)); }, "←" }
+                                                    button { r#type: "button", class: "btn btn-outline-secondary btn-sm", aria_label: "Move diagram up", title: "Move diagram up", onclick: move |_| { let (x, y) = pan(); pan.set((x, y - 120.0)); }, "↑" }
+                                                    button { r#type: "button", class: "btn btn-outline-secondary btn-sm", aria_label: "Move diagram down", title: "Move diagram down", onclick: move |_| { let (x, y) = pan(); pan.set((x, y + 120.0)); }, "↓" }
+                                                    button { r#type: "button", class: "btn btn-outline-secondary btn-sm", aria_label: "Move diagram right", title: "Move diagram right", onclick: move |_| { let (x, y) = pan(); pan.set((x + 120.0, y)); }, "→" }
+                                                }
+                                                button { r#type: "button", class: "btn btn-outline-secondary btn-sm", onclick: move |_| { zoom.set(1.0); pan.set((0.0, 0.0)); }, "Reset view" }
+                                            }
+                                        }
                                         details { class: "bracket-shortcut-help text-muted small",
                                             summary { "Keyboard and mouse shortcuts" }
                                             p { class: "mb-0 mt-2", "Drag an item to move it · Drag empty space to pan on touchscreens · Scroll to zoom · Right-drag to pan · Shift+click for multiple selection · Alt/Meta drag for fine adjustment" }
-                                        }
-                                        if saving() {
-                                            span { class: "text-muted small", "Saving…" }
                                         }
                                     }
                                 }
@@ -2801,37 +2897,6 @@ fn BracketContent(url: String) -> Element {
                             }
                         }
 
-                        if !show_legacy_fallback && edit_mode() {
-                            div { class: "bracket-view-controls", role: "group", aria_label: "Bracket canvas view",
-                                // Keep controls keyboard-focusable; the canvas root otherwise reclaims focus on clicks.
-                                onclick: move |event: Event<MouseData>| event.stop_propagation(),
-                                onkeydown: move |event: Event<KeyboardData>| event.stop_propagation(),
-                                div { class: "bracket-zoom-controls", role: "group", aria_label: "Zoom controls",
-                                    button {
-                                        r#type: "button", class: "btn btn-outline-secondary btn-sm",
-                                        aria_label: "Zoom out", title: "Zoom out",
-                                        disabled: zoom() <= MIN_ZOOM,
-                                        onclick: move |_| { zoom.set((zoom() / 1.2).clamp(MIN_ZOOM, MAX_ZOOM)); },
-                                        "−"
-                                    }
-                                    output { class: "bracket-zoom-value", aria_label: "Zoom level", "{(zoom() * 100.0).round()}%" }
-                                    button {
-                                        r#type: "button", class: "btn btn-outline-secondary btn-sm",
-                                        aria_label: "Zoom in", title: "Zoom in",
-                                        disabled: zoom() >= MAX_ZOOM,
-                                        onclick: move |_| { zoom.set((zoom() * 1.2).clamp(MIN_ZOOM, MAX_ZOOM)); },
-                                        "+"
-                                    }
-                                }
-                                div { class: "bracket-pan-controls", role: "group", aria_label: "Move diagram",
-                                    button { r#type: "button", class: "btn btn-outline-secondary btn-sm", aria_label: "Move diagram left", title: "Move diagram left", onclick: move |_| { let (x, y) = pan(); pan.set((x - 120.0, y)); }, "←" }
-                                    button { r#type: "button", class: "btn btn-outline-secondary btn-sm", aria_label: "Move diagram up", title: "Move diagram up", onclick: move |_| { let (x, y) = pan(); pan.set((x, y - 120.0)); }, "↑" }
-                                    button { r#type: "button", class: "btn btn-outline-secondary btn-sm", aria_label: "Move diagram down", title: "Move diagram down", onclick: move |_| { let (x, y) = pan(); pan.set((x, y + 120.0)); }, "↓" }
-                                    button { r#type: "button", class: "btn btn-outline-secondary btn-sm", aria_label: "Move diagram right", title: "Move diagram right", onclick: move |_| { let (x, y) = pan(); pan.set((x + 120.0, y)); }, "→" }
-                                }
-                                button { r#type: "button", class: "btn btn-outline-secondary btn-sm", onclick: move |_| { zoom.set(1.0); pan.set((0.0, 0.0)); }, "Reset view" }
-                            }
-                        }
                         if !show_legacy_fallback && !edit_mode() {
                             p { class: "bracket-mobile-hint text-muted small", "Pinch to zoom in. Tap a match name for its details." }
                         }

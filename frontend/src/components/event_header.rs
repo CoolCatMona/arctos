@@ -114,7 +114,6 @@ pub struct EventHeaderProps {
     pub title: String,
     #[props(default)]
     pub banner: Option<String>,
-    pub kind: String,
     pub date: Option<String>,
     pub location: Option<String>,
     pub team_count: usize,
@@ -158,7 +157,6 @@ pub fn EventHeader(props: EventHeaderProps) -> Element {
                     }
                 }
                 div { class: "event-hero-badges",
-                    span { class: "event-kind-badge", i { class: "fas fa-trophy", aria_hidden: "true" } "{props.kind}" }
                     if props.registration_open {
                         span { class: "event-registration-badge", i { class: "fas fa-circle-check", aria_hidden: "true" } "Registration open" }
                     }

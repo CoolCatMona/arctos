@@ -29,8 +29,7 @@ mod modal;
 mod organize_menu;
 mod organizer_tools;
 mod results_games_table;
-mod results_ranking;
-mod results_standings;
+mod results_sort_header;
 mod sidecomp_weapon_modal;
 mod team_label;
 mod team_token_input;
@@ -58,8 +57,7 @@ pub use modal::{Modal, ModalKind, ModalSize};
 pub use organize_menu::{OrganizeContext, OrganizeMenu};
 pub use organizer_tools::OrganizerTools;
 pub use results_games_table::{ResultsGamesTable, rows_for_team};
-pub use results_ranking::calculate_ranks;
-pub use results_standings::{ResultsRank, ResultsSortHeader};
+pub use results_sort_header::ResultsSortHeader;
 pub use sidecomp_weapon_modal::{
     default_allowed_weapons, AllowedWeaponsCheckboxes, PompfenIcon, SideCompRegistrationMode,
     SideCompWeaponModal, ALL_POMPFEN,

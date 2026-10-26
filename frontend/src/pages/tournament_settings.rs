@@ -1067,13 +1067,12 @@ pub fn TournamentSettings(url: String) -> Element {
                                 div { class: "alert alert-danger mb-3", role: "alert", "{e}" }
                             }
                             form {
-                                class: "row g-2 align-items-end",
                                 onsubmit: move |ev| {
                                     ev.prevent_default();
                                     let user_type = get_form_value("to_user_type");
                                     let user_id = get_form_value("to_user_id").trim().to_string();
                                     if user_id.is_empty() {
-                                        to_error.set(Some("User ID is required.".to_string()));
+                                        to_error.set(Some("Username is required.".to_string()));
                                         return;
                                     }
                                     to_error.set(None);
@@ -1093,30 +1092,33 @@ pub fn TournamentSettings(url: String) -> Element {
                                         }
                                     });
                                 },
-                                div { class: "col-auto",
-                                    label { class: "form-label", r#for: "to_user_type", "User Type" }
-                                    select {
-                                        class: "form-select form-select-sm",
-                                        id: "to_user_type",
-                                        name: "to_user_type",
-                                        option { value: "player", "Player" }
-                                        option { value: "team", "Team" }
+                                div { class: "row g-2 align-items-end",
+                                    div { class: "col-12 col-sm-auto",
+                                        label { class: "form-label", r#for: "to_user_type", "Account type" }
+                                        select {
+                                            class: "form-select form-select-sm",
+                                            id: "to_user_type",
+                                            name: "to_user_type",
+                                            option { value: "player", "Player" }
+                                            option { value: "team", "Team" }
+                                        }
+                                    }
+                                    div { class: "col-12 col-sm",
+                                        label { class: "form-label", r#for: "to_user_id", "Username" }
+                                        input {
+                                            class: "form-control form-control-sm",
+                                            id: "to_user_id",
+                                            name: "to_user_id",
+                                            r#type: "text",
+                                            autocomplete: "off", autocapitalize: "none", spellcheck: "false",
+                                            required: true, aria_describedby: "organizer-id-help",
+                                        }
+                                    }
+                                    div { class: "col-12 col-sm-auto d-grid",
+                                        button { r#type: "submit", class: "btn btn-primary", "Add organizer" }
                                     }
                                 }
-                                div { class: "col-auto",
-                                    label { class: "form-label", r#for: "to_user_id", "User ID" }
-                                    input {
-                                        class: "form-control form-control-sm",
-                                        id: "to_user_id",
-                                        name: "to_user_id",
-                                        r#type: "text",
-                                        placeholder: "Case-sensitive", required: true, aria_describedby: "organizer-id-help",
-                                    }
-                                    p { id: "organizer-id-help", class: "form-text", "Enter the exact player or team username, including its capitalization." }
-                                }
-                                div { class: "col-auto",
-                                    button { r#type: "submit", class: "btn btn-primary btn-sm", "Add organizer" }
-                                }
+                                p { id: "organizer-id-help", class: "form-text mb-0", "Enter the exact player or team username, including its capitalization." }
                             }
                         }
                     }

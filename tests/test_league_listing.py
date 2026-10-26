@@ -1,4 +1,4 @@
-"""League browsing uses public round dates without changing registration data."""
+"""League season dates and event lists use the caller's round visibility."""
 
 from datetime import datetime
 
@@ -91,6 +91,49 @@ def test_listing_empty_and_hidden_rounds_have_unknown_dates_and_private_leagues_
     }
     assert private.url not in payload["team_counts"]
     assert private.url not in payload["user_reg_status"]
+
+
+@pytest.mark.parametrize("owner_kind", ["player", "team"])
+@pytest.mark.parametrize("viewer", ["guest", "unrelated", "league_organizer", "event_organizer", "same_id_other_type"])
+def test_league_season_dates_match_the_rounds_visible_on_its_page(
+    app, client, player, team, monkeypatch, owner_kind, viewer
+):
+    owner = player if owner_kind == "player" else team
+    unrelated = team if owner_kind == "player" else player
+    league = add_league("season-with-draft")
+    add_round(league, "past-public-round", "2025-06-01")
+    add_round(league, "future-draft-round", "2028-12-30", "2028-12-31", published=False)
+    db.session.flush()
+    if viewer in {"league_organizer", "same_id_other_type"}:
+        db.session.add(TO(league_id=league.url, user_id=owner.id, user_type=owner_kind))
+    elif viewer == "event_organizer":
+        # League events inherit league organizers, not event-specific TO rows.
+        db.session.add(TO(event="future-draft-round", user_id=owner.id, user_type=owner_kind))
+    if viewer == "same_id_other_type":
+        other_model = Team if owner_kind == "player" else Player
+        colliding = other_model(id=owner.id, name="Same username, other account type", pw_hash="unused")
+        db.session.add(colliding)
+    db.session.commit()
+    if viewer != "guest":
+        login_as(client, unrelated if viewer == "unrelated" else owner)
+    if viewer == "same_id_other_type":
+        # Exercise the account-type boundary independently of the ID-only
+        # session loader; ordinary registration prevents these collisions.
+        monkeypatch.setattr(app.login_manager, "_user_callback", lambda _user_id: colliding)
+
+    payload = listing(client)
+    detail = client.get(f"/_api/leagues/{league.url}")
+    assert detail.status_code == 200
+    events = detail.get_json()["events"]
+    can_see_drafts = viewer == "league_organizer"
+    assert [event["url"] for event in events] == (
+        ["past-public-round", "future-draft-round"] if can_see_drafts else ["past-public-round"]
+    )
+    assert payload["event_dates"][league.url] == {
+        "start_date": "2025-06-01T00:00:00",
+        "end_date": "2028-12-31T00:00:00" if can_see_drafts else "2025-06-01T00:00:00",
+        "event_count": len(events),
+    }
 
 
 @pytest.mark.parametrize("league_count", [0, 1, 5])
@@ -196,11 +239,18 @@ def test_private_league_discovery_requires_typed_organizer_membership(
     assert {league["league_url"] for league in payload["leagues"]} == expected
     assert set(payload["event_dates"]) == set(payload["team_counts"]) == expected
     assert set(payload["user_reg_status"]) <= expected
+    detail = client.get(f"/_api/leagues/{private.url}")
     if viewer == "assigned_to":
-        # Organizer visibility does not leak unpublished round metadata into
-        # the listing range, which must match the public event calendar.
+        assert detail.status_code == 200
+        assert [event["url"] for event in detail.get_json()["events"]] == [
+            "public-round-in-draft-league",
+            "draft-round",
+        ]
         assert payload["event_dates"][private.url] == {
             "start_date": "2025-06-01T00:00:00",
-            "end_date": "2025-06-01T00:00:00",
-            "event_count": 1,
+            "end_date": "2028-12-31T00:00:00",
+            "event_count": 2,
         }
+    else:
+        assert detail.status_code == 403
+        assert "events" not in detail.get_json()

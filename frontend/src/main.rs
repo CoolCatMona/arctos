@@ -269,6 +269,7 @@ fn main() {
     }
     dioxus::launch(|| {
         rsx! {
+            document::Link { rel: "icon", r#type: "image/svg+xml", href: asset!("/assets/favicon.svg") }
             Router::<Route> {}
         }
     });

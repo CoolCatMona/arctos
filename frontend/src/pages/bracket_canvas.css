@@ -687,7 +687,11 @@
 .bracket-page-toolbar > * { max-width: 100%; }
 .bracket-shortcut-help { flex-basis: 100%; }
 .bracket-shortcut-help summary { cursor: pointer; padding: .5rem 0; }
-.bracket-view-controls { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; padding: .75rem; margin-bottom: .75rem; border: 1px solid var(--ui-border); border-radius: .75rem; background: var(--ui-surface-muted); }
+.bracket-view-menu { position: relative; margin-left: auto; }
+.bracket-view-menu > summary { list-style: none; }
+.bracket-view-menu > summary::-webkit-details-marker { display: none; }
+.bracket-view-controls { position: absolute; top: calc(100% + .5rem); right: 0; z-index: 20; display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; width: min(310px, calc(100vw - 48px)); padding: .75rem; border: 1px solid var(--ui-border); border-radius: .5rem; background: var(--ui-surface); box-shadow: 0 4px 12px var(--ui-shadow); }
+#bracket-save-status { line-height: 1.5; min-height: 1.5em; }
 .bracket-zoom-controls, .bracket-pan-controls { display: flex; align-items: center; gap: .35rem; }
 .bracket-view-controls .btn { min-width: 44px; min-height: 44px; }
 .bracket-zoom-value { min-width: 4rem; text-align: center; font-variant-numeric: tabular-nums; }

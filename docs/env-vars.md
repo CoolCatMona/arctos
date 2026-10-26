@@ -42,9 +42,23 @@ and fill only the values you need.
 : (default `104857600`) Max upload/request size in bytes.
 
 `SILLY_USERS`
-: Colon-separated account ids/usernames. These are the `Player.id` or
-  `Team.id` slug values used to log in, not display names and not
-  numeric database row ids; e.g. `alice:team-slug`.
+: Enables the additional built-in Stones sounds for the listed accounts.
+  Use exact, case-sensitive usernames separated by colons; for example,
+  `alice:team-slug`. These are the `Player.id` or `Team.id` values used to
+  sign in. Unlisted accounts and signed-out visitors receive Classic and
+  Snare. Custom MP3 playback is available to everyone.
+
+  Set this variable in the backend process environment and restart the
+  backend after changing it. `just dev` and `just run` load `.env`; the
+  isolated demo launcher uses the environment passed to its command.
+  To enable the extra sounds for the demo organizer:
+
+  ```sh
+  SILLY_USERS=demo-organizer uv run python -m scripts.dev_demo
+  ```
+
+  Sign in as that account and open or reload Stones. The same environment
+  prefix works with the demo launcher's `--snapshot` option.
 
 
 ## Scoreboard overlay rendering

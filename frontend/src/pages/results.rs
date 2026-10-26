@@ -1,6 +1,6 @@
 use super::tournament_home::TournamentHomeContent;
 use crate::api;
-use crate::components::{ResultsGamesTable, ResultsRank, ResultsSortHeader, calculate_ranks, rows_for_team};
+use crate::components::{ResultsGamesTable, ResultsSortHeader, rows_for_team};
 use crate::Route;
 use dioxus::prelude::*;
 use std::cmp::Ordering;
@@ -30,20 +30,20 @@ fn ResultsContent(url: String) -> Element {
     let mut expanded = use_signal(|| None::<String>);
     let mut team_matches_cache =
         use_signal(|| HashMap::<String, Option<Result<crate::types::TeamMatchesResponse, String>>>::new());
-    let mut sort_column = use_signal(|| "rank".to_string());
+    let mut sort_column = use_signal(|| "team".to_string());
     let mut sort_asc = use_signal(|| true);
 
     let val = data.value();
     rsx! {
         if let Some(Ok(results_data)) = val.read().as_ref() {
-            div { class: "d-flex align-items-center gap-2 mt-2 mb-2",
-                label { class: "form-check-label d-flex align-items-center gap-1 user-select-none",
+            div { class: "d-flex align-items-center mb-2",
+                label { class: "form-check-label d-inline-flex align-items-center gap-2 user-select-none mb-0",
                     input {
                         class: "form-check-input",
                         r#type: "checkbox",
                         id: "results-include-ribbon",
                         checked: include_ribbon(),
-                        onchange: move |e| include_ribbon.set(e.value() == "true"),
+                        onchange: move |e| include_ribbon.set(e.checked()),
                     }
                     "Include ribbon games"
                 }
@@ -55,26 +55,10 @@ fn ResultsContent(url: String) -> Element {
                 }
             } else {
                 {
-                    let ranks = calculate_ranks(&results_data.teams);
                     let mut teams_sorted = results_data.teams.iter().collect::<Vec<_>>();
                     let col = sort_column().clone();
                     let asc = sort_asc();
                     teams_sorted.sort_by(|a, b| {
-                        // Keep unranked teams last in either rank sort direction.
-                        if col == "rank" {
-                            return match (ranks.get(&a.id), ranks.get(&b.id)) {
-                                (Some(a_rank), Some(b_rank)) => {
-                                    let order = a_rank.cmp(b_rank);
-                                    (if asc { order } else { order.reverse() })
-                                        .then_with(|| a.pseudonym.to_lowercase().cmp(&b.pseudonym.to_lowercase()))
-                                        .then_with(|| a.id.cmp(&b.id))
-                                }
-                                (Some(_), None) => Ordering::Less,
-                                (None, Some(_)) => Ordering::Greater,
-                                (None, None) => a.pseudonym.to_lowercase().cmp(&b.pseudonym.to_lowercase())
-                                    .then_with(|| a.id.cmp(&b.id)),
-                            };
-                        }
                         let ord = match col.as_str() {
                             "matches" => {
                                 let a_tot = u64::from(a.matches_won) + u64::from(a.matches_lost);
@@ -100,29 +84,14 @@ fn ResultsContent(url: String) -> Element {
                     });
                     let backend = api::base_url();
                 rsx! {
-                div { class: "data-section mt-3",
+                div { class: "data-section",
                     div {
-                        p { id: "standings-ranking-help", class: "text-muted small mb-2", "Ranked by match win percentage, then point win percentage. Ties share a rank." }
-                        div { class: "table-responsive", role: "region", aria_label: "Tournament standings", tabindex: "0",
-                            table { class: "table table-striped align-middle mb-0", aria_describedby: "standings-ranking-help",
-                                caption { class: "visually-hidden", "Tournament standings" }
+                        div { class: "table-responsive results-summary-scroll", role: "region", aria_label: "Tournament results", tabindex: "0",
+                            table { class: "table table-striped align-middle mb-0 results-summary-table",
+                                caption { class: "visually-hidden", "Tournament results" }
                                 thead {
                                     tr {
                                         th { scope: "col", style: "width: 1%;", span { class: "visually-hidden", "Match details" } }
-                                        ResultsSortHeader {
-                                            label: "Rank",
-                                            numeric: true,
-                                            active: sort_column() == "rank",
-                                            ascending: sort_asc(),
-                                            onsort: move |_| {
-                                                if sort_column() == "rank" {
-                                                    sort_asc.set(!sort_asc());
-                                                } else {
-                                                    sort_column.set("rank".to_string());
-                                                    sort_asc.set(true);
-                                                }
-                                            },
-                                        }
                                         ResultsSortHeader {
                                             label: "Team",
                                             active: sort_column() == "team",
@@ -206,6 +175,7 @@ fn ResultsContent(url: String) -> Element {
                                                     r#type: "button",
                                                     class: "btn btn-lg p-0 text-secondary results-expand-toggle",
                                                     "aria-label": if is_expanded { "Collapse" } else { "Expand" },
+                                                    aria_expanded: is_expanded,
                                                     onclick: move |ev: Event<MouseData>| {
                                                         ev.stop_propagation();
                                                         if is_expanded {
@@ -217,7 +187,6 @@ fn ResultsContent(url: String) -> Element {
                                                     if is_expanded { "−" } else { "+" }
                                                 }
                                             }
-                                            td { class: "table-number", ResultsRank { rank: ranks.get(&tid).copied() } }
                                             td { class: "table-copy table-identity",
                                                 Link {
                                                     to: Route::TeamProfilePage { id: row_team.id.clone() },
@@ -247,7 +216,7 @@ fn ResultsContent(url: String) -> Element {
                                         if is_expanded {
                                             tr {
                                                 key: "{tid}-detail",
-                                                td { colspan: 5, class: "p-0 bg-light results-games-cell",
+                                                td { colspan: 4, class: "p-0 bg-light results-games-cell",
                                                         match team_matches_cache().get(&tid) {
                                                             None | Some(None) => rsx! { p { class: "text-muted mb-0", "Loading…" } },
                                                             Some(Some(Err(e))) => rsx! { p { class: "text-danger mb-0", "{e}" } },

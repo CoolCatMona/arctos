@@ -131,7 +131,6 @@ pub fn LeagueHomeContent(
             {{
                 let viewer_is_to = is_current_user_to(me_res.read().as_ref(), &d.to_entries);
                 let unattached_count = d.unattached_players.len();
-                let wide = content.is_some() && matches!(active_tab.as_str(), "results" | "manage");
                 let mut tabs = vec![
                     EventTab { id: "info".into(), label: "Info".into(), icon: "fas fa-info-circle".into(), href: Some(format!("/leagues/{league_url}")) },
                     EventTab { id: "events".into(), label: format!("Events ({})", d.events.len()), icon: "far fa-calendar-alt".into(), href: Some(format!("/leagues/{league_url}?tab=events")) },
@@ -142,11 +141,10 @@ pub fn LeagueHomeContent(
                     tabs.push(EventTab { id: active_tab.clone(), label: title.clone(), icon: "fas fa-sliders-h".into(), href: Some(route.to_string()) });
                 }
                 rsx! {
-            div { class: if wide { "event-detail-page is-wide" } else { "event-detail-page" },
+            div { class: "event-detail-page",
                 EventHeader {
                     banner: banner_photo(),
                     title: d.league.name.clone(),
-                    kind: "League".to_string(),
                     date: None,
                     location: None,
                     team_count: d.teams_with_counts.len(),
