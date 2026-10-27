@@ -676,14 +676,110 @@ fn read_debug_mode() -> bool {
 /// completes (or a plain click on empty grid space).
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct DragCreatePayload {
-    /// Field column the drag happened in.
-    field_name: String,
+    /// Field column the drag happened in; None is the event-wide activity lane.
+    field_name: Option<String>,
     /// Snapped drag start, local time.
     start_local: chrono::NaiveDateTime,
     /// Drag extent in minutes (already min-clamped); None = plain click → default length.
     length_min: Option<u32>,
     /// Suggested previous match on that field (latest displayed start at-or-before the drag start).
     prev_match_id: Option<String>,
+}
+
+impl DragCreatePayload {
+    fn activity_end_local(&self) -> chrono::NaiveDateTime {
+        self.start_local + chrono::Duration::minutes(self.length_min.unwrap_or(30) as i64)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ScheduleAddKind {
+    Static,
+    Safe,
+    Fast,
+    Break,
+    StaticBreak,
+    Join,
+    Activity,
+    SideCompetition,
+}
+
+impl ScheduleAddKind {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Static => "Static match",
+            Self::Safe => "Safe match",
+            Self::Fast => "Fast match",
+            Self::Break => "Break",
+            Self::StaticBreak => "Static break",
+            Self::Join => "Join",
+            Self::Activity => "Activity or announcement",
+            Self::SideCompetition => "Side competition",
+        }
+    }
+
+    fn schedule_type(self) -> Option<&'static str> {
+        match self {
+            Self::Static => Some("STATIC"),
+            Self::Safe => Some("SAFE"),
+            Self::Fast => Some("FAST"),
+            Self::Break => Some("BREAK"),
+            Self::StaticBreak => Some("STATBREAK"),
+            Self::Join => Some("JOIN"),
+            Self::Activity | Self::SideCompetition => None,
+        }
+    }
+}
+
+/// Use the side of the trigger with room, keeping the options scrollable on short screens.
+fn schedule_add_menu_position() -> (bool, f64) {
+    #[cfg(target_arch = "wasm32")]
+    if let Some(window) = web_sys::window() {
+        if let Some(trigger) = window.document().and_then(|document| document.get_element_by_id("schedule-add-trigger")) {
+            let rect = trigger.get_bounding_client_rect();
+            let viewport_height = window.inner_height().ok().and_then(|height| height.as_f64()).unwrap_or(600.0);
+            let above = rect.top() - 12.0;
+            let below = viewport_height - rect.bottom() - 12.0;
+            let opens_above = below < 460.0 && above > below;
+            return (opens_above, (if opens_above { above } else { below }).clamp(44.0, 460.0));
+        }
+    }
+    (false, 460.0)
+}
+
+#[component]
+fn ScheduleAddChoices(matches_allowed: bool, on_choose: EventHandler<ScheduleAddKind>) -> Element {
+    let groups: [(&str, &[ScheduleAddKind]); 3] = [
+        ("Matches", &[
+            ScheduleAddKind::Static,
+            ScheduleAddKind::Safe,
+            ScheduleAddKind::Fast,
+        ]),
+        ("Breaks and timing", &[
+            ScheduleAddKind::Break,
+            ScheduleAddKind::StaticBreak,
+            ScheduleAddKind::Join,
+        ]),
+        ("Activities", &[
+            ScheduleAddKind::Activity,
+            ScheduleAddKind::SideCompetition,
+        ]),
+    ];
+    rsx! {
+        div { class: "schedule-add-choices",
+            for (label, choices) in groups {
+                div { class: "schedule-add-group", role: "group", aria_label: label,
+                    p { class: "schedule-add-group-label", "{label}" }
+                    for &choice in choices {
+                        button { r#type: "button", class: "schedule-add-choice",
+                            disabled: !matches_allowed && choice.schedule_type().is_some(),
+                            onclick: move |_| on_choose.call(choice), "{choice.label()}"
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Placeholder block shown on the editor timeline while the create card is
@@ -847,6 +943,9 @@ fn SchedulePage(
     let mut is_to = use_signal(|| false);
 
     let mut active_modal = use_signal(|| "none".to_string());
+    let mut add_menu_open = use_signal(|| false);
+    let mut add_menu_above = use_signal(|| false);
+    let mut add_menu_height = use_signal(|| 460.0);
     let mut last_helper_setup = use_signal(|| None::<ScheduleSetupResponse>);
     use_effect(move || {
         if let Some(Ok(data)) = setup_data.read().as_ref() {
@@ -876,11 +975,13 @@ fn SchedulePage(
     let mut push_back_minutes = use_signal(|| 30i32);
     // Local calendar day currently shown in the timeline (`YYYY-MM-DD`); the
     // timeline writes this as the user navigates days.
-    let mut viewed_day = use_signal(|| {
-        let today = (chrono::Utc::now()
-            + chrono::Duration::minutes(schedule_tz_offset_minutes()))
-        .date_naive();
-        today.format("%Y-%m-%d").to_string()
+    let mut viewed_day = use_signal(String::new);
+    use_effect(move || {
+        if viewed_day.peek().is_empty() {
+            if let Some(Ok(data)) = setup_data.read().as_ref() {
+                viewed_day.set(data.tournament.start_date.chars().take(10).collect());
+            }
+        }
     });
     // Warnings click: timeline switches to this match's day and centers the block.
     let mut focus_match = use_signal(|| None::<String>);
@@ -890,8 +991,8 @@ fn SchedulePage(
     let mut create_prefill = use_signal(|| None::<DragCreatePayload>);
     // Bumped per drag-create so the card remounts with fresh prefill state.
     let mut create_prefill_nonce = use_signal(|| 0u32);
-    // Default schedule type for newly created matches (toolbar dropdown; not persisted).
-    let mut default_match_type = use_signal(|| "STATIC".to_string());
+    // Chosen for this creation only; each Add action asks for its own item type.
+    let mut create_kind = use_signal(|| ScheduleAddKind::Static);
     // Placeholder on the timeline while the create card is open, kept in sync with
     // the card's field/start/length values (the card writes it via this signal).
     let mut create_ghost = use_signal(|| None::<PendingCreateGhost>);
@@ -899,6 +1000,14 @@ fn SchedulePage(
     let mut team_field_focus = use_signal(|| None::<String>);
     // Winner/Loser chip clicks queue a `<Match>::winner|loser` token for the open card.
     let mut insert_team_ref = use_signal(|| None::<String>);
+    let choose_create_kind = EventHandler::new(move |kind: ScheduleAddKind| {
+        add_menu_open.set(false);
+        create_kind.set(kind);
+        selected_activity.set(None);
+        create_prefill_nonce.set(create_prefill_nonce().wrapping_add(1));
+        team_field_focus.set(None);
+        active_modal.set(if kind.schedule_type().is_some() { "match_create" } else { "activity" }.into());
+    });
 
     // Pull schedule warnings in parallel so we can surface a cycle banner at the top
     // of the page. Re-runs whenever refresh_trigger bumps so the banner stays in sync
@@ -1070,6 +1179,13 @@ fn SchedulePage(
         let current = active_modal();
         let previous = previous_active_modal.peek().clone();
         previous_active_modal.set(current.clone());
+        if current != "none" { add_menu_open.set(false); }
+        if current == "none" && previous != "none" {
+            create_prefill.set(None);
+            create_ghost.set(None);
+            selected_activity.set(None);
+            team_field_focus.set(None);
+        }
         #[cfg(target_arch = "wasm32")]
         if current == "none" && is_docked_schedule_editor(&previous) {
             spawn(async move {
@@ -1120,6 +1236,14 @@ fn SchedulePage(
                     return;
                 }
                 let key_str = ev.key().to_string();
+                if add_menu_open() {
+                    if key_str == "Escape" {
+                        ev.prevent_default();
+                        add_menu_open.set(false);
+                        crate::appearance::focus_control("schedule-add-trigger");
+                    }
+                    return;
+                }
                 let modal_open = active_modal() != "none";
                 if modal_open {
                     // Native helpers own Escape, including their pending-write guard.
@@ -1297,6 +1421,7 @@ fn SchedulePage(
                                             button {
                                                 r#type: "button",
                                                 class: "btn btn-link p-0 align-baseline",
+                                                disabled: active_modal() != "none",
                                                 onclick: move |_| active_modal.set("schedule_warnings".to_string()),
                                                 "Warnings"
                                             }
@@ -1440,43 +1565,50 @@ fn SchedulePage(
                                 }
                                 if editor {
                                     div { class: "d-flex flex-wrap align-items-center gap-1",
-                                            button {
-                                                r#type: "button",
-                                                class: "btn btn-sm btn-outline-secondary",
-                                                disabled: data.fields.is_empty() || active_modal() != "none" || bulk_mode(),
-                                                onclick: move |_| {
-                                                    create_prefill.set(None);
-                                                    create_prefill_nonce.set(create_prefill_nonce().wrapping_add(1));
-                                                    team_field_focus.set(None);
-                                                    active_modal.set("match_create".to_string());
+                                            div { id: "schedule-add-control", class: if !add_menu_open() { "schedule-add-menu" } else if add_menu_above() { "schedule-add-menu is-open opens-above" } else { "schedule-add-menu is-open" },
+                                                onfocusout: move |_| {
+                                                    #[cfg(target_arch = "wasm32")]
+                                                    spawn(async move {
+                                                        gloo_timers::future::TimeoutFuture::new(0).await;
+                                                        let contains_focus = web_sys::window().and_then(|window| window.document()).is_some_and(|document| {
+                                                            document.get_element_by_id("schedule-add-control").zip(document.active_element())
+                                                                .is_some_and(|(control, active)| control.contains(Some(&active)))
+                                                        });
+                                                        if !contains_focus { add_menu_open.set(false); }
+                                                    });
                                                 },
-                                                "Add match"
-                                            }
-                                            button { r#type: "button", class: "btn btn-sm btn-outline-secondary",
-                                                disabled: active_modal() != "none" || bulk_mode(),
-                                                onclick: move |_| { selected_activity.set(None); active_modal.set("activity".into()); },
-                                                "Add to schedule"
-                                            }
-                                            button { class: "btn btn-sm btn-outline-secondary", onclick: move |_| active_modal.set("tags".to_string()), "Tags" }
-                                            button { class: "btn btn-sm btn-outline-secondary", onclick: move |_| active_modal.set("scripting".to_string()), "Scripting" }
-                                            button { class: "btn btn-sm btn-outline-secondary", onclick: move |_| active_modal.set("fields".to_string()), "Fields" }
-                                            div {
-                                                class: "d-flex align-items-center gap-1 ms-1",
-                                                title: "Schedule type new matches start with (click or drag on the schedule to create one)",
-                                                label { class: "small text-muted mb-0", r#for: "defaultMatchTypeSelect", "Default new match type" }
-                                                select {
-                                                    id: "defaultMatchTypeSelect",
-                                                    class: "form-select form-select-sm w-auto",
-                                                    value: "{default_match_type}",
-                                                    onchange: move |e| default_match_type.set(e.value()),
-                                                    option { value: "STATIC", "Static" }
-                                                    option { value: "SAFE", "Safe" }
-                                                    option { value: "FAST", "Fast" }
-                                                    option { value: "BREAK", "Break" }
-                                                    option { value: "STATBREAK", "Static Break" }
-                                                    option { value: "JOIN", "Join" }
+                                                onkeydown: move |event| {
+                                                    if add_menu_open() && event.key() == Key::Escape {
+                                                        event.prevent_default(); event.stop_propagation();
+                                                        add_menu_open.set(false);
+                                                        crate::appearance::focus_control("schedule-add-trigger");
+                                                    }
+                                                },
+                                                button { id: "schedule-add-trigger", r#type: "button", class: "btn btn-sm btn-outline-secondary schedule-add-trigger",
+                                                    disabled: active_modal() != "none" || bulk_mode(),
+                                                    aria_expanded: add_menu_open(), aria_controls: "schedule-add-options",
+                                                    onclick: move |_| {
+                                                        create_prefill.set(None); create_ghost.set(None);
+                                                        let (above, height) = schedule_add_menu_position();
+                                                        add_menu_above.set(above); add_menu_height.set(height);
+                                                        add_menu_open.set(!add_menu_open());
+                                                    },
+                                                    i { class: "fas fa-plus", aria_hidden: true } "Add"
+                                                    i { class: "fas fa-chevron-down", aria_hidden: true }
+                                                }
+                                                if add_menu_open() {
+                                                    button { r#type: "button", class: "schedule-add-dismiss", tabindex: "-1", aria_label: "Close Add options",
+                                                        onclick: move |_| { add_menu_open.set(false); crate::appearance::focus_control("schedule-add-trigger"); }
+                                                    }
+                                                    div { id: "schedule-add-options", class: "schedule-add-dropdown", style: format!("max-height: {}px", add_menu_height()),
+                                                        if data.fields.is_empty() { p { class: "schedule-add-hint", "Add a field to schedule matches and breaks." } }
+                                                        ScheduleAddChoices { matches_allowed: !data.fields.is_empty(), on_choose: choose_create_kind }
+                                                    }
                                                 }
                                             }
+                                            button { class: "btn btn-sm btn-outline-secondary", disabled: active_modal() != "none", onclick: move |_| active_modal.set("tags".to_string()), "Tags" }
+                                            button { class: "btn btn-sm btn-outline-secondary", disabled: active_modal() != "none", onclick: move |_| active_modal.set("scripting".to_string()), "Scripting" }
+                                            button { class: "btn btn-sm btn-outline-secondary", disabled: active_modal() != "none", onclick: move |_| active_modal.set("fields".to_string()), "Fields" }
                                             button { class: "btn btn-sm btn-outline-secondary", onclick: move |_| {
                                                 let u = url_for_export.clone();
                                                 spawn(async move {
@@ -1512,7 +1644,7 @@ fn SchedulePage(
                                                     }
                                                 });
                                             }, "Export TOML" }
-                                            button { class: "btn btn-sm btn-outline-secondary", onclick: move |_| active_modal.set("toml_import".to_string()), "Import TOML" }
+                                            button { class: "btn btn-sm btn-outline-secondary", disabled: active_modal() != "none", onclick: move |_| active_modal.set("toml_import".to_string()), "Import TOML" }
                                             button {
                                                 class: if push_back_open() { "btn btn-sm btn-primary" } else { "btn btn-sm btn-outline-primary" },
                                                 title: "Push back all non-started matches on the currently viewed day",
@@ -1522,12 +1654,14 @@ fn SchedulePage(
                                             button {
                                                 class: "btn btn-sm btn-outline-warning",
                                                 title: "Show schedule warnings (unknown teams, cycles, missing match refs, double-bookings)",
+                                                disabled: active_modal() != "none",
                                                 onclick: move |_| active_modal.set("schedule_warnings".to_string()),
                                                 "⚠ Warnings"
                                             }
                                             button {
                                                 class: if bulk_mode() { "btn btn-sm btn-secondary" } else { "btn btn-sm btn-outline-secondary" },
                                                 title: "Click blocks to multi-select, then apply one length to all (Esc to exit)",
+                                                disabled: active_modal() != "none",
                                                 onclick: move |_| {
                                                     let on = !bulk_mode();
                                                     bulk_mode.set(on);
@@ -1718,7 +1852,11 @@ fn SchedulePage(
                             data: data.clone(),
                             personal_view: view_mode() == "team",
                             on_activity: move |item: ScheduleItemData| {
-                                if editor { selected_activity.set(Some(item)); active_modal.set("activity".into()); }
+                                if active_modal() != "none" { return; }
+                                if editor {
+                                    create_prefill.set(None); create_ghost.set(None);
+                                    selected_activity.set(Some(item)); active_modal.set("activity".into());
+                                }
                                 else { activity_details_id.set(Some(item.id)); }
                             },
                             // Team view spans all fields; "By field" reuses the grid
@@ -1745,6 +1883,7 @@ fn SchedulePage(
                             },
                             tournament_url: url.clone(),
                             editor: editor && view_mode() == "timeline",
+                            allow_create: active_modal() == "none" && !add_menu_open(),
                             viewed_day: viewed_day,
                             focus_match: Some(focus_match),
                             bulk_select_active: bulk_mode(),
@@ -1766,6 +1905,8 @@ fn SchedulePage(
                             on_edit_match: {
                                 let matches_for_edit = data.matches.clone();
                                 move |id: String| {
+                                    if active_modal() != "none" { return; }
+                                    create_prefill.set(None); create_ghost.set(None);
                                     // Bulk-length tool: clicks toggle selection instead of editing.
                                     // Structural BREAK/STATBREAK rows toggle the whole same-name group.
                                     if bulk_mode() {
@@ -1821,10 +1962,11 @@ fn SchedulePage(
                                 }
                             },
                             on_drag_create: move |p: DragCreatePayload| {
+                                if active_modal() != "none" { return; }
                                 create_prefill.set(Some(p));
-                                create_prefill_nonce.set(create_prefill_nonce().wrapping_add(1));
+                                create_ghost.set(None);
                                 team_field_focus.set(None);
-                                active_modal.set("match_create".to_string());
+                                active_modal.set("add_choice".to_string());
                             },
                             on_move_match: {
                                 let u = url.clone();
@@ -1904,7 +2046,11 @@ fn SchedulePage(
                     } else {
                         TableView {
                             data: data.clone(),
-                            on_activity: move |item: ScheduleItemData| { selected_activity.set(Some(item)); active_modal.set("activity".into()); },
+                            on_activity: move |item: ScheduleItemData| {
+                                if active_modal() != "none" { return; }
+                                create_prefill.set(None); create_ghost.set(None);
+                                selected_activity.set(Some(item)); active_modal.set("activity".into());
+                            },
                             selected_field: selected_field(),
                             highlight_team: highlight_team(),
                             edit_mode: edit_mode,
@@ -1914,6 +2060,8 @@ fn SchedulePage(
                             on_edit_match: {
                                 let matches_for_edit = data.matches.clone();
                                 move |id: String| {
+                                    if active_modal() != "none" { return; }
+                                    create_prefill.set(None); create_ghost.set(None);
                                     team_field_focus.set(None);
                                     if let Some(m) = matches_for_edit.iter().find(|m| m.uuid == id) {
                                         if is_structural_match(m) && !m.name.is_empty() {
@@ -1958,13 +2106,13 @@ fn SchedulePage(
                             CreateMatchModal {
                                 tournament_url: url.clone(),
                                 data: data.clone(),
-                                prefill_field: create_prefill().map(|p| p.field_name.clone()),
+                                prefill_field: create_prefill().and_then(|p| p.field_name),
                                 prefill_start_time: create_prefill()
                                     .map(|p| p.start_local.format("%Y-%m-%dT%H:%M").to_string()),
                                 prefill_length: create_prefill().and_then(|p| p.length_min),
                                 prefill_prev_match_id: create_prefill()
                                     .and_then(|p| p.prev_match_id.clone()),
-                                default_schedule_type: default_match_type(),
+                                initial_schedule_type: create_kind().schedule_type().map(str::to_string),
                                 show_as_happened: show_as_happened(),
                                 create_ghost: create_ghost,
                                 team_field_focus: team_field_focus,
@@ -2001,9 +2149,50 @@ fn SchedulePage(
                     }
                     } // schedule-editor-split
 
+                    if editor && active_modal() == "add_choice" {
+                        Modal {
+                            id: "schedule-add-selection", labelled_by: "schedule-add-selection-title",
+                            return_focus_id: "schedule-add-trigger",
+                            on_close: move |_| active_modal.set("none".into()),
+                            div { class: "modal-header",
+                                h2 { id: "schedule-add-selection-title", class: "modal-title h5", tabindex: "-1", "Add to schedule" }
+                                button { r#type: "button", class: "btn-close", aria_label: "Close", onclick: move |_| active_modal.set("none".into()) }
+                            }
+                            div { class: "modal-body schedule-add-selection-body",
+                                if let Some(selection) = create_prefill() {
+                                    p { class: "schedule-add-selection-context",
+                                        strong { {selection.field_name.as_deref().unwrap_or("Event activities")} }
+                                        span {
+                                            {selection.start_local.format("%b %-d · %H:%M").to_string()}
+                                            if selection.length_min.is_some() {
+                                                if selection.start_local.date() == selection.activity_end_local().date() {
+                                                    " – " {selection.activity_end_local().format("%H:%M").to_string()}
+                                                } else {
+                                                    " – " {selection.activity_end_local().format("%b %-d · %H:%M").to_string()}
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if selection.field_name.is_none() { p { class: "form-text", "Select a field column to add matches and breaks." } }
+                                }
+                                ScheduleAddChoices {
+                                    matches_allowed: !data.fields.is_empty() && create_prefill().is_some_and(|selection| selection.field_name.is_some()),
+                                    on_choose: choose_create_kind,
+                                }
+                            }
+                            div { class: "modal-footer",
+                                button { r#type: "button", class: "btn btn-outline-secondary", onclick: move |_| active_modal.set("none".into()), "Cancel" }
+                            }
+                        }
+                    }
                     if editor && active_modal() == "activity" {
                         ScheduleItemDialog {
                             tournament_url: url.clone(), existing: selected_activity(), initial_date: Some(viewed_day()),
+                            initial_start_local: create_prefill().map(|selection| selection.start_local.format("%Y-%m-%dT%H:%M").to_string()),
+                            initial_end_local: create_prefill().map(|selection| selection.activity_end_local().format("%Y-%m-%dT%H:%M").to_string()),
+                            initial_field: create_prefill().and_then(|selection| selection.field_name),
+                            initial_sidecomp_mode: selected_activity().is_none() && create_kind() == ScheduleAddKind::SideCompetition,
+                            return_focus_id: selected_activity().is_none().then(|| "schedule-add-trigger".to_string()),
                             on_close: move |_| active_modal.set("none".into()),
                             on_saved: move |_| { active_modal.set("none".into()); refresh(); }
                         }
@@ -2175,7 +2364,7 @@ fn is_docked_schedule_editor(value: &str) -> bool {
 }
 
 fn is_schedule_helper(value: &str) -> bool {
-    matches!(value, "tags" | "scripting" | "fields" | "toml_import" | "schedule_warnings")
+    matches!(value, "tags" | "scripting" | "fields" | "toml_import" | "schedule_warnings" | "add_choice" | "activity")
 }
 
 /// Merge authoritative reloads without overwriting another row's local draft.
@@ -2253,7 +2442,7 @@ mod schedule_helper_tests {
 
     #[test]
     fn helper_escape_is_distinct_from_docked_editor_escape() {
-        for helper in ["fields", "tags", "scripting", "toml_import", "schedule_warnings"] {
+        for helper in ["fields", "tags", "scripting", "toml_import", "schedule_warnings", "add_choice", "activity"] {
             assert!(is_schedule_helper(helper));
             assert!(!is_docked_schedule_editor(helper));
         }
@@ -2332,10 +2521,9 @@ fn CreateMatchModal(
     /// Drag-to-create prefill: chain-position default for dynamic types.
     #[props(default)]
     prefill_prev_match_id: Option<String>,
-    /// Toolbar "Default new match type" (any schedule type; structural types
-    /// open the card in the corresponding group form).
+    /// Type chosen for this item; structural types open the corresponding group form.
     #[props(default)]
-    default_schedule_type: Option<String>,
+    initial_schedule_type: Option<String>,
     /// Page-level "show times as they happened" toggle (for previous-match lookup).
     #[props(default = false)]
     show_as_happened: bool,
@@ -2352,7 +2540,7 @@ fn CreateMatchModal(
         let f = prefill_field.clone();
         move || f.unwrap_or_default()
     });
-    let initial_type = default_schedule_type
+    let initial_type = initial_schedule_type
         .clone()
         .filter(|t| {
             matches!(
@@ -4668,10 +4856,75 @@ fn activity_in_field(item: &ScheduleItemData, selected: &str, fields: &[FieldSet
     selected == "all" || item.field.is_none() || fields.iter().any(|field| field.id.to_string() == selected && item.field.as_deref() == Some(field.name.as_str()))
 }
 
+fn initial_schedule_day(dates: &[chrono::NaiveDate], event_start: &str, today: chrono::NaiveDate) -> chrono::NaiveDate {
+    if dates.contains(&today) {
+        return today;
+    }
+    dates.first().copied()
+        .or_else(|| chrono::NaiveDate::parse_from_str(event_start.get(..10)?, "%Y-%m-%d").ok())
+        .unwrap_or(today)
+}
+
+/// Event-wide activities always use their own lane, including in a filtered field view.
+fn activity_field_id(item: &ScheduleItemData, fields: &[FieldSetupData]) -> u32 {
+    item.field.as_deref()
+        .and_then(|name| fields.iter().find(|field| field.name == name))
+        .map(|field| field.id)
+        .unwrap_or(0)
+}
+
 fn activity_local_interval(item: &ScheduleItemData) -> Option<(chrono::NaiveDateTime, chrono::NaiveDateTime)> {
     let start = chrono::NaiveDateTime::parse_from_str(&schedule_item_local_input(&item.start_time), "%Y-%m-%dT%H:%M").ok()?;
     let end = chrono::NaiveDateTime::parse_from_str(&schedule_item_local_input(&item.end_time), "%Y-%m-%dT%H:%M").ok()?;
     Some((start, end.max(start + chrono::Duration::minutes(1))))
+}
+
+#[cfg(test)]
+mod schedule_creation_tests {
+    use super::{activity_field_id, activity_in_field, initial_schedule_day, DragCreatePayload};
+    use crate::types::{FieldSetupData, ScheduleItemData};
+    use chrono::{NaiveDate, NaiveDateTime};
+
+    #[test]
+    fn activity_selection_preserves_duration_across_midnight() {
+        let start = NaiveDateTime::parse_from_str("2026-11-14T23:45", "%Y-%m-%dT%H:%M").unwrap();
+        let selection = DragCreatePayload {
+            field_name: Some("North".into()), start_local: start,
+            length_min: Some(45), prev_match_id: Some("prior-match".into()),
+        };
+        assert_eq!(selection.activity_end_local().format("%Y-%m-%dT%H:%M").to_string(), "2026-11-15T00:30");
+        let click = DragCreatePayload { length_min: None, field_name: None, ..selection };
+        assert_eq!(click.activity_end_local() - start, chrono::Duration::minutes(30));
+    }
+
+    #[test]
+    fn fieldless_activities_remain_visible_without_claiming_the_selected_field() {
+        let fields = vec![
+            FieldSetupData { id: 5, name: "North".into() },
+            FieldSetupData { id: 6, name: "South".into() },
+        ];
+        let mut item = ScheduleItemData {
+            id: 1, sidecomp_id: None, title: "Announcements".into(), description: None,
+            start_time: "2026-11-14T09:00:00Z".into(), end_time: "2026-11-14T09:15:00Z".into(),
+            field: None, location: None,
+        };
+        assert!(activity_in_field(&item, "5", &fields));
+        assert!(activity_in_field(&item, "6", &fields));
+        assert_eq!(activity_field_id(&item, &fields), 0);
+        item.field = Some("North".into());
+        assert!(activity_in_field(&item, "5", &fields));
+        assert!(!activity_in_field(&item, "6", &fields));
+        assert_eq!(activity_field_id(&item, &fields), 5);
+    }
+
+    #[test]
+    fn empty_future_schedule_opens_on_the_event_day() {
+        let today = NaiveDate::from_ymd_opt(2026, 10, 27).unwrap();
+        let event_day = NaiveDate::from_ymd_opt(2026, 11, 14).unwrap();
+        assert_eq!(initial_schedule_day(&[], "2026-11-14T09:00:00", today), event_day);
+        assert_eq!(initial_schedule_day(&[], "invalid", today), today);
+        assert_eq!(initial_schedule_day(&[event_day, today], "2026-11-14", today), today);
+    }
 }
 
 // Internal types for timeline events
@@ -4807,7 +5060,7 @@ fn TimelineEventCard(
         }
     };
     let event_class = format!(
-        "schedule-timeline-event{}{}{}{}{}{}",
+        "schedule-timeline-event{}{}{}{}{}{}{}",
         if event.highlight_playing {
             " schedule-timeline-event--highlight-playing"
         } else {
@@ -4831,6 +5084,11 @@ fn TimelineEventCard(
         },
         if selected {
             " schedule-timeline-event--bulk-selected"
+        } else {
+            ""
+        },
+        if team_view && event.num_lanes > 1 {
+            " schedule-timeline-event--compact-team"
         } else {
             ""
         },
@@ -5408,6 +5666,9 @@ fn ScheduleTimeline(
     /// Edit-page interactions: drag-to-create, drag-to-move, alt-hover dependency lines.
     #[props(default = false)]
     editor: bool,
+    /// An open editor owns its draft; a new grid selection must not replace it.
+    #[props(default = true)]
+    allow_create: bool,
     /// Shared with the parent toolbar so "push back day" targets this day (`YYYY-MM-DD`).
     #[props(default)]
     viewed_day: Signal<String>,
@@ -5677,14 +5938,10 @@ fn ScheduleTimeline(
     let today_local =
         (chrono::Utc::now() + chrono::Duration::minutes(tz_offset_minutes)).date_naive();
 
-    // Default visible date: today if it has matches, else first day with matches
-    let mut visible_date_signal = use_signal(|| {
-        if dates_with_matches.contains(&today_local) {
-            today_local
-        } else {
-            dates_with_matches.first().copied().unwrap_or(today_local)
-        }
-    });
+    // Empty schedules start on the event date, so new items have the same date as the grid.
+    let mut visible_date_signal = use_signal(|| initial_schedule_day(
+        &dates_with_matches, &data.tournament.start_date, today_local,
+    ));
 
     // Keep the parent toolbar's push-back day in sync with the timeline cursor.
     {
@@ -5828,7 +6085,7 @@ fn ScheduleTimeline(
                 }
             }),
     };
-    let activity_field = FieldSetupData { id: 0, name: "Activities".into() };
+    let activity_field = FieldSetupData { id: 0, name: "Event activities".into() };
     let mut visible_fields: Vec<&FieldSetupData> = if team_view {
         vec![&team_view_field]
     } else if selected_field == "all" {
@@ -5839,7 +6096,7 @@ fn ScheduleTimeline(
             .filter(|f| f.id.to_string() == selected_field)
             .collect()
     };
-    if !team_view && selected_field == "all" && (data.schedule_items.iter().any(|i| i.field.is_none()) || data.fields.is_empty()) {
+    if !team_view && (data.schedule_items.iter().any(|i| i.field.is_none()) || data.fields.is_empty()) {
         visible_fields.push(&activity_field);
     }
     if visible_fields.is_empty() { visible_fields.push(&activity_field); }
@@ -6085,8 +6342,7 @@ fn ScheduleTimeline(
         if !team_view && !activity_in_field(item, &selected_field, &data.fields) { continue; }
         let Some((start_time, end_time)) = activity_local_interval(item) else { continue; };
         let field_id = if team_view { TEAM_VIEW_FIELD_ID }
-            else if selected_field != "all" { visible_fields.first().map(|f| f.id).unwrap_or(0) }
-            else { item.field.as_ref().and_then(|name| data.fields.iter().find(|f| &f.name == name)).map(|f| f.id).unwrap_or(0) };
+            else { activity_field_id(item, &data.fields) };
         let empty_slot = TeamSlot { token: String::new(), team_id: None, name: None, shortname: None, photo: None };
         timeline_events.push(TimelineEvent {
             id: format!("activity-{}", item.id), activity: Some(item.clone()), name: item.title.clone(),
@@ -6429,7 +6685,7 @@ fn ScheduleTimeline(
     let on_block_drag_start: EventHandler<(String, f64, f64)> = EventHandler::new({
         let info = drag_block_info.clone();
         move |(id, cx, cy): (String, f64, f64)| {
-            if !editor || bulk_select_active {
+            if !editor || !allow_create || bulk_select_active {
                 return;
             }
             // Any fresh press clears a stale click-suppression flag (e.g. after a
@@ -6588,7 +6844,7 @@ fn ScheduleTimeline(
                     let dur = (anchor_min - cur_min).abs().max(10);
                     let title =
                         format!("{} – {}", fmt_minutes(start), fmt_minutes(start + dur));
-                    Some((col, start, dur, title, "new match".to_string(), false, None))
+                    Some((col, start, dur, title, "New item".to_string(), false, None))
                 }
                 Some(TimelineDrag::Move {
                     ref id,
@@ -6661,7 +6917,7 @@ fn ScheduleTimeline(
     // Container pointer handlers (edit page only; touch is reserved for scroll/pinch-zoom).
     let grid_pointer_down = {
         move |ev: Event<PointerData>| {
-            if !editor || bulk_select_active {
+            if !editor || !allow_create || bulk_select_active {
                 return;
             }
             if ev.pointer_type() != "mouse" {
@@ -6677,7 +6933,6 @@ fn ScheduleTimeline(
             let Some((col, min)) = grid_pos_from_client(c.x, c.y, num_fields_total) else {
                 return;
             };
-            if activity_column == Some(col) { return; }
             let snapped = snap5(min);
             drag_state.set(Some(TimelineDrag::Create {
                 col,
@@ -6806,9 +7061,10 @@ fn ScheduleTimeline(
                 } => {
                     let start = anchor_min.min(cur_min);
                     let extent = (anchor_min - cur_min).abs();
-                    let Some(field_name) = field_names_for_drop.get(col).cloned() else {
+                    let Some(column_name) = field_names_for_drop.get(col).cloned() else {
                         return;
                     };
+                    let field_name = (activity_column != Some(col)).then_some(column_name);
                     let start_local = day_start + chrono::Duration::minutes(start);
                     // Plain click (no drag) = default length; otherwise min 10 minutes.
                     let length_min = if extent == 0 {
@@ -6816,15 +7072,10 @@ fn ScheduleTimeline(
                     } else {
                         Some(extent.max(10) as u32)
                     };
-                    let prev_match_id = latest_match_before(
-                        &matches_for_drop,
-                        &field_name,
-                        start_local,
-                        "",
-                        show_as_happened,
-                        tz_offset_minutes,
-                    )
-                    .map(|(u, _, _)| u);
+                    let prev_match_id = field_name.as_deref().and_then(|field| {
+                        latest_match_before(&matches_for_drop, field, start_local, "", show_as_happened, tz_offset_minutes)
+                            .map(|(id, _, _)| id)
+                    });
                     on_drag_create.call(DragCreatePayload {
                         field_name,
                         start_local,
@@ -6981,9 +7232,10 @@ fn ScheduleTimeline(
             }
             if show_add_field_message {
                 div { class: "schedule-timeline-empty-message",
-                    "Add a field for matches, or use Add to schedule for other activities."
+                    "Use Add to schedule an activity, or add a field for matches."
                 }
-            } else if !editor && occupied_window.is_none() {
+            }
+            if !editor && occupied_window.is_none() {
                 p { class: "schedule-timeline-empty-message mb-0", "Nothing scheduled for this day." }
             } else {
             {
@@ -7135,7 +7387,7 @@ fn ScheduleTimeline(
                     if show_add_match_overlay {
                         div { class: "schedule-timeline-add-match-overlay",
                             span { class: "schedule-timeline-add-match-label",
-                                "Click anywhere to add a match"
+                                "Use Add, or select a time on the schedule"
                             }
                         }
                     }
@@ -7505,7 +7757,7 @@ fn ScheduleTimeline(
             } // schedule-timeline-scroll
                 } // inner rsx! for scroll_id
             } // scroll_id block
-            } // show_add_field_message else
+            } // schedule grid
         } // wrapper
     } // outer rsx!
     }

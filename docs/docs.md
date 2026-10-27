@@ -580,8 +580,10 @@ Break matches represent dynamically scheduled breaks in the
 tournament. They just reserve time (ie, for a lunch break) on a field
 in a way that can be pulled forward if matches finish early.
 
-If you want a non-dynamic break, just use static matches before and
-after the break, and leave the break empty.
+Choose **Static break** for a break with a fixed start time. Breaks and joins
+control match timing and appear in the field view, not the team view. For a
+lunch announcement that everyone should see, add an [activity](#activities-and-side-competitions)
+as well as any breaks needed to pause matches.
 
 ### Joins
 
@@ -633,19 +635,33 @@ You can see the full ASS docs [here](arctos-schedule-script.md).
 
 ### Activities and Side Competitions
 
-Use **Add to schedule** in the schedule editor for announcements, check-in,
-awards, or other activities. Enter a name, start and end time, and any description
-or location players need. A field is optional. Each entry can span up to 31 days.
+Open **Add** in the schedule editor and choose **Activity or announcement** for
+announcements, check-in, awards, or other activities. The same menu includes
+matches, breaks, joins, and **Side competition**. On a computer, clicking an
+empty part of the timeline fills in the start time; dragging selects a time
+range. Choose the entry type, then review and save its details.
+
+For an activity, enter a name, start and end time, and any description or
+location players need. A field is optional and describes where the activity
+takes place. Each entry can span up to 31 days.
 
 Choose a side competition to schedule one that already exists, or create a new
 competition from the same form. You can also schedule a competition from its
 own page. Its schedule entry uses the competition's current name and description.
 Players can tap the entry to read the details or open the competition.
 
+**By team** shows every activity and scheduled side competition alongside the
+selected team's matches. Activities are visible even before a team is selected;
+they are not filtered by side competition entries. **By field** shows activities
+assigned to the selected field, with fieldless entries in a separate
+**Event activities** column. Fieldless entries also appear in the editor's
+**All fields** view.
+
 Activity times stay fixed when matches run early or late. They do not delay
-matches or reserve a field in the match scheduler. Use a [break](#breaks) when
-the following matches must wait. Activities follow the event's schedule
-publication setting and can be used before any matches have been added.
+matches, reserve a field, or check for overlaps with matches. **Push back day…**
+leaves activity times unchanged. Use a [break](#breaks) in the match schedule
+when following matches must wait. Activities follow the event's schedule
+publication setting and can be used before any matches or fields have been added.
 
 ### Exporting and Importing Schedules
 

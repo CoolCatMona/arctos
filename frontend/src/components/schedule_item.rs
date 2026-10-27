@@ -184,6 +184,11 @@ pub fn ScheduleItemDialog(
     #[props(default)] existing: Option<ScheduleItemData>,
     #[props(default)] initial_sidecomp: Option<i32>,
     #[props(default)] initial_date: Option<String>,
+    #[props(default)] initial_start_local: Option<String>,
+    #[props(default)] initial_end_local: Option<String>,
+    #[props(default)] initial_field: Option<String>,
+    #[props(default)] initial_sidecomp_mode: bool,
+    #[props(default)] return_focus_id: Option<String>,
     on_close: EventHandler<()>,
     on_saved: EventHandler<()>,
 ) -> Element {
@@ -203,6 +208,7 @@ pub fn ScheduleItemDialog(
             .and_then(|i| i.sidecomp_id)
             .or(initial_sidecomp)
             .is_some()
+            || (existing.is_none() && initial_sidecomp_mode)
         {
             "existing".to_string()
         } else {
@@ -236,18 +242,34 @@ pub fn ScheduleItemDialog(
         existing
             .as_ref()
             .map(|i| schedule_item_local_input(&i.start_time))
+            .or_else(|| initial_start_local.clone())
             .unwrap_or_default()
     });
     let mut end = use_signal(|| {
         existing
             .as_ref()
             .map(|i| schedule_item_local_input(&i.end_time))
+            .or(initial_end_local)
+            .or_else(|| {
+                let start = chrono::NaiveDateTime::parse_from_str(
+                    initial_start_local.as_deref()?,
+                    "%Y-%m-%dT%H:%M",
+                )
+                .ok()?;
+                Some(
+                    start
+                        .checked_add_signed(chrono::Duration::minutes(30))?
+                        .format("%Y-%m-%dT%H:%M")
+                        .to_string(),
+                )
+            })
             .unwrap_or_default()
     });
     let mut field = use_signal(|| {
         existing
             .as_ref()
-            .and_then(|i| i.field.clone())
+            .map(|i| i.field.clone().unwrap_or_default())
+            .or(initial_field)
             .unwrap_or_default()
     });
     let mut location = use_signal(|| {
@@ -292,6 +314,7 @@ pub fn ScheduleItemDialog(
         Modal {
             id: "schedule-activity-editor",
             labelled_by: "schedule-activity-editor-title",
+            return_focus_id,
             dismissible: !busy(),
             dismiss_on_backdrop: false,
             on_close,

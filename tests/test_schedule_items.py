@@ -1,10 +1,10 @@
 """Activities share schedule visibility without becoming matches."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
-from app.domain.enums import SideCompType
+from app.domain.enums import MatchStatus, ScheduleType, SideCompType
 from app.services.schedule_import_export_service import ScheduleImportExportService
 from models import Field, Match, ScheduleItem, SideComp, TO, Tournament, db
 from tests.utils import login_as, make_registrable_config
@@ -47,6 +47,48 @@ def test_activity_crud_does_not_create_matches(client, tournament, player):
         assert [i["title"] for i in listed] == ["Team meeting"]
     assert client.delete(item_url).status_code == 200
     assert client.get(item_url).status_code == 404
+
+
+def test_field_activity_does_not_reserve_time_or_move_with_matches(client, tournament, player):
+    organizer(client, tournament, player)
+    start = datetime(2026, 11, 1, 10)
+    match = Match(
+        name="Opening match",
+        event=tournament.url,
+        field="Field 1",
+        nominal_start_time=start,
+        scheduled_start_time=start,
+        nominal_length=60,
+        schedule_type=ScheduleType.STATIC,
+        status=MatchStatus.NOT_STARTED,
+    )
+    db.session.add(match)
+    db.session.commit()
+
+    response = client.post(
+        base(tournament),
+        json=payload(
+            field="Field 1",
+            start_time="2026-11-01T10:00:00Z",
+            end_time="2026-11-01T11:00:00Z",
+        ),
+    )
+    assert response.status_code == 201
+    item_url = f"{base(tournament)}/{response.get_json()['id']}"
+    db.session.refresh(match)
+    assert match.nominal_start_time == match.scheduled_start_time == start
+
+    shifted = client.post(
+        f"/_api/tournaments/{tournament.url}/push-back-matches",
+        json={"day": "2026-11-01", "minutes": 30, "tz_offset_minutes": 0},
+    )
+    assert shifted.status_code == 200
+    db.session.refresh(match)
+    assert match.nominal_start_time == match.scheduled_start_time == start + timedelta(minutes=30)
+    activity = client.get(item_url).get_json()
+    assert activity["field"] == "Field 1"
+    assert activity["start_time"] == "2026-11-01T10:00:00Z"
+    assert activity["end_time"] == "2026-11-01T11:00:00Z"
 
 
 @pytest.mark.parametrize(
