@@ -22,6 +22,40 @@ and fill only the values you need.
 `ARCTOS_PORT`
 : (default `5006`) Backend port when running `python run_app.py`.
 
+`ARCTOS_PUBLIC_HTML_ENABLED`
+: (default `0`) Set to `1` for Flask's Events/Leagues document routing and initial
+  visibility checks. `content` mode renders public facts; `loading` mode
+  returns the application startup shell. Requires the document proxy setup in
+  [DEPLOY](DEPLOY.md#public-html-rollout).
+
+`ARCTOS_FRONTEND_DIST`
+: Absolute path to the prepared Dioxus `public` output containing
+  `arctos-assets.json`, `index.html`, and `assets/`. Defaults to the checkout's
+  `frontend/dist/public`. Run `scripts/prepare_public_assets.py` after bundling.
+  Set the same value in deployment and gunicorn environments when staging.
+
+`ARCTOS_PUBLIC_ENTRY_MODE`
+: (default `content`) `content` provides Events, Leagues, and their published Info
+  pages as HTML when public routing is enabled; reading stays available while
+  the runtime warms. `loading` provides a
+  lightweight themed startup screen and automatically opens Dioxus, which
+  requires JavaScript for reading. The setting applies to regular application
+  shells independently of `ARCTOS_PUBLIC_HTML_ENABLED`; enable that flag for
+  Flask's initial event/league visibility and 404 checks. Both modes use current database
+  data and retain one runtime during ordinary navigation. Invalid values fail
+  configuration validation.
+
+`ARCTOS_PUBLIC_ORIGIN`
+: Trusted canonical origin, such as `https://arctos.example.org`. Accepts an
+  HTTP(S) origin with a host; credentials, paths, queries, and fragments are
+  rejected. Canonical and Open Graph URLs are generated when configured.
+
+`ARCTOS_PUBLIC_CALENDAR_TIMEZONE`
+: (default `UTC`) IANA timezone for Upcoming/Past filtering when the request
+  lacks a valid `arctos_timezone` cookie. Later requests use the browser zone
+  saved by the appearance script. Event date labels preserve their entered
+  calendar day in every timezone.
+
 `SQLALCHEMY_DATABASE_URI`
 : SQLAlchemy database URI. Format: `sqlite:///tournament.db` for a local
   SQLite file, or any SQLAlchemy-supported database URI.

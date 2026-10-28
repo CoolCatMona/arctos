@@ -1,0 +1,755 @@
+/* Arctos chrome for the temporary startup document.
+   Keep these rules aligned with frontend/src/theme.css and appearance_menu.css. */
+body.public-startup {
+  margin: 0;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+
+.public-startup #main {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+#app-startup {
+  --header-height: calc(76px + env(safe-area-inset-top, 0px));
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font: 400 1rem/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-text-size-adjust: 100%;
+  accent-color: var(--ui-link);
+  overflow-wrap: anywhere;
+}
+
+#app-startup *, #app-startup *::before, #app-startup *::after {
+  box-sizing: border-box;
+}
+
+#app-startup[hidden], #app-startup [hidden] {
+  display: none !important;
+}
+
+#app-startup :focus-visible {
+  outline: 3px solid var(--ui-link);
+  outline-offset: 3px;
+}
+
+#app-startup [id] {
+  scroll-margin-top: calc(var(--header-height) + 16px);
+}
+
+#app-startup h1, #app-startup h2 {
+  margin-top: 0;
+  color: inherit;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -.025em;
+}
+
+#app-startup h1 {
+  font-size: clamp(1.55rem, 3vw, 2rem);
+  margin-bottom: .75rem;
+}
+
+#app-startup h2 {
+  font-size: 1.35rem;
+}
+
+#app-startup p {
+  margin: 0 0 1rem;
+}
+
+#app-startup a {
+  color: var(--ui-link);
+  text-underline-offset: .2em;
+}
+
+#app-startup button, #app-startup input {
+  font: inherit;
+}
+
+#app-startup button {
+  cursor: pointer;
+}
+
+#app-startup .text-muted {
+  color: var(--ui-muted) !important;
+}
+
+#app-startup .public-icon {
+  display: inline-block;
+  vertical-align: -.125em;
+  flex-shrink: 0;
+}
+
+#app-startup i {
+  font-style: normal;
+  line-height: 1;
+}
+
+#app-startup .app-brand .public-mark-dark {
+  display: none;
+}
+
+.arctos-public[data-bs-theme="dark"] #app-startup .app-brand .public-mark-light {
+  display: none;
+}
+
+.arctos-public[data-bs-theme="dark"] #app-startup .app-brand .public-mark-dark {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  .arctos-public:not([data-bs-theme]) #app-startup .app-brand .public-mark-light {
+    display: none;
+  }
+  .arctos-public:not([data-bs-theme]) #app-startup .app-brand .public-mark-dark {
+    display: block;
+  }
+}
+
+#app-startup summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+#app-startup summary::-webkit-details-marker {
+  display: none;
+}
+
+#app-startup details[open] > summary {
+  color: var(--ui-text);
+  background: var(--ui-surface-hover);
+}
+
+#app-startup .public-menu[open] {
+  z-index: 1040;
+}
+
+#app-startup .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 9px 16px;
+  border: 1px solid var(--ui-control-border);
+  border-radius: 8px;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  font-size: .875rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: normal;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+#app-startup .btn:hover {
+  background: var(--ui-surface-hover);
+}
+
+#app-startup .dropdown-item {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ui-text);
+  text-align: left;
+  text-decoration: none;
+  white-space: normal;
+}
+
+#app-startup .dropdown-item:hover, #app-startup .dropdown-item:focus {
+  background: var(--ui-surface-hover);
+}
+
+#app-startup .container-wide {
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
+  padding-left: max(24px, env(safe-area-inset-left, 0px));
+  padding-right: max(24px, env(safe-area-inset-right, 0px));
+}
+
+#app-startup .app-main {
+  flex: 1;
+  padding-block: 32px 56px;
+  min-width: 0;
+}
+
+#app-startup .skip-link {
+  position: fixed;
+  top: -100px;
+  left: max(16px, env(safe-area-inset-left, 0px));
+  max-width: calc(100% - max(16px, env(safe-area-inset-left, 0px)) - max(16px, env(safe-area-inset-right, 0px)));
+  z-index: 2000;
+  padding: 12px 20px;
+  background: var(--ui-surface);
+  color: var(--ui-accent-text);
+  border-radius: 8px;
+}
+
+#app-startup .skip-link:focus {
+  top: max(8px, env(safe-area-inset-top, 0px));
+}
+
+/* Primary navigation remains visible in a row on phones. */
+#app-startup .app-header {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  background: var(--ui-nav-surface);
+  border-bottom: 1px solid var(--ui-nav-border);
+  padding-top: env(safe-area-inset-top);
+}
+
+#app-startup .app-header-inner {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 20px;
+  max-width: 1440px;
+  min-height: 76px;
+  margin-inline: auto;
+  padding-left: max(24px, env(safe-area-inset-left, 0px));
+  padding-right: max(24px, env(safe-area-inset-right, 0px));
+}
+
+#app-startup .app-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  color: var(--ui-nav-text);
+  text-decoration: none;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -.035em;
+  white-space: nowrap;
+}
+
+#app-startup .brand-mark {
+  height: 34px;
+  width: auto;
+  flex-shrink: 0;
+  display: block;
+}
+
+#app-startup .app-nav {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  min-width: 0;
+}
+
+#app-startup .app-nav-link {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--ui-nav-muted);
+  text-decoration: none;
+  font-size: .875rem;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+#app-startup .app-nav-link:hover:not(.active) {
+  background: var(--ui-surface-hover);
+  color: var(--ui-text);
+}
+
+#app-startup .app-nav-link.active {
+  background: var(--ui-nav-active-bg);
+  color: var(--ui-nav-active-text);
+}
+
+#app-startup .app-brand:focus-visible, #app-startup .app-nav-link:focus-visible, #app-startup .account-trigger:focus-visible {
+  outline-color: var(--ui-nav-text);
+}
+
+#app-startup .app-header-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+}
+
+#app-startup .app-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ui-text);
+  text-decoration: none;
+}
+
+#app-startup .app-icon-button:hover {
+  background: var(--ui-surface-hover);
+}
+
+#app-startup .account-menu {
+  position: relative;
+}
+
+#app-startup .account-dropdown {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 12px);
+  right: 0;
+  width: min(310px, calc(100vw - 32px));
+  max-height: calc(100vh - 100px);
+  max-height: calc(100dvh - 100px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px var(--ui-shadow-strong);
+}
+
+#app-startup .account-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border-bottom: 1px solid var(--ui-border);
+  margin-bottom: 8px;
+  overflow-wrap: anywhere;
+}
+
+#app-startup .account-identity span {
+  font-size: .8rem;
+}
+
+#app-startup .account-dismiss {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  border: 0;
+  z-index: 1;
+  cursor: default;
+}
+
+#app-startup .account-trigger {
+  position: relative;
+  z-index: 3;
+  color: var(--ui-nav-text);
+}
+
+#app-startup .account-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+#app-startup .account-trigger:hover, #app-startup .account-trigger[aria-expanded="true"] {
+  background: var(--ui-nav-active-bg);
+  color: var(--ui-nav-active-text);
+}
+
+@media (max-width: 575.98px) {
+  #app-startup .app-header-actions {
+    gap: 4px;
+  }
+  #app-startup .app-header-actions .app-login {
+    padding-inline: 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+}
+
+#app-startup .app-footer {
+  background: var(--ui-surface-muted);
+  border-top: 1px solid var(--ui-border);
+  color: var(--ui-muted);
+  padding: 28px 0 max(24px, env(safe-area-inset-bottom));
+  font-size: .8125rem;
+}
+
+#app-startup .footer-top, #app-startup .footer-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+#app-startup .footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
+
+#app-startup .footer-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--ui-muted);
+  text-decoration: none;
+}
+
+#app-startup .footer-links a:hover {
+  text-decoration: underline;
+}
+
+#app-startup .footer-bottom {
+  border-top: 1px solid var(--ui-border);
+  padding-top: 20px;
+  margin-top: 20px;
+  gap: 8px 24px;
+}
+
+#app-startup .footer-bottom p {
+  margin: 0;
+}
+
+/* More contains the same utility actions for guests and signed-in accounts. */
+#app-startup .appearance-panel {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 12px);
+  right: 0;
+  width: min(360px, calc(100vw - 32px));
+  max-height: calc(100dvh - 100px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  box-shadow: 0 12px 40px var(--ui-shadow-strong);
+}
+
+#app-startup .appearance-panel-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+
+#app-startup .appearance-panel-header h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 1rem;
+  text-align: center;
+}
+
+#app-startup .appearance-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-link);
+  font-size: .875rem;
+}
+
+#app-startup .appearance-back:hover {
+  background: var(--ui-surface-hover);
+}
+
+#app-startup .appearance-panel-body {
+  padding: 16px;
+}
+
+#app-startup .appearance-section {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+#app-startup .appearance-section + .appearance-section {
+  margin-top: 20px;
+}
+
+#app-startup .appearance-section legend {
+  float: none;
+  width: auto;
+  font-size: .875rem;
+  font-weight: 650;
+  margin-bottom: 10px;
+}
+
+#app-startup .appearance-mode-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#app-startup .appearance-mode-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 6px;
+  border: 1px solid var(--ui-control-border);
+  border-radius: 8px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: .8125rem;
+  cursor: pointer;
+}
+
+#app-startup .appearance-theme-options {
+  display: grid;
+  gap: 10px;
+}
+
+#app-startup .appearance-theme-option {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 12px;
+  font-size: .875rem;
+  font-weight: 600;
+  border: 1px solid var(--ui-control-border);
+  border-radius: 10px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  cursor: pointer;
+}
+
+#app-startup .appearance-mode-option:hover, #app-startup .appearance-theme-option:hover {
+  background: var(--ui-surface-hover);
+}
+
+#app-startup .appearance-mode-option.is-selected, #app-startup .appearance-theme-option.is-selected {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
+  border-color: var(--ui-accent-border);
+}
+
+#app-startup .appearance-mode-option:focus-within, #app-startup .appearance-theme-option:focus-within {
+  outline: 3px solid var(--ui-link);
+  outline-offset: 2px;
+}
+
+#app-startup .appearance-mode-option input, #app-startup .appearance-theme-option input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--ui-link);
+}
+
+#app-startup .appearance-page-setting label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 0;
+  color: var(--ui-text);
+  font-size: .875rem;
+  cursor: pointer;
+}
+
+#app-startup .appearance-page-setting input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--ui-link);
+}
+
+#app-startup .appearance-page-setting label:focus-within {
+  outline: 3px solid var(--ui-link);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+@media (max-width: 575px) {
+  #app-startup .profile-dropdown {
+    position: fixed;
+    top: calc(64px + env(safe-area-inset-top));
+    right: 16px;
+    max-height: calc(100dvh - 80px - env(safe-area-inset-top));
+  }
+  #app-startup .appearance-panel {
+    position: fixed;
+    top: calc(64px + env(safe-area-inset-top));
+    right: 16px;
+    max-height: calc(100dvh - 80px - env(safe-area-inset-top));
+  }
+}
+
+@media (max-width: 1100px) {
+  #app-startup .app-header-inner {
+    gap: 12px;
+  }
+  #app-startup .app-nav-link {
+    padding-inline: 9px;
+  }
+}
+
+@media (max-width: 991.98px) {
+  #app-startup {
+    --header-height: calc(120px + env(safe-area-inset-top, 0px));
+  }
+  #app-startup .app-header-inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 16px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  #app-startup .app-brand, #app-startup .app-header-actions {
+    min-height: 64px;
+  }
+  #app-startup .app-header-actions {
+    flex-wrap: wrap;
+    margin-inline-start: auto;
+  }
+  #app-startup .app-nav {
+    order: 1;
+    flex-basis: 100%;
+    padding-bottom: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  #app-startup .app-nav::-webkit-scrollbar {
+    display: none;
+  }
+  #app-startup .app-nav-link {
+    flex: 1 0 auto;
+    min-width: max-content;
+    padding-inline: 12px;
+  }
+}
+
+@media (max-width: 575.98px) {
+  #app-startup {
+    --header-height: calc(124px + env(safe-area-inset-top, 0px));
+  }
+  #app-startup .container-wide {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  #app-startup .app-main {
+    padding-block: 24px 36px;
+  }
+  #app-startup .app-nav-link {
+    flex: 1 0 auto;
+    flex-direction: column;
+    gap: 3px;
+    min-width: max-content;
+    min-height: 50px;
+    padding: 6px 2px;
+    font-size: .75rem;
+    white-space: normal;
+  }
+  #app-startup .app-nav-link i {
+    font-size: .875rem;
+  }
+  #app-startup .footer-top, #app-startup .footer-bottom {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  #app-startup .footer-links {
+    gap: 0 20px;
+  }
+  #app-startup .appearance-mode-options {
+    grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
+  }
+}
+
+#app-startup .public-boot {
+  max-width: 48rem;
+}
+
+#app-startup .startup-status {
+  display: flex;
+  align-items: center;
+  gap: .625rem;
+  margin-block: 1.25rem .5rem;
+}
+
+#app-startup .public-boot-status {
+  margin: 0;
+}
+
+#app-startup .startup-detail {
+  max-width: 36rem;
+  margin-bottom: .5rem;
+}
+
+#app-startup .startup-note {
+  color: var(--ui-muted);
+  font-size: .875rem;
+}
+
+#app-startup .startup-activity {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  border: 2px solid var(--ui-border);
+  border-top-color: var(--ui-link);
+  border-radius: 50%;
+  animation: arctos-startup-turn .85s linear infinite;
+}
+
+#app-startup .public-boot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem 1.25rem;
+}
+
+#app-startup .public-boot-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+#app-startup .public-boot[data-boot-state="failed"] [data-boot-message] {
+  color: var(--ui-danger-text) !important;
+}
+
+@keyframes arctos-startup-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #app-startup .startup-activity {
+    animation: none;
+  }
+}
