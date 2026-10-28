@@ -270,14 +270,6 @@ def _application(page=None, workflow: str = "application", *, league: bool = Fal
 
 
 def _event(slug: str, *, application: bool = False, workflow: str = "event tools"):
-    if current_app.config["PUBLIC_ENTRY_MODE"] == "loading":
-        from app.services.permission_service import PermissionService
-
-        # Preserve Flask's visibility/status contract without preparing cards,
-        # registration counts or Markdown that this entry will never display.
-        if not PermissionService.can_view_tournament(slug, current_user):
-            return _error()
-        return _application(workflow=workflow if application else "event")
     match PublicPageService.event(slug, user=current_user, prefix=request.script_root):
         case Ok(page):
             if application or not page.card.published:
@@ -295,14 +287,6 @@ def _event(slug: str, *, application: bool = False, workflow: str = "event tools
 
 
 def _league(slug: str, *, application: bool = False, workflow: str = "league tools"):
-    if current_app.config["PUBLIC_ENTRY_MODE"] == "loading":
-        from app.services.permission_service import PermissionService
-        from models import League
-
-        league = League.query.with_entities(League.published).filter_by(url=slug).first()
-        if league is None or not (league.published or PermissionService.is_league_organizer(slug, current_user)):
-            return _error()
-        return _application(workflow=workflow if application else "league")
     match PublicLeagueService.league(slug, user=current_user, prefix=request.script_root):
         case Ok(page):
             if application or not page.card.published:
@@ -321,11 +305,7 @@ def _league(slug: str, *, application: bool = False, workflow: str = "league too
 
 @bp.route("/", methods=["GET"])
 def index():
-    if (
-        not current_app.config["PUBLIC_HTML_ENABLED"]
-        or current_app.config["PUBLIC_ENTRY_MODE"] == "loading"
-        or request.args.get("app") == "1"
-    ):
+    if not current_app.config["PUBLIC_HTML_ENABLED"] or request.args.get("app") == "1":
         return _application(workflow="events")
     try:
         page = _directory_page()
@@ -361,11 +341,7 @@ def _directory_page():
 @bp.get("/leagues")
 @bp.get("/leagues/")
 def leagues():
-    if (
-        not current_app.config["PUBLIC_HTML_ENABLED"]
-        or current_app.config["PUBLIC_ENTRY_MODE"] == "loading"
-        or request.args.get("app") == "1"
-    ):
+    if not current_app.config["PUBLIC_HTML_ENABLED"] or request.args.get("app") == "1":
         return _application(workflow="leagues")
     try:
         raw_page = request.args.get("page", "1")

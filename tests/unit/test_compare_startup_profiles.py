@@ -40,9 +40,8 @@ def startup(variant):
         "fcp_ms": 90,
         "document_status": 200,
         "horizontal_overflow": False,
-        "public_background_enabled": variant != "original",
-        "loading_shell_seen": variant == "loading-entry",
-        "loading_entry_seen": variant == "loading-entry",
+        "public_background_enabled": variant == "public-html",
+        "loading_shell_seen": False,
         "public_content_seen": variant == "public-html",
         "background_start": {"passed": True},
         "network_after_startup": network(),
@@ -54,7 +53,7 @@ def test_default_comparison_covers_each_variant_and_profile():
     assert {variant.name: variant.origin for variant in args.variants} == DEFAULT_ORIGINS
     assert args.profiles == list(PROFILES)
     report = report_metadata(args)
-    assert report["expected_samples"] == 72
+    assert report["expected_samples"] == 48
     assert not args.skip_journey
     assert not args.include_direct_leagues
 
@@ -63,7 +62,7 @@ def test_cli_selects_profiles_variants_and_optional_direct_leagues():
     args = arguments(
         [
             "--variant",
-            "loading-entry=http://localhost:9000",
+            "public-html=http://localhost:9000",
             "--profile",
             "fast-mobile",
             "--runs",
@@ -72,17 +71,17 @@ def test_cli_selects_profiles_variants_and_optional_direct_leagues():
             "--skip-journey",
         ]
     )
-    assert args.variants == [Variant("loading-entry", "http://localhost:9000")]
+    assert args.variants == [Variant("public-html", "http://localhost:9000")]
     assert args.profiles == ["fast-mobile"]
     assert report_metadata(args)["expected_samples"] == 8
     assert args.skip_journey
 
 
-def test_direct_leagues_only_has_18_mobile_samples_and_no_journeys():
+def test_direct_leagues_only_has_12_mobile_samples_and_no_journeys():
     args = arguments(["--direct-leagues-only", "--profile", "mobile-4g"])
     report = report_metadata(args)
     assert args.targets == ["leagues"]
-    assert report["expected_samples"] == 18
+    assert report["expected_samples"] == 12
     with pytest.raises(SystemExit):
         arguments(["--direct-leagues-only", "--include-direct-leagues"])
 
@@ -93,7 +92,7 @@ def test_direct_leagues_only_has_18_mobile_samples_and_no_journeys():
         ["--variant", "unknown=http://localhost:5000"],
         ["--variant", "original=https://production.example"],
         ["--variant", "original=http://localhost:5000", "--variant", "original=http://localhost:5001"],
-        ["--variant", "original=http://localhost:5000", "--variant", "loading-entry=http://localhost:5000"],
+        ["--variant", "original=http://localhost:5000", "--variant", "public-html=http://localhost:5000"],
         ["--events-path", "//external.example"],
         ["--events-path", "/?q=changes-header-route"],
         ["--timeout-ms", "60000"],
@@ -116,10 +115,10 @@ def test_remote_requires_explicit_opt_in_but_origin_is_omitted_from_report():
     assert "http" not in serialized
 
 
-def test_three_runs_balance_variant_order():
+def test_variant_order_rotates_without_mutating_input():
     variants = [Variant(name, origin) for name, origin in DEFAULT_ORIGINS.items()]
-    orders = [variant_order(variants, run) for run in (1, 2, 3)]
-    for position in range(3):
+    orders = [variant_order(variants, run) for run in (1, 2)]
+    for position in range(2):
         assert {order[position].name for order in orders} == set(DEFAULT_ORIGINS)
     assert variants == orders[0]  # Rotation does not mutate the input.
 
@@ -131,9 +130,9 @@ def test_correct_variant_with_useful_content_and_runtime_passes(variant):
 
 @pytest.mark.parametrize("missing", ["ready_ms", "runtime_warm_ms", "visible_feedback_ms", "fcp_ms"])
 def test_feedback_alone_cannot_count_as_useful_readiness(missing):
-    row = startup("loading-entry")
+    row = startup("public-html")
     row[missing] = None
-    assert not startup_passes(row, "loading-entry", "events")
+    assert not startup_passes(row, "public-html", "events")
 
 
 def test_public_html_requires_content_and_after_paint_background_start():
@@ -145,12 +144,11 @@ def test_public_html_requires_content_and_after_paint_background_start():
     assert not startup_passes(row, "public-html", "events")
 
 
-def test_loading_entry_is_not_mistaken_for_public_content_despite_retention_marker():
-    row = startup("loading-entry")
-    assert row["public_background_enabled"]
-    assert startup_passes(row, "loading-entry", "events")
-    assert not startup_passes(row, "public-html", "events")
-    assert not startup_passes(startup("public-html"), "loading-entry", "events")
+@pytest.mark.parametrize("variant", DEFAULT_ORIGINS)
+def test_loading_shell_cannot_pass_as_completed_content(variant):
+    row = startup(variant)
+    row["loading_shell_seen"] = True
+    assert not startup_passes(row, variant, "events")
 
 
 @pytest.mark.parametrize("wasm,documents", [(0, 1), (2, 1), (1, 2)])
@@ -189,13 +187,12 @@ def test_network_failures_are_never_hidden_by_readiness(field):
 
 def test_journey_requires_retained_runtime_and_expected_cache_behavior():
     before, first, after = network(), network(leagues=1), network(leagues=1)
-    assert journey_passes("loading-entry", True, before, first, after)
     assert journey_passes("public-html", True, before, first, after)
-    assert not journey_passes("loading-entry", False, before, first, after)
+    assert not journey_passes("public-html", False, before, first, after)
     assert not journey_passes("original", True, before, first, after)
     after["leagues_list_requests"] = 2
     assert journey_passes("original", True, before, first, after)
-    assert not journey_passes("loading-entry", True, before, first, after)
+    assert not journey_passes("public-html", True, before, first, after)
     after["leagues_list_requests"] = 3
     assert not journey_passes("original", True, before, first, after)
 
@@ -204,14 +201,14 @@ def test_journey_requires_retained_runtime_and_expected_cache_behavior():
 def test_journey_cannot_pass_after_reloading(extra):
     before, first, after = network(), network(leagues=1), network(leagues=1)
     after.update(extra)
-    assert not journey_passes("loading-entry", True, before, first, after)
+    assert not journey_passes("public-html", True, before, first, after)
 
 
 def test_summary_keeps_failures_visible_and_excludes_them_from_medians():
     rows = [
         {
             "profile": "fast-mobile",
-            "variant": "loading-entry",
+            "variant": "public-html",
             "target": "events",
             "cache": "cold",
             "passed": True,
@@ -241,11 +238,11 @@ def test_summary_keeps_failures_visible_and_excludes_them_from_medians():
     [(False, 2, False, False), (True, 1, False, False), (True, 2, True, False), (True, 2, False, True)],
 )
 def test_report_passes_only_with_every_expected_sample(complete, count, failed, expected_pass, tmp_path):
-    args = arguments(["--variant", "loading-entry=http://localhost:5016", "--profile", "mobile-4g", "--runs", "1"])
+    args = arguments(["--variant", "public-html=http://localhost:5016", "--profile", "mobile-4g", "--runs", "1"])
     report = report_metadata(args)
     report["complete"] = complete
     report["samples"] = [
-        {"profile": "mobile-4g", "variant": "loading-entry", "target": "events", "cache": "cold", "passed": not failed}
+        {"profile": "mobile-4g", "variant": "public-html", "target": "events", "cache": "cold", "passed": not failed}
         for _ in range(count)
     ]
     save_report(report, tmp_path)

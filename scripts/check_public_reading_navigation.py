@@ -2,7 +2,7 @@
 
     uv run python scripts/check_public_reading_navigation.py --base-url http://127.0.0.1:5016
 
-The target must use content mode and include a public event plus a public league.
+The target must enable public HTML and include a public event plus a public league.
 Requests are read-only; writes are blocked except the read-only Markdown renderer.
 Delay/failure injection makes this a functional check, separate from timing runs.
 Reports contain assertion outcomes and failure stages rather than page content.

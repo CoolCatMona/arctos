@@ -355,11 +355,11 @@ mod tests {
     }
 
     #[test]
-    fn activating_the_current_loading_entry_keeps_history_and_raw_query() {
+    fn same_url_navigation_keeps_history_and_raw_query() {
         let initial = "/?q=Rock%26Roll&view=past&page=2&app=1#events";
         let history = PersistentHistory::new(Rc::new(MemoryHistory::with_initial_path(initial)));
-        // Loading-only entry automatically activates its current destination.
-        // The underlying history must treat that as activation, not a new visit.
+        // Revisiting the current URL preserves its raw query and does not add
+        // another entry to browser history.
         history.push(initial.into());
         history.replace(
             Route::from_str(&history.current_route())

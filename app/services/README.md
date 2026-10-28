@@ -34,12 +34,11 @@ belongs to the requesting visitor; the HTTP layer serves these responses with
 
 [`frontend_shell.py`](frontend_shell.py) validates the build manifest and URL
 prefix, renders application entry, and serves prepared assets for local/staging
-use. Missing application assets produce a recoverable 503. In `content` mode,
-public HTML warms a parked runtime; marked reading links fetch another document
-while startup is pending or unavailable. Navigation activates the application
-once its bridge is ready. In `loading` mode, a
-lightweight shell starts the runtime and activates the selected destination.
-Both use the configured database and the existing permission services.
+use. Missing application assets produce a recoverable 503. Public HTML warms
+a parked runtime; marked reading links fetch another document while startup
+is pending or unavailable. Navigation activates the application once its bridge
+is ready. Interactive entries display feedback until their route and styles
+are ready. Data comes from the configured database and permission services.
 
 Jinja handles document rendering; Dioxus handles application workflows. Shared
 styles and appearance preferences preserve the existing design. See

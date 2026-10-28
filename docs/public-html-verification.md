@@ -17,15 +17,13 @@ cd ..
 uv run python scripts/prepare_public_assets.py --dist frontend/dist/public
 uv run playwright install chromium
 ARCTOS_PUBLIC_HTML_ENABLED=1 \
-ARCTOS_PUBLIC_ENTRY_MODE=content \
 ARCTOS_FRONTEND_DIST="$PWD/frontend/dist/public" \
 uv run python -m scripts.dev_demo
 ```
 
 Use the public output path reported by Dioxus for both `--dist` and
 `ARCTOS_FRONTEND_DIST`. The demo serves Flask on `http://127.0.0.1:5006`, creates
-fictional fixtures in `instance/demo.db`, and preserves edits on restart. Use
-`ARCTOS_PUBLIC_ENTRY_MODE=loading` to exercise the lightweight entry. Flask
+fictional fixtures in `instance/demo.db`, and preserves edits on restart. Flask
 serves the document templates; `dx serve` exercises the application directly.
 
 For a representative local dataset, `scripts.dev_demo --snapshot
@@ -46,8 +44,12 @@ uv run pytest tests/test_frontend_shell.py \
 uv run pytest tests/unit/test_public_html_check.py \
   tests/unit/test_compare_startup_profiles.py -n 4
 just frontend-test
-uv run python scripts/prepare_public_assets.py --check-theme
 ```
+
+Pytest prepares generated public CSS before collection, including on a fresh
+checkout. `just run` and `just demo` prepare it before starting Flask. Use
+`just public-assets` after editing shared styles, then restart Flask to refresh
+its asset versions and compressed responses.
 
 Server tests cover publication and account boundaries, pagination, query
 encoding, calendar dates, error statuses, manifest validation, compression, and
@@ -56,8 +58,7 @@ invalidation. Browser tests cover rendered interactions and failure recovery.
 The repository's [testing guide](https://github.com/reid23/arctos/blob/dev/TESTING.md)
 describes broader workflow checks.
 
-Check retained directory account state against the local release in either
-entry mode:
+Check retained directory account state against the local release:
 
 ```bash
 uv run python scripts/check_directory_account_state.py \
@@ -90,7 +91,7 @@ and failures, focus, native recovery, and modified clicks. Write requests are
 blocked; the read-only Markdown renderer remains available. Run it separately
 from timing measurements.
 
-For content mode, run the reading and application suite in another terminal:
+Run the reading and application suite in another terminal:
 
 ```bash
 uv run python scripts/check_public_html.py \
@@ -130,30 +131,28 @@ workflow suites.
 
 | Area | Required behavior |
 | --- | --- |
-| Content-mode directories | Events and Leagues headings, search, cards, and metadata are visible; search and pagination work with JavaScript disabled |
-| Content-mode Info | Published event/league facts, About content or fallback, and permitted registration actions are readable |
-| Loading entry | Original navigation and theme, clear startup status, latest selected destination, single visible header, application styles ready at handoff |
+| Public directories | Events and Leagues headings, search, cards, and metadata are visible; search and pagination work with JavaScript disabled |
+| Public Info | Published event/league facts, About content or fallback, and permitted registration actions are readable |
+| Interactive entry | Original navigation and theme, clear startup status, single visible header, application styles ready at handoff |
 | Application workflow | Required controls are visible and enabled after the startup shell closes |
-| Failed or delayed Wasm | Public facts remain readable in content mode; pending navigation has recovery; loading entry provides slow/failure status and Retry to the selected URL |
-| JavaScript disabled | Content mode retains reading and native navigation; loading mode explains its JavaScript requirement |
+| Failed or delayed Wasm | Public facts remain readable on public documents; pending navigation has recovery; interactive entry provides slow/failure status and Retry to the selected URL |
+| JavaScript disabled | Public documents retain reading and native navigation; interactive entry explains its JavaScript requirement |
 | Navigation | One runtime across ordinary routes; encoded queries, fragments, pagination, Back/Forward, scroll, and focus behave correctly |
 | Reading during startup | Marked links and GET forms replace the public page while Wasm is pending or failed; stale responses cannot replace a newer destination |
 | First handoff | Public page remains visible until the requested application route and its styles are ready; one visible header, coherent focus, and native recovery on failure |
 | Leagues cache | Revisit within 60 seconds reuses eligible data; account changes, writes, expiry, and Retry refresh it |
 | Mobile and appearance | No horizontal overflow at 320px and 390px; three palettes, light/dark modes, keyboard access, and enlarged text remain usable |
 
-`check_public_html.py` verifies content-mode reading, sign-in controls, native
+`check_public_html.py` verifies public reading, sign-in controls, native
 search/navigation, Wasm failure/delay recovery, retained navigation, Leagues
 reuse, and overflow. Its ready criterion requires visible meaningful content,
 then two animation frames and observed FCP. Default selectors identify the
 public page facts and the username, password, and submit controls. Alternate
 selectors should express the page's usable state.
 
-Loading-entry checks also hold Wasm and CSS while selecting another route,
-change appearance before handoff, recover a failed request through Retry, and
-verify initial activation preserves history. These require deliberate failure
-injection in separate browser contexts. Timing runs use normal browser caching
-with request interception disabled.
+Interactive-entry checks hold Wasm and application CSS, verify keyboard focus
+at handoff, and exercise native recovery. Timing runs use normal browser
+caching with request interception disabled; failure injection runs separately.
 
 ## Comparative measurements
 
@@ -163,8 +162,7 @@ Leagues navigation across selected prepared local origins:
 | Runner name | Default origin | Server setup |
 | --- | --- | --- |
 | `original` | `http://127.0.0.1:5017` | Optimized baseline frontend entry and its matching assets |
-| `public-html` | `http://127.0.0.1:5016` | Current release, public routing enabled, `content` mode |
-| `loading-entry` (optional) | `http://127.0.0.1:5019` | Current release, public routing enabled, `loading` mode |
+| `public-html` | `http://127.0.0.1:5016` | Current release with public routing enabled |
 
 Prepare both releases and one shared fictional demo database. From the current
 checkout, choose a new directory for the baseline checkout and run:
@@ -178,6 +176,7 @@ git -C "$ARCTOS_COMPARE_BASELINE_CHECKOUT" checkout --detach daebd5c6f57b24461f8
 export ARCTOS_COMPARE_BASELINE_DIST="$ARCTOS_COMPARE_BASELINE_CHECKOUT/frontend/dist/public"
 export ARCTOS_COMPARE_CURRENT_DIST="$PWD/frontend/dist/public"
 export ARCTOS_COMPARE_DATABASE="$PWD/instance/demo.db"
+just public-assets
 uv run python -m scripts.dev_demo --seed-only
 uv run python scripts/prepare_public_assets.py --dist "$ARCTOS_COMPARE_BASELINE_DIST"
 uv run python scripts/prepare_public_assets.py --dist "$ARCTOS_COMPARE_CURRENT_DIST"
@@ -186,7 +185,7 @@ uv run python scripts/prepare_public_assets.py --dist "$ARCTOS_COMPARE_CURRENT_D
 Use the public output directories reported by Dioxus if they differ. Both
 builds use same-origin APIs. Run the following from the current checkout in two
 terminals with those exported paths: use `public-html` in one and `original`
-in the other. The optional third variant is `loading-entry`.
+in the other.
 
 ```bash
 ARCTOS_COMPARE_VARIANT=public-html uv run python - <<'PY'
@@ -197,13 +196,12 @@ from flask import request, send_file
 from scripts.dev_demo import create_demo_app
 
 variant = os.environ["ARCTOS_COMPARE_VARIANT"]
-port = {"original": 5017, "public-html": 5016, "loading-entry": 5019}[variant]
+port = {"original": 5017, "public-html": 5016}[variant]
 dist_key = "ARCTOS_COMPARE_BASELINE_DIST" if variant == "original" else "ARCTOS_COMPARE_CURRENT_DIST"
 dist = Path(os.environ[dist_key]).resolve()
 os.environ.update(
     ARCTOS_FRONTEND_DIST=str(dist),
     ARCTOS_PUBLIC_HTML_ENABLED="1",
-    ARCTOS_PUBLIC_ENTRY_MODE="loading" if variant == "loading-entry" else "content",
     ARCTOS_PUBLIC_ORIGIN=f"http://127.0.0.1:{port}",
 )
 app = create_demo_app(Path(os.environ["ARCTOS_COMPARE_DATABASE"]))
@@ -239,10 +237,8 @@ uv run python scripts/compare_startup_profiles.py \
   --runs 3 --output /tmp/arctos-startup-comparison
 ```
 
-Add `--variant loading-entry=http://127.0.0.1:5019` to compare a separately
-prepared loading-mode server. Omitting all `--variant` arguments expects all
-three default origins. Direct Leagues checks require actual server-rendered
-league cards in content mode, before any league-list API request.
+Omitting `--variant` arguments uses the two default origins. Direct Leagues
+checks require server-rendered league cards before any league-list API request.
 
 Each run rotates variant order and measures an independent cold/warm pair.
 Cold means a fresh browser context; warm means a new page sharing that
@@ -282,7 +278,7 @@ assess the retained runtime's cost.
 
 ## Measured results
 
-The current content-mode release passed **48/48 startup samples and 24/24
+The public HTML release passed **48/48 startup samples and 24/24
 navigation journeys** in the 2026-10-27 comparison. It includes server-rendered
 Events, Leagues, and their published Info pages, plus public reading navigation
 while the runtime starts.
@@ -330,47 +326,19 @@ request, and reused its league-list response. These results support early
 public reading and faster repeat navigation; reducing the remaining
 interactive startup cost requires further runtime and asset/data work.
 
-Full samples, warm-entry journey timings, and ranges are in
-`preview/public-content-comparison-final/report.json` and `summary.md`.
+## Verification scope and limits
 
-## Evidence and limits
+The browser acceptance run on 2026-10-27 passed 10 readiness samples,
+15 JavaScript-disabled/delayed/failed-Wasm checks, nine reading/handoff cases,
+four account/cache/pagination cases, and four Leagues layouts at 320px with
+normal and enlarged text. The commands above produce fresh local reports;
+reports and temporary captures are excluded from Git.
 
-Run the commands above to produce fresh reports. These local paths identify
-the captured acceptance results:
-
-| Check | Result | Report |
-| --- | --- | --- |
-| Public reading and application readiness at 320px | 10/10 samples | `preview/public-content-reviewed/report.json` |
-| JavaScript-disabled, blocked-Wasm, and delayed-Wasm behavior | 15/15 checks | Same report |
-| Public reading, history, and application handoff | 9/9 cases | `preview/public-reading-pr-review-final/report.json` |
-| Account isolation, Retry, and Leagues pagination/history | 4/4 cases | `preview/public-content-account-final.json` |
-| Leagues directory and Info at 320px, normal/200% text | 4/4 layouts | `preview/public-content-responsive/report.json` |
-
-The directory runner checks private-card removal during same-route logout,
-rejection of delayed prior-account data, pending Retry UI, and encoded query/page
-state across workflow navigation. The mobile checks inspect document width,
-whole labels, contained navigation scrolling, and heading clearance below the
-sticky header. Server and Rust tests provide complementary permission, data,
-and state coverage.
-
-The reading runner verifies one document and one Wasm request across retained
-journeys. It checks navigation while startup is held or failed, competing HTTP
-responses, metadata and appearance replacement, fragments and encoded queries,
-history across application activation, stylesheet delays/failures, direct-entry
-keyboard focus, and native recovery. Appearance changes during a delayed handoff
-carry into the running application. Its request guard recorded no writes.
-
-The earlier three-mode comparison is retained in
-`preview/startup-profiles-final/` (72/72 startup samples and 72/72 journeys) and
-`preview/startup-leagues-mobile-final/` (18/18 direct Leagues samples). Those
-captures rendered Events as public HTML but used an application shell for
-Leagues; they document the loading-mode comparison separately from the current
-results above.
-Additional loading-mode and shared-header captures are in
-`preview/public-html/loading-entry-audit/`,
-`preview/public-html/review-2026-10-27/`, and `preview/responsive-header-final/`.
-Reports and screenshots are ignored local artifacts; screenshots can contain
-displayed data.
+The account runner checks private-card removal during logout, rejection of
+prior-account responses, Retry, and query/page state across navigation. The
+reading runner checks one runtime, competing requests, metadata, appearance,
+history, focus, stylesheet failures, and native recovery. Server and Rust tests
+cover permissions, data selection, and state transitions.
 
 These small synthetic samples describe the tested release, fixture, browser,
 and local serving configuration. Production distributions, TLS/proxy behavior,

@@ -142,7 +142,6 @@ async def logout_case(browser, origin, delayed_old):
     await page.route("**/_api/public/events?*", events)
     try:
         STEP = "entry"
-        # The explicit app entry works in both public-content and loading modes.
         await page.goto(origin + "/?app=1", wait_until="domcontentloaded")
         STEP = "initial-directory-request"
         await asyncio.wait_for(old_started.wait(), 8)

@@ -109,9 +109,6 @@ def create_app(config: dict | None = None) -> Flask:
         "on",
     }
     app.config["PUBLIC_HTML_PAGE_SIZE"] = 24
-    # Keep both entry experiences available for controlled local comparisons.
-    # Loading mode skips the public content projection; APIs still read live data.
-    app.config["PUBLIC_ENTRY_MODE"] = os.environ.get("ARCTOS_PUBLIC_ENTRY_MODE", "content")
     app.config["PUBLIC_CANONICAL_ORIGIN"] = os.environ.get("ARCTOS_PUBLIC_ORIGIN", "")
     app.config["PUBLIC_CALENDAR_TIMEZONE"] = os.environ.get("ARCTOS_PUBLIC_CALENDAR_TIMEZONE", "UTC")
     # Record / footage uploads use multi-MB POST bodies; set explicitly so Werkzeug does not reject large chunks.
@@ -148,9 +145,6 @@ def create_app(config: dict | None = None) -> Flask:
     # Override with custom config if provided
     if config:
         app.config.update(config)
-
-    if app.config["PUBLIC_ENTRY_MODE"] not in {"content", "loading"}:
-        raise ValueError("PUBLIC_ENTRY_MODE must be 'content' or 'loading'")
 
     # Fail clearly at boot for an invalid calendar boundary configuration.
     from zoneinfo import ZoneInfo

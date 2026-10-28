@@ -1,7 +1,7 @@
 """Prepare shared public presentation and a verified Dioxus entry manifest.
 
-Run after ``dx bundle --web --release``. ``--theme-only`` also works without
-Rust; ``--check-theme`` verifies generated presentation assets match the app.
+Run after ``dx bundle --web --release``. ``--theme-only`` prepares the public
+styles without requiring a Rust build.
 """
 
 from __future__ import annotations
@@ -40,6 +40,15 @@ def presentation_assets() -> dict[str, bytes]:
         "design.css": design_css().encode(),
         "theme.css": theme_css().encode(),
     }
+
+
+def prepare_presentation(destination: Path = ROOT / "static/public") -> None:
+    """Write public styles from their shared sources without modifying unchanged files."""
+    destination.mkdir(parents=True, exist_ok=True)
+    for name, data in presentation_assets().items():
+        path = destination / name
+        if not path.is_file() or path.read_bytes() != data:
+            _atomic_write(path, data)
 
 
 def theme_css() -> str:
@@ -152,20 +161,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dist", type=Path, default=ROOT / "frontend/dist/public")
     parser.add_argument("--theme-only", action="store_true")
-    parser.add_argument("--check-theme", action="store_true")
     args = parser.parse_args()
-    destination = ROOT / "static/public"
-    generated = presentation_assets()
-    if args.check_theme:
-        if any(
-            not (destination / name).exists() or (destination / name).read_bytes() != data
-            for name, data in generated.items()
-        ):
-            parser.exit(1, "Public presentation is stale; run --theme-only and review the change.\n")
-        print("Public presentation matches application styles and tokens.")
-        return
-    for name, data in generated.items():
-        _atomic_write(destination / name, data)
+    prepare_presentation()
     if not args.theme_only:
         manifest = prepare_dist(args.dist)
         print(f"Prepared application entry {manifest['entry']} and compressed assets.")

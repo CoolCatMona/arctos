@@ -1,20 +1,19 @@
 # Public route indexing
 
 [`public_pages.py`](../app/routes/public_pages.py) classifies document indexing
-from route purpose and publication state. The classification applies to both
-entry modes and to application documents served with public rendering disabled.
+from route purpose and publication state. The classification also applies to
+application documents served with public rendering disabled.
 API authorization continues to govern the content available to each visitor.
 
 “No directive” means the response permits normal crawler behavior. Discovery
-and indexing still depend on the crawler. Content mode supplies event and league facts in
-the first response; loading mode supplies startup HTML and relies on application
-execution for content. Documents use `Cache-Control: private, no-store`
+and indexing still depend on the crawler. Public documents supply event and
+league facts in the first response. Documents use `Cache-Control: private, no-store`
 independently of their indexing classification.
 
 | Route or state | Robots behavior | Publication rule |
 | --- | --- | --- |
 | Events/Leagues directories and published event/league Info | No directive | Public event and league permissions |
-| Content-mode directory search or page after page 1 | `noindex, follow` | Search and pagination variants retain discoverable links |
+| Public directory search or page after page 1 | `noindex, follow` | Search and pagination variants retain discoverable links |
 | Player/team directories | No directive | Existing public list APIs |
 | Existing player/team profiles, default/Info/History tabs | No directive | Account exists; APIs apply field-level privacy |
 | Player injuries/infractions and team Notes tabs | `noindex` | Panels contain account-sensitive information |
@@ -35,7 +34,7 @@ Application shells receive an explicit `noindex` value, reflected in both the
 HTML meta tag and `X-Robots-Tag`. A missing build overrides it to `noindex`.
 Readable public documents keep their normal status and publication metadata
 when application assets are unavailable.
-Content-mode search and pagination add `follow` through their document metadata.
+Public search and pagination add `follow` through their document metadata.
 Application-rendered directory queries retain their route's classification.
 
 Public reading navigation replaces document metadata with the accepted Flask

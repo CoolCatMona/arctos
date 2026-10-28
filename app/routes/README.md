@@ -67,12 +67,10 @@ codes:
 ### Public HTML and application documents
 
 [`public_pages.py`](public_pages.py) classifies document GET requests. With
-`ARCTOS_PUBLIC_HTML_ENABLED=1`, `content` mode renders `/`, `/leagues`, and
-published `/<event>` and `/leagues/<league>` Info pages through Jinja.
-`?tab=info` selects the same reading page. `loading` mode performs event/league
-visibility checks and returns an application shell. Other declared application
-URLs use that shell in either mode. The public routing flag defaults to `0`;
-the entry mode defaults to `content`.
+`ARCTOS_PUBLIC_HTML_ENABLED=1`, Flask renders `/`, `/leagues`, and published
+`/<event>` and `/leagues/<league>` Info pages through Jinja. `?tab=info` selects
+the same reading page. Other declared application URLs use the startup shell.
+The public routing flag defaults to `0`.
 
 Both directories preserve `q`, `view=past`, and `page`. The Events directory's
 `/_api/public/events` endpoint shares the same bounded projection with Dioxus.

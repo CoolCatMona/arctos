@@ -1,6 +1,6 @@
 # Public documents and application startup
 
-In content mode, Flask serves event and league reading pages in the initial
+Flask serves event and league reading pages in the initial
 HTTP response while Dioxus starts in the background. Reading navigation remains
 available during startup; the application stays loaded after activation.
 Both presentations use the existing mobile layout, navigation, palettes,
@@ -9,41 +9,25 @@ and account workflows.
 Flask owns permissions, publication rules, data selection, and HTTP responses.
 Dioxus owns interactive workflows and navigation after activation.
 
-## Entry modes
-
-`ARCTOS_PUBLIC_HTML_ENABLED=1` enables Flask's public document routing. The flag
-defaults to `0`. `ARCTOS_PUBLIC_ENTRY_MODE` selects the entry experience:
-
-| Mode | First response | Application activation | Reading requirement |
-| --- | --- | --- | --- |
-| `content` (default) | Events and Leagues directories or published event/league Info, rendered by Flask/Jinja | Runtime warms while HTML remains visible; navigation activates its Router when ready | Public facts, search, pagination, links, and disclosures work with HTML alone |
-| `loading` | Existing Arctos chrome, page heading, and startup status | Runtime starts immediately and opens the current URL or latest selected destination | JavaScript and Wasm provide the page content |
-
-Other application routes use an application shell in either mode. The loading
-mode uses the lightweight shell for all regular application routes. Scoreboard,
-OBS, and side-competition scoring outputs retain their dedicated layouts.
-The entry-mode setting also applies when the public routing flag is off; enable
-that flag to apply Flask's initial event/league visibility and 404 checks.
-
-Both modes select data from the configured database. Loading mode performs the
-event/league permission check before returning its shell and obtains page data through
-the application's APIs. Content mode prepares the public view model during the
-initial HTTP request. [Measured results](public-html-verification.md#measured-results)
-show the distinction between early feedback and readable page content.
-
 ## Request and data ownership
 
-| Request | Content mode with public routing enabled | Loading mode with public routing enabled |
-| --- | --- | --- |
-| `/` with `q`, `view`, `page` | Events HTML | Application shell |
-| `/leagues` with `q`, `view`, `page` | Leagues HTML | Application shell |
-| Published `/<event>` and `?tab=info` | Event Info HTML | Permission check, then application shell |
-| Published `/leagues/<league>` and `?tab=info` | League Info HTML | Permission check, then application shell |
-| Authorized draft, `?app=1`, `?tab=app`, other event tabs | Application shell | Application shell |
-| Declared workflow routes | Application shell | Application shell |
-| Missing or inaccessible event/league | 404 document | 404 document |
-| Database failure during document selection | Recoverable 503 | Recoverable 503 |
-| Missing or incompatible application manifest | Public facts remain available; app entry returns 503 | Recoverable 503 |
+`ARCTOS_PUBLIC_HTML_ENABLED=1` enables Flask's public document routing. The flag
+defaults to `0`. Public pages use current database data and evaluate visibility
+for each request. Interactive destinations display startup feedback while
+Dioxus loads. Scoreboard, OBS, and side-competition scoring outputs retain their
+dedicated layouts.
+
+| Request with public routing enabled | Response |
+| --- | --- |
+| `/` with `q`, `view`, `page` | Events HTML |
+| `/leagues` with `q`, `view`, `page` | Leagues HTML |
+| Published `/<event>` and `?tab=info` | Event Info HTML |
+| Published `/leagues/<league>` and `?tab=info` | League Info HTML |
+| Authorized draft, `?app=1`, `?tab=app`, other event tabs | Application shell |
+| Declared workflow routes | Application shell |
+| Missing or inaccessible event/league | 404 document |
+| Database failure during document selection | Recoverable 503 |
+| Missing or incompatible application manifest | Public facts remain available; app entry returns 503 |
 
 The route classifier in [`public_pages.py`](../app/routes/public_pages.py) and
 the Rust `Route` enum must agree. APIs, assets, waivers, and authentication
@@ -87,11 +71,10 @@ instructions remain in their existing application workflows.
 
 Jinja templates in `templates/public/` use the application's component classes.
 `prepare_public_assets.py` copies vendored Bootstrap and generates `design.css`
-and `theme.css` from the frontend styles. `public.css` adapts native forms and
-disclosures. `startup.css` contains the header, footer, appearance controls,
-and loading presentation, scoped to `#app-startup`. Review it with changes to
-those frontend components. Inline SVG icons use the existing Font Awesome
-glyphs. Appearance and introduction preferences use the application's storage
+and `theme.css` from the frontend styles. Generated CSS is ignored by Git and
+prepared by development, test, and release commands. `public.css` adapts native
+forms, disclosures, and startup feedback. Inline SVG icons use the existing
+Font Awesome glyphs. Appearance and introduction preferences use the application's storage
 keys.
 
 At enlarged text sizes, header controls wrap and the navigation row scrolls
@@ -119,14 +102,12 @@ application content. A failed first mount detaches the failed application,
 restores the public page's IDs, address, and title, and offers a native link to
 the requested destination.
 
-Loading entries preload the module and run `boot.js` asynchronously. The first
-status is “Starting Arctos…”. Once the navigation bridge is ready, the status
-changes to “Opening [page]…”. The latest startup navigation is queued against
-that single import. Same-URL activation preserves browser history. Handoff
-waits for route content and application styles; Dioxus then owns its route's
-loading, empty, error, and content states. The temporary header is hidden in
-the same task that reveals the application. Focus moves to the application
-content when a focused startup control disappears.
+Interactive entries preload the module and run `boot.js` asynchronously. The
+status identifies the destination and displays “Loading…”. Handoff waits for
+route content and application styles; Dioxus then owns the route's loading,
+empty, error, and content states. The temporary header is hidden in the same
+task that reveals the application. Focus moves to the application content when
+a focused startup control disappears.
 
 ![Interactive page while application startup is delayed](images/public-application-loading.png)
 
@@ -134,10 +115,10 @@ The image shows Log in at a 390px viewport with the runtime download held past
 five seconds.
 
 After five seconds, startup explains that opening is taking longer than usual.
-The loading entry offers Retry after 20 seconds and immediately on failure;
-Retry opens the selected destination. Content-mode navigation offers a native
+Interactive entry offers Retry after 20 seconds and immediately on failure.
+Public navigation offers a native
 recovery link while startup is delayed and restores the public document if its
-first route fails to mount. JavaScript-disabled loading entries explain the
+first route fails to mount. JavaScript-disabled interactive entries explain the
 requirement to enable JavaScript.
 
 ## Navigation and caching
@@ -175,7 +156,7 @@ Save, cancel, withdrawal, and roster access retain their existing workflows.
 Canonical and Open Graph URLs use the configured `ARCTOS_PUBLIC_ORIGIN`.
 Publication flags determine indexing for public app sections; privileged
 workflows and previews receive `noindex`. The full route policy is in
-[indexing](public-html-indexing.md). Loading entries retain that classification,
+[indexing](public-html-indexing.md). Interactive entries retain that classification,
 while their initial HTML contains startup feedback. Schedules, results,
 profiles, and other application pages obtain their content through Dioxus.
 Public reading navigation updates title, description, robots, canonical, and

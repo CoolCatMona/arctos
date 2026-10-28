@@ -24,8 +24,8 @@ and fill only the values you need.
 
 `ARCTOS_PUBLIC_HTML_ENABLED`
 : (default `0`) Set to `1` for Flask's Events/Leagues document routing and initial
-  visibility checks. `content` mode renders public facts; `loading` mode
-  returns the application startup shell. Requires the document proxy setup in
+  visibility checks. Public facts arrive in the first HTML response while the
+  application starts in the background. Requires the document proxy setup in
   [DEPLOY](DEPLOY.md#public-html-rollout).
 
 `ARCTOS_FRONTEND_DIST`
@@ -33,17 +33,6 @@ and fill only the values you need.
   `arctos-assets.json`, `index.html`, and `assets/`. Defaults to the checkout's
   `frontend/dist/public`. Run `scripts/prepare_public_assets.py` after bundling.
   Set the same value in deployment and gunicorn environments when staging.
-
-`ARCTOS_PUBLIC_ENTRY_MODE`
-: (default `content`) `content` provides Events, Leagues, and their published Info
-  pages as HTML when public routing is enabled; reading stays available while
-  the runtime warms. `loading` provides a
-  lightweight themed startup screen and automatically opens Dioxus, which
-  requires JavaScript for reading. The setting applies to regular application
-  shells independently of `ARCTOS_PUBLIC_HTML_ENABLED`; enable that flag for
-  Flask's initial event/league visibility and 404 checks. Both modes use current database
-  data and retain one runtime during ordinary navigation. Invalid values fail
-  configuration validation.
 
 `ARCTOS_PUBLIC_ORIGIN`
 : Trusted canonical origin, such as `https://arctos.example.org`. Accepts an
@@ -88,6 +77,7 @@ and fill only the values you need.
   To enable the extra sounds for the demo organizer:
 
   ```sh
+  just public-assets
   SILLY_USERS=demo-organizer uv run python -m scripts.dev_demo
   ```
 

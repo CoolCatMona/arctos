@@ -1,16 +1,5 @@
 # Testing
 
-Public entry has [architecture](docs/public-html-architecture.md) and
-[browser verification](docs/public-html-verification.md) guides. Run performance
-checks externally against an isolated demo or explicitly selected staging
-origin. Focused server and asset contracts:
-
-```bash
-uv run pytest tests/test_frontend_shell.py \
-  tests/integration/test_public_pages.py tests/unit/test_public_page_service.py \
-  tests/unit/test_public_league_service.py -n 4
-```
-
 Choose checks for the behavior being changed. Backend tests verify domain rules,
 permissions, data integrity, and API contracts. Rust tests verify pure frontend
 logic. Browser checks verify interactions that need a rendered application.
@@ -177,41 +166,12 @@ Save screenshot output outside the checkout and attach relevant images directly
 to the pull request. Include the viewport size and state shown. Screenshots are
 visual references, not an exhaustive test record.
 
-### Retained directory account state
+### Public documents and startup
 
-With a prepared release served by the local Flask demo, run:
-
-```bash
-uv run python scripts/check_directory_account_state.py \
-  --base-url http://127.0.0.1:5006 \
-  --output /tmp/arctos-directory-account-check.json
-```
-
-This checks same-route logout while fresh Events data is pending, delayed
-prior-account responses, Leagues Retry pending/recovery, and encoded Leagues
-pagination across workflow navigation and Back/Forward. The loopback-only
-runner uses synthetic account/directory responses, intercepts logout, and
-rejects unexpected API calls. It writes assertions to a fresh output path.
-See [public entry verification](docs/public-html-verification.md) for release
-setup and the complementary permission tests.
-
-### Public reading and application handoff
-
-Run against content mode with fictional public event and league fixtures:
-
-```bash
-uv run python scripts/check_public_reading_navigation.py \
-  --base-url http://127.0.0.1:5006 \
-  --event-path /demo-open --league-path /leagues/demo-coast-league \
-  --output /tmp/arctos-public-reading-check.json
-```
-
-The loopback-only runner holds or fails Wasm, reading requests, and application
-stylesheets. It checks continued reading, latest navigation intent, metadata,
-appearance, Back/Forward, scroll, handoff focus, single-header presentation,
-and native recovery. Browser contexts are isolated and write requests are
-blocked; the Markdown renderer's read-only POST remains allowed. Run these
-failure-injection checks separately from performance measurements.
+See [public entry verification](docs/public-html-verification.md) for prepared
+release setup, focused server tests, browser acceptance checks, and comparative
+performance measurements. The browser suites cover reading during startup,
+application handoff, account isolation, and retained directory navigation.
 
 ### Manual checks and device limits
 

@@ -2,8 +2,8 @@
 
 Arctos uses [Dioxus](https://dioxuslabs.com/) compiled to WebAssembly for
 interactive workflows. The browser calls Flask under `/_api/`. Flask also owns
-the initial document: optional `content` mode serves Events, Leagues, and their Info pages as
-HTML, while `loading` mode provides a lightweight startup screen before Dioxus.
+the initial document: public routing serves Events, Leagues, and their Info
+pages as HTML. Interactive destinations display startup feedback before Dioxus.
 See [entry architecture](../docs/public-html-architecture.md) and
 [deployment](../docs/DEPLOY.md).
 
@@ -38,7 +38,7 @@ Deploy the output path reported by Dioxus. The frontend builds with Rust and
 serves bundled CSS and fonts locally. Dependencies and licenses are in
 [`assets/vendor/`](assets/vendor/README.md).
 
-Exercise Flask entry modes on port 5006 with public routing enabled and a
+Exercise Flask public entry on port 5006 with public routing enabled and a
 prepared release bundle. After bundling, run `scripts/prepare_public_assets.py`
 from the repository root with `--dist` set to Dioxus's public output directory.
 Set `ARCTOS_FRONTEND_DIST` to the same directory. The
@@ -71,18 +71,16 @@ query variants for filters or sections; preserve those parameters and browser
 Back/Forward behavior when adding navigation. Event sections use real links,
 with `aria-current="page"` on the current destination.
 
-With public routing enabled, `content` mode serves `/` and `/leagues` (including
+With public routing enabled, Flask serves `/` and `/leagues` (including
 `q`, `view`, and `page`) and published event/league Info as Flask documents.
 Other tabs and workflows, authorized drafts, and explicit `?app=1` requests
-use the application. Loading mode uses an application startup shell at the
-same URLs after Flask's event/league visibility check.
+use the application.
 
 Documents marked `data-public-background="true"` initialize a parked runtime.
 `public_navigation.rs` activates its Router through the cancelable navigation
-bridge. While content-mode startup is pending or failed, marked reading links
+bridge. While startup is pending or failed, marked reading links
 and GET forms replace the public document with fresh Flask HTML, preserving
-the single runtime. Once ready, navigation activates the application. Loading mode activates
-as soon as the bridge is ready, using the latest selected destination.
+the single runtime. Once ready, navigation activates the application.
 Subsequent public reading and workflows stay in the running app. History
 preserves raw queries, page numbers, fragments, return parameters, and native
 modified/external/download behavior. Dedicated output routes retain their own
@@ -109,20 +107,18 @@ uses the same paginated `DirectoryPage` through `/_api/public/events`.
 response, which it reuses for up to 60 seconds. Writes, account changes, expiry,
 and Retry refresh data.
 
-`prepare_public_assets.py` copies vendored Bootstrap and generates presentation
-styles from the theme, public-page, event, organizer, and appearance sources.
-Run `--theme-only` after changes and `--check-theme` to verify generated files.
-Also review the scoped header/footer/appearance rules in
-`static/public/startup.css` when their frontend components change.
+Public CSS is generated from the frontend sources by `just public-assets` and
+by release preparation. Restart Flask after regeneration to refresh its cached
+asset versions and compressed responses. Generated files are ignored by Git. `public.css`
+contains native-control adapters. Review shared component changes in both the
+Flask documents and the running application.
 
-`boot.js` provides application startup feedback and transfers control to
-Layout's route states. Loading entry waits for route content and application
-styles before revealing the app. `background.js` retains content-mode HTML
-until requested navigation has an application route and loaded styles ready
-to replace it. Both share the existing
-appearance preferences and preserve a single visible header. Performance
-measurements come from the external tools in the
-[verification guide](../docs/public-html-verification.md).
+`boot.js` displays startup feedback for interactive destinations;
+`background.js` keeps public reading available until an application route and
+its styles are ready. Both preserve appearance preferences and a single
+visible header. See [architecture](../docs/public-html-architecture.md) and
+[verification](../docs/public-html-verification.md) for the handoff contract
+and browser checks.
 
 ## UI conventions
 

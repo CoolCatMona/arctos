@@ -22,6 +22,7 @@ load `.env` or use `instance/tournament.db`. Keep it local.
 To start from an existing versioned SQLite snapshot:
 
 ```bash
+just public-assets
 uv run python -m scripts.dev_demo --snapshot /absolute/path/to/snapshot.db
 ```
 
@@ -61,118 +62,23 @@ for focused suites and device/integration limits.
 
 ## Public HTML assets and browser checks
 
-`prepare_public_assets.py` generates shared presentation from the frontend CSS
-and vendored Bootstrap, validates the compiled module and Wasm references,
-creates deterministic gzip companions, and atomically writes
-`arctos-assets.json` in the selected build directory.
+`prepare_public_assets.py` generates public CSS from the frontend sources,
+validates the compiled module and Wasm references, creates gzip companions,
+and writes the application manifest. `stage_frontend.py` publishes that build
+while retaining assets used by open tabs. See [deployment](../docs/DEPLOY.md#public-html-rollout).
 
-```bash
-cd frontend
-dx bundle --web --release
-cd ..
-uv run python scripts/prepare_public_assets.py --dist frontend/dist/public
-ARCTOS_PUBLIC_HTML_ENABLED=1 \
-ARCTOS_PUBLIC_ENTRY_MODE=content \
-ARCTOS_FRONTEND_DIST="$PWD/frontend/dist/public" just demo
-```
+The [public entry verification guide](../docs/public-html-verification.md)
+provides setup, commands, acceptance criteria, and measured results for:
 
-Use the public output directory reported by Dioxus for both `--dist` and
-`ARCTOS_FRONTEND_DIST`. Open Flask at **http://127.0.0.1:5006**. `content`
-provides Events, Leagues, and their published Info pages as HTML; `loading` selects lightweight startup
-feedback followed by Dioxus. Both modes use the configured database.
+| Script | Purpose |
+| --- | --- |
+| `check_public_html.py` | Readable content, usable controls, native navigation, and startup recovery |
+| `check_public_reading_navigation.py` | Reading during startup, navigation races, history, focus, and handoff |
+| `check_directory_account_state.py` | Account isolation, stale responses, Retry, and pagination |
+| `compare_startup_profiles.py` | Cold/warm startup and repeat navigation under network/CPU profiles |
 
-Regenerate presentation when shared component styles change:
-
-```bash
-uv run python scripts/prepare_public_assets.py --theme-only
-uv run python scripts/prepare_public_assets.py --check-theme
-```
-
-These options cover generated `bootstrap.css`, `design.css`, and `theme.css`.
-The scoped `startup.css` and native-control `public.css` adapters are maintained
-alongside the corresponding frontend components.
-
-`check_public_html.py` verifies anonymous content-mode reading, usable sign-in
-controls, navigation, caching, overflow, and failed/delayed Wasm recovery:
-
-```bash
-uv run playwright install chromium
-uv run python scripts/check_public_html.py --league-path /leagues/demo-coast-league \
-  --runs 5 --output /tmp/arctos-public-html
-```
-
-Default targets are `/`, `/demo-open`, and login with a return to the event's
-registration. The default profile uses a 390px viewport, mobile 4G network, and
-4× CPU slowdown. `--public-only` checks public reading before a Wasm build;
-`--width 320 --profile unthrottled --runs 1` provides a narrow functional pass.
-Repeated `--*-ready-selector` options define all required facts or controls for
-another route. Remote staging requires `--base-url` and `--allow-remote`.
-Screenshots are opt-in because they include displayed content.
-`--league-path` adds the Leagues directory, league Info, and their native
-navigation and JavaScript-disabled checks.
-
-`check_public_reading_navigation.py` exercises public document replacement and
-the first application handoff under deliberate delays and failures:
-
-```bash
-uv run python scripts/check_public_reading_navigation.py \
-  --base-url http://127.0.0.1:5006 \
-  --event-path /demo-open --league-path /leagues/demo-coast-league \
-  --output /tmp/arctos-public-reading-check.json
-```
-
-It verifies reading during held/failed Wasm, superseded responses, metadata,
-appearance rebinding, pre/post-activation history, stylesheet-gated handoff,
-failure recovery, and native links. It accepts loopback origins, blocks writes,
-and creates a fresh assertion report. Run it separately from timing comparisons.
-
-`check_directory_account_state.py` checks retained directory behavior against a
-local release in either entry mode:
-
-```bash
-uv run python scripts/check_directory_account_state.py \
-  --base-url http://127.0.0.1:5006 \
-  --output /tmp/arctos-directory-account-check.json
-```
-
-It verifies removal of private Events cards during logout, rejection of delayed
-prior-account responses, Leagues Retry pending/recovery states, and encoded
-Leagues pagination across workflow navigation and Back/Forward. Synthetic
-responses and intercepted logout keep server records and sessions unchanged;
-unexpected API calls fail the check. The runner accepts loopback origins.
-Choose a fresh output path, or omit `--output` for a timestamped report.
-
-`compare_startup_profiles.py` compares prepared variants across four network/CPU
-profiles. Prepare matching data, backend APIs, and asset policies, then select
-the original frontend and content mode explicitly:
-
-```bash
-uv run python scripts/compare_startup_profiles.py \
-  --variant original=http://127.0.0.1:5017 \
-  --variant public-html=http://127.0.0.1:5016 \
-  --runs 3 \
-  --output /tmp/arctos-startup-comparison
-uv run python scripts/compare_startup_profiles.py \
-  --variant original=http://127.0.0.1:5017 \
-  --variant public-html=http://127.0.0.1:5016 \
-  --direct-leagues-only \
-  --profile mobile-4g --runs 3 --output /tmp/arctos-leagues-comparison
-```
-
-Default origins are `original=5017`, `public-html=5016`, and
-`loading-entry=5019` on loopback. To include the optional loading-mode server,
-add `--variant loading-entry=http://127.0.0.1:5019`. Repeated `--variant NAME=ORIGIN` and
-`--profile` options select a focused comparison. The runner rotates version
-order, preserves normal browser caching, and records separate startup-feedback,
-content, and retained-navigation timings. `--include-direct-leagues` adds
-direct-entry pairs to the Events run.
-
-The reading and comparison tools inject observations into their own browser
-sessions and write local reports. Reading and timing runs use anonymous GET workflows; the known
-Markdown-rendering POST is a read operation. Run comparisons while builds and
-other browser tests are idle. See
-[verification](../docs/public-html-verification.md) for setup, acceptance
-criteria, report interpretation, and measured results.
+These tools run externally and write local reports. Production does not collect
+performance telemetry.
 
 ## Database maintenance
 

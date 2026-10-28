@@ -74,77 +74,13 @@ def test_public_html_remains_usable_without_a_prepared_application(
     assert "background.js" not in response.get_data(as_text=True)
 
 
-def test_loading_entry_skips_directory_projection_and_preserves_destination(public_client, app, monkeypatch):
-    monkeypatch.setitem(app.config, "PUBLIC_ENTRY_MODE", "loading")
-
-    def unwanted_projection(**kwargs):
-        raise AssertionError("The loading document must not query directory content")
-
-    monkeypatch.setattr(PublicPageService, "directory", unwanted_projection)
-    path = "/?q=Rock%26Roll&view=past&page=2"
-    response = public_client.get(path)
-    html = response.get_data(as_text=True)
-    assert response.status_code == 200
-    assert 'id="app-boot"' in html
-    assert 'data-public-background="true"' in html
-    assert "startup.css" in html and "boot.js" in html
-    assert not any(name in html for name in ("bootstrap.css", "design.css", "public.css", "background.js"))
-    tags = Elements(html)
-    retry = next(link["href"] for link in tags.all("a") if "data-boot-retry" in link)
-    assert retry == path
-    sign_in = next(link["href"] for link in tags.all("a") if link.get("href", "").startswith("/login?"))
-    assert parse_qs(urlsplit(sign_in).query)["next"] == [path]
-    assert response.headers["Cache-Control"] == "private, no-store"
-
-
-def test_loading_entry_api_reads_current_data(public_client, app, monkeypatch, tournament):
-    monkeypatch.setitem(app.config, "PUBLIC_ENTRY_MODE", "loading")
-    tournament.name = "Updated after the snapshot"
+def test_directory_html_and_api_read_current_data(public_client, tournament):
+    assert tournament.name in public_client.get("/").get_data(as_text=True)
+    tournament.name = "Updated event name"
     db.session.commit()
-    assert tournament.name not in public_client.get("/").get_data(as_text=True)
+    assert tournament.name in public_client.get("/").get_data(as_text=True)
     cards = public_client.get("/_api/public/events").get_json()["cards"]
     assert next(card for card in cards if card["url"] == f"/{tournament.url}")["name"] == tournament.name
-
-
-def test_loading_event_checks_permissions_without_content_projection(public_client, app, monkeypatch, tournament):
-    monkeypatch.setitem(app.config, "PUBLIC_ENTRY_MODE", "loading")
-
-    def unwanted_projection(*args, **kwargs):
-        raise AssertionError("Loading entry must not prepare an event overview")
-
-    monkeypatch.setattr(PublicPageService, "event", unwanted_projection)
-    response = public_client.get(f"/{tournament.url}")
-    assert response.status_code == 200
-    assert tournament.name not in response.get_data(as_text=True)
-    assert tournament.location not in response.get_data(as_text=True)
-    assert_robots(response, noindex=False)
-    tournament.published = False
-    db.session.commit()
-    assert public_client.get(f"/{tournament.url}").status_code == 404
-    assert public_client.get(f"/{tournament.url}/register").status_code == 404
-    assert public_client.get("/missing-event").status_code == 404
-
-
-def test_loading_entry_allows_organizer_draft_without_indexing(public_client, app, monkeypatch, tournament, player):
-    monkeypatch.setitem(app.config, "PUBLIC_ENTRY_MODE", "loading")
-    tournament.published = False
-    db.session.add(TO(event=tournament.url, user_id=player.id, user_type="player"))
-    db.session.commit()
-    login_as(public_client, player)
-    draft = public_client.get(f"/{tournament.url}")
-    assert draft.status_code == 200
-    assert 'id="app-boot"' in draft.get_data(as_text=True)
-    assert_robots(draft, noindex=True)
-
-
-def test_loading_entry_without_build_is_recoverable_503(public_client, app, monkeypatch, tmp_path):
-    monkeypatch.setitem(app.config, "PUBLIC_ENTRY_MODE", "loading")
-    monkeypatch.setitem(app.config, "ARCTOS_FRONTEND_DIST", str(tmp_path / "missing"))
-    response = public_client.get("/")
-    assert response.status_code == 503
-    assert response.headers["Retry-After"] == "30"
-    assert "temporarily unavailable" in response.get_data(as_text=True)
-    assert "boot.js" not in response.get_data(as_text=True)
 
 
 def test_interactive_directory_shares_html_search_pagination_and_privacy(public_client):
@@ -548,9 +484,7 @@ def test_league_info_is_sanitized_readable_and_has_workflow_links_without_javasc
         assert "boot.js" in workflow.get_data(as_text=True)
 
 
-@pytest.mark.parametrize("mode", ["content", "loading"])
-def test_league_missing_or_private_documents_return_real_404(public_client, app, monkeypatch, mode):
-    monkeypatch.setitem(app.config, "PUBLIC_ENTRY_MODE", mode)
+def test_league_missing_or_private_documents_return_real_404(public_client):
     league = make_league("private-league", published=False)
     db.session.commit()
     for suffix in ("", "?tab=events", "/register", "/results", "/settings"):
@@ -561,9 +495,7 @@ def test_league_missing_or_private_documents_return_real_404(public_client, app,
         assert missing.get_data(as_text=True) == private.get_data(as_text=True).replace("private-league", "missing")
 
 
-@pytest.mark.parametrize("mode", ["content", "loading"])
-def test_league_draft_requires_signed_in_organizer(public_client, app, monkeypatch, player, mode):
-    monkeypatch.setitem(app.config, "PUBLIC_ENTRY_MODE", mode)
+def test_league_draft_requires_signed_in_organizer(public_client, player):
     league = make_league("private-league", published=False)
     db.session.commit()
     login_as(public_client, player)
@@ -617,22 +549,6 @@ def test_league_public_reading_works_without_application_build(public_client, ap
         assert "background.js" not in response.get_data(as_text=True)
     assert league.about in public_client.get("/leagues/league").get_data(as_text=True)
     assert public_client.get("/leagues/league/register").status_code == 503
-
-
-def test_league_loading_mode_skips_public_projections(public_client, app, monkeypatch):
-    make_league()
-    db.session.commit()
-    monkeypatch.setitem(app.config, "PUBLIC_ENTRY_MODE", "loading")
-
-    def unwanted_projection(*args, **kwargs):
-        raise AssertionError("Loading mode should not prepare public content")
-
-    monkeypatch.setattr(PublicLeagueService, "directory", unwanted_projection)
-    monkeypatch.setattr(PublicLeagueService, "league", unwanted_projection)
-    for path in ("/leagues", "/leagues/league"):
-        response = public_client.get(path)
-        assert response.status_code == 200
-        assert "boot.js" in response.get_data(as_text=True)
 
 
 def test_event_section_indexing_distinguishes_publication_from_preview_permission(public_client, tournament, player):

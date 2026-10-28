@@ -163,7 +163,6 @@ def render_application_shell(context: dict | None = None) -> Response:
         **supplied,
         "entry": entry,
         "bare": bare,
-        "loading_entry": current_app.config.get("PUBLIC_ENTRY_MODE", "content") == "loading" and not bare,
         "public_enabled": bool(current_app.config.get("PUBLIC_HTML_ENABLED", False)),
     }
     if values["workflow_label"] in {"application", "Arctos"}:

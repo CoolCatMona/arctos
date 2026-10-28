@@ -6,9 +6,10 @@ import os
 import stat
 
 import pytest
+from flask import Flask
 
-from app.services.frontend_shell import render_application_shell
-from scripts.prepare_public_assets import prepare_dist
+from app.services.frontend_shell import init_frontend_shell, render_application_shell
+from scripts.prepare_public_assets import prepare_dist, prepare_presentation
 
 pytestmark = pytest.mark.integration
 
@@ -25,28 +26,25 @@ def frontend_dist(app, tmp_path, monkeypatch):
     return tmp_path
 
 
-def test_generated_theme_matches_app_tokens():
-    from scripts.prepare_public_assets import ROOT, presentation_assets
-
-    for name, source in presentation_assets().items():
-        assert (ROOT / "static/public" / name).read_bytes() == source, name
-
-
-def test_unknown_entry_mode_fails_at_startup():
-    from app import create_app
-
-    with pytest.raises(ValueError, match="PUBLIC_ENTRY_MODE"):
-        create_app({"TESTING": True, "PUBLIC_ENTRY_MODE": "typo"})
-
-
-def test_shared_presentation_is_compressed_and_version_cached(app):
+@pytest.mark.parametrize("name", ["bootstrap.css", "design.css", "theme.css"])
+def test_prepared_presentation_is_served_compressed_and_version_cached(tmp_path, name):
     from app.services.frontend_shell import public_asset
 
+    directory = tmp_path / "public"
+    prepare_presentation(directory)
+    generated = (directory / name).read_bytes()
+    prepare_presentation(directory)
+    assert (directory / name).read_bytes() == generated
+
+    app = Flask(__name__, static_folder=tmp_path, static_url_path="/static")
+    init_frontend_shell(app)
     with app.test_request_context("/"):
-        path = public_asset("bootstrap.css")
+        path = public_asset(name)
     client = app.test_client()
     plain = client.get(path, headers={"Accept-Encoding": "identity"})
     compressed = client.get(path, headers={"Accept-Encoding": "gzip"})
+    assert plain.status_code == compressed.status_code == 200
+    assert plain.data == generated
     assert plain.mimetype == compressed.mimetype == "text/css"
     assert gzip.decompress(compressed.data) == plain.data
     assert len(compressed.data) < len(plain.data)
@@ -57,7 +55,7 @@ def test_shared_presentation_is_compressed_and_version_cached(app):
         == 304
     )
     assert client.get(path, headers={"Accept-Encoding": "gzip;q=0"}).data == plain.data
-    assert "immutable" not in client.get("/static/public/bootstrap.css?v=old").headers["Cache-Control"]
+    assert "immutable" not in client.get(f"/static/public/{name}?v=old").headers["Cache-Control"]
     assert client.get("/static/public/missing.css").status_code == 404
 
 
@@ -108,15 +106,12 @@ def test_shell_preserves_context_and_accessible_feedback_until_application_start
 
 
 @pytest.mark.parametrize("path", ["/scoreboard-render", "/cup/scoreboard", "/cup/sidecomps/1/enter-results"])
-@pytest.mark.parametrize("mode", ["content", "loading"])
-def test_special_outputs_keep_their_own_document_chrome(app, frontend_dist, monkeypatch, path, mode):
-    monkeypatch.setitem(app.config, "PUBLIC_ENTRY_MODE", mode)
+def test_special_outputs_keep_their_own_document_chrome(app, frontend_dist, path):
     with app.test_request_context(path):
         response = render_application_shell()
     html = response.get_data(as_text=True)
     assert 'id="app-boot"' not in html
     assert "public.css" not in html
-    assert "startup.css" not in html
     assert 'data-public-background="true"' not in html
     assert 'id="app-startup"' not in html
     assert 'aria-hidden="true" inert' not in html

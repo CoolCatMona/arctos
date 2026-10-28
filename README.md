@@ -39,8 +39,8 @@ Browser ── document request ──> nginx ──> Flask ──> services ─
 ```
 
 - **Frontend.** Rust with [Dioxus], compiled to WebAssembly. Flask can serve
-  Events, Leagues, and their published Info pages as readable HTML in `content` mode, or a
-  lightweight startup screen in `loading` mode. Dioxus owns interactive
+  Events, Leagues, and their published Info pages as readable HTML, with
+  startup feedback for interactive destinations. Dioxus owns interactive
   workflows and retains one runtime across ordinary navigation. The existing
   design and appearance preferences span both surfaces.
   `ARCTOS_PUBLIC_HTML_ENABLED` defaults to `0`; the
@@ -152,6 +152,7 @@ migrated. Fresh demos use the current models.
 To preview an existing versioned SQLite snapshot, run the backend with:
 
 ```bash
+just public-assets
 uv run python -m scripts.dev_demo --snapshot /absolute/path/to/snapshot.db
 ```
 
@@ -223,25 +224,15 @@ gunicorn using `.env`; it defaults to TLS on port 8081. Use
 `just certfile= keyfile= run` when TLS is handled by your reverse proxy.
 `just certs` creates local self-signed certificates if needed.
 
-Flask document routing requires a prepared application manifest, compressed
-assets, and the proxy configuration in the
-[deployment guide](docs/DEPLOY.md#public-html-rollout). Enable
-`ARCTOS_PUBLIC_HTML_ENABLED=1` and select `ARCTOS_PUBLIC_ENTRY_MODE=content`
-(default) or `loading`.
+Enable `ARCTOS_PUBLIC_HTML_ENABLED=1` with the prepared frontend and proxy
+configuration in the [deployment guide](docs/DEPLOY.md#public-html-rollout).
+Flask serves event and league information, search, pagination, and links in the
+first response while Dioxus starts in the background. Interactive workflows
+use the running application.
 
-Content mode supplies event and league facts, GET search, pagination, and links
-in the first response. Reading navigation can fetch another public document
-while the same runtime warms. Loading mode supplies a lightweight
-startup screen and opens Dioxus automatically; reading requires JavaScript.
-Both obtain current data from the configured database. Documents use
-`private, no-store`; fingerprinted assets use browser caching. Dioxus retains
-ordinary navigation, shares the bounded Events projection, and caches Leagues
-briefly in memory.
-
-The [verification guide](docs/public-html-verification.md) contains external
-browser commands and measured comparisons for first feedback, readable content,
-and repeat navigation. Performance observations remain in developer-run local
-reports.
+See the [architecture](docs/public-html-architecture.md) for data and navigation
+ownership and [verification](docs/public-html-verification.md) for external
+browser checks and measured loading improvements.
 
 ## Daily commands
 

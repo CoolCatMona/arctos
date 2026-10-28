@@ -5,7 +5,7 @@
 
 Run against frozen local servers with identical snapshots, backend APIs, and
 asset/compression policy, without concurrent builds or browser tests. Default
-origins: original=5017, public-html=5016, loading-entry=5019. The tool follows
+origins: original=5017 and public-html=5016. The tool follows
 anonymous directory links and records numeric measurements in local reports.
 """
 
@@ -39,7 +39,6 @@ from scripts.check_public_html import (
 DEFAULT_ORIGINS = {
     "original": "http://127.0.0.1:5017",
     "public-html": "http://127.0.0.1:5016",
-    "loading-entry": "http://127.0.0.1:5019",
 }
 EVENTS_SELECTORS = ("#event-search", ".arctos-event-card .arctos-card-title", ".arctos-meta-list")
 LEAGUES_SELECTORS = ("#league-search", ".arctos-league-grid .arctos-card-title", ".arctos-meta-list")
@@ -80,7 +79,7 @@ def arguments(argv: list[str] | None = None) -> argparse.Namespace:
         for item in raw_variants:
             name, separator, origin = item.partition("=")
             if not separator or name not in DEFAULT_ORIGINS:
-                raise ValueError("Variant must be original=ORIGIN, public-html=ORIGIN, or loading-entry=ORIGIN.")
+                raise ValueError("Variant must be original=ORIGIN or public-html=ORIGIN.")
             args.variants.append(Variant(name, validate_base_url(origin, args.allow_remote)))
         if len({variant.name for variant in args.variants}) != len(args.variants):
             raise ValueError("Variant names must be unique.")
@@ -109,7 +108,7 @@ def arguments(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def variant_order(variants: list[Variant], run: int) -> list[Variant]:
-    """Three default runs put every variant in every ordinal position once."""
+    """Rotate the first measured variant to reduce fixed-order bias."""
     offset = (run - 1) % len(variants)
     return variants[offset:] + variants[:offset]
 
@@ -121,7 +120,7 @@ def startup_probe(selectors: tuple[str, ...]) -> str:
     (() => {
         const audit = window.__arctosStartupAudit = {
             feedback_ms: null, feedback_kind: null, layout_mounted_ms: null,
-            loading_shell_seen: false, loading_entry_seen: false, public_content_seen: false
+            loading_shell_seen: false, public_content_seen: false
         };
         const visible = element => {
             if (!element || element.closest('[hidden],[inert]')) return false;
@@ -131,7 +130,6 @@ def startup_probe(selectors: tuple[str, ...]) -> str:
         };
         const inspect = () => {
             if (document.getElementById('app-boot')) audit.loading_shell_seen = true;
-            if (document.querySelector('#app-boot[data-loading-entry="true"]')) audit.loading_entry_seen = true;
             if (document.querySelector('main[data-public-page="directory"], main[data-public-page="leagues"]')) audit.public_content_seen = true;
             if (audit.layout_mounted_ms === null && document.querySelector('#main #app-layout'))
                 audit.layout_mounted_ms = performance.now();
@@ -164,7 +162,6 @@ STARTUP_METRICS = """() => {
             : Math.max(audit.feedback_ms, window.__arctosLocalAudit?.fcp_ms ?? 0),
         feedback_kind: audit?.feedback_kind ?? null,
         loading_shell_seen: audit?.loading_shell_seen ?? false,
-        loading_entry_seen: audit?.loading_entry_seen ?? false,
         public_content_seen: audit?.public_content_seen ?? false,
         runtime_warm_ms: bridge ?? audit?.layout_mounted_ms ?? null,
         runtime_evidence: bridge != null ? 'navigation-bridge' :
@@ -189,11 +186,9 @@ def startup_passes(row: dict, variant: str, target: str) -> bool:
         valid_variant = (
             row["public_background_enabled"]
             and row["public_content_seen"]
-            and not row["loading_entry_seen"]
+            and not row["loading_shell_seen"]
             and row["background_start"]["passed"]
         )
-    elif variant == "loading-entry":
-        valid_variant = row["loading_entry_seen"] and not row["public_content_seen"]
     else:
         valid_variant = not row["public_background_enabled"] and not row["loading_shell_seen"]
     return bool(
@@ -416,7 +411,7 @@ def report_metadata(args) -> dict:
         "runs_per_cold_warm_pair": args.runs,
         "collection_scope": scope,
         "targets": args.targets,
-        "runtime_evidence": {"original": "mounted-app-layout", "current_variants": "navigation-bridge"},
+        "runtime_evidence": {"original": "mounted-app-layout", "public-html": "navigation-bridge"},
         "expected_samples": len(args.variants) * len(args.profiles) * args.runs * 2 * len(args.targets),
         "complete": False,
         "passed": False,
