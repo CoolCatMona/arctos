@@ -676,7 +676,7 @@ fn read_debug_mode() -> bool {
 /// completes (or a plain click on empty grid space).
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct DragCreatePayload {
-    /// Field column the drag happened in; None is the event-wide activity lane.
+    /// Field column the drag happened in; None means no fields exist yet.
     field_name: Option<String>,
     /// Snapped drag start, local time.
     start_local: chrono::NaiveDateTime,
@@ -2161,7 +2161,7 @@ fn SchedulePage(
                             div { class: "modal-body schedule-add-selection-body",
                                 if let Some(selection) = create_prefill() {
                                     p { class: "schedule-add-selection-context",
-                                        strong { {selection.field_name.as_deref().unwrap_or("Event activities")} }
+                                        strong { {selection.field_name.as_deref().unwrap_or("Schedule")} }
                                         span {
                                             {selection.start_local.format("%b %-d · %H:%M").to_string()}
                                             if selection.length_min.is_some() {
@@ -4627,10 +4627,10 @@ fn TableView(
         .collect();
 
     let mut rows: Vec<(Option<chrono::NaiveDateTime>, Option<&MatchSetupData>, Option<&ScheduleItemData>)> = matches.iter().map(|m| (display_interval_utc(m, show_as_happened).map(|i| i.0), Some(*m), None)).collect();
+    // An activity is one saved item, even though the timeline shows it in
+    // every field. Keep one row in the table for each item.
     for item in &data.schedule_items {
-        if activity_in_field(item, &selected_field, &data.fields) {
-            rows.push((chrono::DateTime::parse_from_rfc3339(&item.start_time).ok().map(|d| d.naive_utc()), None, Some(item)));
-        }
+        rows.push((chrono::DateTime::parse_from_rfc3339(&item.start_time).ok().map(|d| d.naive_utc()), None, Some(item)));
     }
     rows.sort_by_key(|row| row.0);
     rsx! {
@@ -4852,10 +4852,6 @@ struct SchedulerSection {
     label: String,
 }
 
-fn activity_in_field(item: &ScheduleItemData, selected: &str, fields: &[FieldSetupData]) -> bool {
-    selected == "all" || item.field.is_none() || fields.iter().any(|field| field.id.to_string() == selected && item.field.as_deref() == Some(field.name.as_str()))
-}
-
 fn initial_schedule_day(dates: &[chrono::NaiveDate], event_start: &str, today: chrono::NaiveDate) -> chrono::NaiveDate {
     if dates.contains(&today) {
         return today;
@@ -4863,14 +4859,6 @@ fn initial_schedule_day(dates: &[chrono::NaiveDate], event_start: &str, today: c
     dates.first().copied()
         .or_else(|| chrono::NaiveDate::parse_from_str(event_start.get(..10)?, "%Y-%m-%d").ok())
         .unwrap_or(today)
-}
-
-/// Event-wide activities always use their own lane, including in a filtered field view.
-fn activity_field_id(item: &ScheduleItemData, fields: &[FieldSetupData]) -> u32 {
-    item.field.as_deref()
-        .and_then(|name| fields.iter().find(|field| field.name == name))
-        .map(|field| field.id)
-        .unwrap_or(0)
 }
 
 fn activity_local_interval(item: &ScheduleItemData) -> Option<(chrono::NaiveDateTime, chrono::NaiveDateTime)> {
@@ -4881,8 +4869,7 @@ fn activity_local_interval(item: &ScheduleItemData) -> Option<(chrono::NaiveDate
 
 #[cfg(test)]
 mod schedule_creation_tests {
-    use super::{activity_field_id, activity_in_field, initial_schedule_day, DragCreatePayload};
-    use crate::types::{FieldSetupData, ScheduleItemData};
+    use super::{initial_schedule_day, DragCreatePayload};
     use chrono::{NaiveDate, NaiveDateTime};
 
     #[test]
@@ -4895,26 +4882,6 @@ mod schedule_creation_tests {
         assert_eq!(selection.activity_end_local().format("%Y-%m-%dT%H:%M").to_string(), "2026-11-15T00:30");
         let click = DragCreatePayload { length_min: None, field_name: None, ..selection };
         assert_eq!(click.activity_end_local() - start, chrono::Duration::minutes(30));
-    }
-
-    #[test]
-    fn fieldless_activities_remain_visible_without_claiming_the_selected_field() {
-        let fields = vec![
-            FieldSetupData { id: 5, name: "North".into() },
-            FieldSetupData { id: 6, name: "South".into() },
-        ];
-        let mut item = ScheduleItemData {
-            id: 1, sidecomp_id: None, title: "Announcements".into(), description: None,
-            start_time: "2026-11-14T09:00:00Z".into(), end_time: "2026-11-14T09:15:00Z".into(),
-            field: None, location: None,
-        };
-        assert!(activity_in_field(&item, "5", &fields));
-        assert!(activity_in_field(&item, "6", &fields));
-        assert_eq!(activity_field_id(&item, &fields), 0);
-        item.field = Some("North".into());
-        assert!(activity_in_field(&item, "5", &fields));
-        assert!(!activity_in_field(&item, "6", &fields));
-        assert_eq!(activity_field_id(&item, &fields), 5);
     }
 
     #[test]
@@ -5060,7 +5027,7 @@ fn TimelineEventCard(
         }
     };
     let event_class = format!(
-        "schedule-timeline-event{}{}{}{}{}{}{}",
+        "schedule-timeline-event{}{}{}{}{}{}{}{}{}",
         if event.highlight_playing {
             " schedule-timeline-event--highlight-playing"
         } else {
@@ -5089,6 +5056,16 @@ fn TimelineEventCard(
         },
         if team_view && event.num_lanes > 1 {
             " schedule-timeline-event--compact-team"
+        } else {
+            ""
+        },
+        if !team_view && event.num_lanes > 1 {
+            " schedule-timeline-event--compact-field"
+        } else {
+            ""
+        },
+        if !team_view && event.num_lanes > 2 {
+            " schedule-timeline-event--very-dense"
         } else {
             ""
         },
@@ -5920,7 +5897,6 @@ fn ScheduleTimeline(
             }
         }
         for item in &data.schedule_items {
-            if !activity_in_field(item, &selected_field, &data.fields) && !team_view { continue; }
             let Some((start, end)) = activity_local_interval(item) else { continue; };
             let mut day = start.date();
             dates.push(day);
@@ -6079,13 +6055,15 @@ fn ScheduleTimeline(
             .map(|o| team_full_label(o))
             .unwrap_or_else(|| {
                 if focus_team_id.is_empty() {
-                    "Event activities".to_string()
+                    "Schedule".to_string()
                 } else {
                     focus_team_id.clone()
                 }
             }),
     };
-    let activity_field = FieldSetupData { id: 0, name: "Event activities".into() };
+    // Without configured fields, organizers can still schedule event-wide
+    // activities. Otherwise, each real field displays the same saved items.
+    let fallback_field = FieldSetupData { id: 0, name: "Schedule".into() };
     let mut visible_fields: Vec<&FieldSetupData> = if team_view {
         vec![&team_view_field]
     } else if selected_field == "all" {
@@ -6096,11 +6074,8 @@ fn ScheduleTimeline(
             .filter(|f| f.id.to_string() == selected_field)
             .collect()
     };
-    if !team_view && (data.schedule_items.iter().any(|i| i.field.is_none()) || data.fields.is_empty()) {
-        visible_fields.push(&activity_field);
-    }
-    if visible_fields.is_empty() { visible_fields.push(&activity_field); }
-    let activity_column = visible_fields.iter().position(|f| f.id == 0);
+    if visible_fields.is_empty() { visible_fields.push(&fallback_field); }
+    let fallback_column = visible_fields.iter().position(|f| f.id == fallback_field.id);
     let show_add_field_message = editor && !team_view && data.fields.is_empty() && data.schedule_items.is_empty();
     let show_add_match_overlay = editor
         && !team_view
@@ -6339,21 +6314,24 @@ fn ScheduleTimeline(
         .collect();
 
     for item in &data.schedule_items {
-        if !team_view && !activity_in_field(item, &selected_field, &data.fields) { continue; }
         let Some((start_time, end_time)) = activity_local_interval(item) else { continue; };
-        let field_id = if team_view { TEAM_VIEW_FIELD_ID }
-            else { activity_field_id(item, &data.fields) };
-        let empty_slot = TeamSlot { token: String::new(), team_id: None, name: None, shortname: None, photo: None };
-        timeline_events.push(TimelineEvent {
-            id: format!("activity-{}", item.id), activity: Some(item.clone()), name: item.title.clone(),
-            team1: String::new(), team2: String::new(), team1_photo: None, team2_photo: None,
-            team1_slot: empty_slot.clone(), team2_slot: empty_slot,
-            refs_display: String::new(), refs_list: Vec::new(), refs_slots: Vec::new(),
-            start_time, end_time, length_min: (end_time - start_time).num_minutes().max(1),
-            field_id, field_name: item.field.clone().unwrap_or_default(), color: String::new(), status: String::new(), schedule_type: None,
-            lane_index: 0, num_lanes: 1, highlight_playing: false, highlight_ref: false, ribbon: false,
-            team_role: String::new(), opponent_label: None, opponent_photo: None, opponent_kind: 0, opponent_slot: None,
-        });
+        for field in &visible_fields {
+            let empty_slot = TeamSlot { token: String::new(), team_id: None, name: None, shortname: None, photo: None };
+            timeline_events.push(TimelineEvent {
+                // Each visible copy needs a unique render ID, but every copy
+                // opens the same ScheduleItem row for editing.
+                id: format!("activity-{}-field-{}", item.id, field.id),
+                activity: Some(item.clone()), name: item.title.clone(),
+                team1: String::new(), team2: String::new(), team1_photo: None, team2_photo: None,
+                team1_slot: empty_slot.clone(), team2_slot: empty_slot,
+                refs_display: String::new(), refs_list: Vec::new(), refs_slots: Vec::new(),
+                start_time, end_time, length_min: (end_time - start_time).num_minutes().max(1),
+                field_id: field.id, field_name: item.field.clone().unwrap_or_default(),
+                color: String::new(), status: String::new(), schedule_type: None,
+                lane_index: 0, num_lanes: 1, highlight_playing: false, highlight_ref: false, ribbon: false,
+                team_role: String::new(), opponent_label: None, opponent_photo: None, opponent_kind: 0, opponent_slot: None,
+            });
+        }
     }
 
     // True iff two events overlap in time (using exact start/end, not slots)
@@ -7018,7 +6996,7 @@ fn ScheduleTimeline(
                 } => {
                     // STATBREAK groups share one start across fields — vertical
                     // (time) moves only; membership stays in the group card.
-                    let target_col = if schedule_type == "STATBREAK" || activity_column == Some(col) {
+                    let target_col = if schedule_type == "STATBREAK" || fallback_column == Some(col) {
                         orig_col
                     } else {
                         col
@@ -7064,7 +7042,7 @@ fn ScheduleTimeline(
                     let Some(column_name) = field_names_for_drop.get(col).cloned() else {
                         return;
                     };
-                    let field_name = (activity_column != Some(col)).then_some(column_name);
+                    let field_name = (fallback_column != Some(col)).then_some(column_name);
                     let start_local = day_start + chrono::Duration::minutes(start);
                     // Plain click (no drag) = default length; otherwise min 10 minutes.
                     let length_min = if extent == 0 {
@@ -7646,14 +7624,35 @@ fn ScheduleTimeline(
                                             let label = if item.sidecomp_id.is_some() { "Side competition" } else { "Activity" };
                                             let icon = if item.sidecomp_id.is_some() { "fas fa-trophy" } else { "far fa-calendar" };
                                             let time = format!("{} – {}", ev.start_time.format("%H:%M"), ev.end_time.format("%H:%M"));
+                                            let place = item.field.as_deref().or(item.location.as_deref());
+                                            let kind_and_place = place.map_or_else(
+                                                || label.to_string(),
+                                                |place| format!("{place} · {label}"),
+                                            );
+                                            let accessible_label = format!(
+                                                "{}: {}, {}{}",
+                                                label,
+                                                item.title,
+                                                time,
+                                                place.map_or_else(String::new, |place| format!(", at {place}")),
+                                            );
                                             rsx! {
-                                                button { r#type: "button", class: "schedule-activity-block", style,
-                                                    aria_label: format!("{}: {}, {}", label, item.title, time), aria_haspopup: "dialog",
+                                                button {
+                                                    r#type: "button",
+                                                    class: if ev.length_min < 15 {
+                                                        "schedule-activity-block schedule-activity-block--short"
+                                                    } else if ev.length_min >= 20 {
+                                                        "schedule-activity-block schedule-activity-block--roomy"
+                                                    } else {
+                                                        "schedule-activity-block"
+                                                    },
+                                                    style,
+                                                    aria_label: accessible_label.clone(), title: accessible_label, aria_haspopup: "dialog",
                                                     onpointerdown: move |event| event.stop_propagation(),
                                                     onclick: move |event| { event.stop_propagation(); on_activity.call(item.clone()); },
                                                     strong { i { class: icon, aria_hidden: true } " {ev.name}" }
                                                     small { "{time}" }
-                                                    small { class: "schedule-activity-kind", "{label}" }
+                                                    small { class: "schedule-activity-kind", "{kind_and_place}" }
                                                 }
                                             }
                                         }

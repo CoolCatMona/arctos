@@ -642,8 +642,8 @@ empty part of the timeline fills in the start time; dragging selects a time
 range. Choose the entry type, then review and save its details.
 
 For an activity, enter a name, start and end time, and any description or
-location players need. A field is optional and describes where the activity
-takes place. Each entry can span up to 31 days.
+location players need. You can choose a field as its location, but the activity
+still appears throughout the schedule. Each entry can span up to 31 days.
 
 Choose a side competition to schedule one that already exists, or create a new
 competition from the same form. You can also schedule a competition from its
@@ -652,10 +652,10 @@ Players can tap the entry to read the details or open the competition.
 
 **By team** shows every activity and scheduled side competition alongside the
 selected team's matches. Activities are visible even before a team is selected;
-they are not filtered by side competition entries. **By field** shows activities
-assigned to the selected field, with fieldless entries in a separate
-**Event activities** column. Fieldless entries also appear in the editor's
-**All fields** view.
+they are not filtered by side competition entries. **By field** shows all
+activities alongside that field's matches. In the editor's **All fields** view,
+each field displays the same activity. Select any copy to edit the one saved
+entry. The table shows each activity once.
 
 Activity times stay fixed when matches run early or late. They do not delay
 matches, reserve a field, or check for overlaps with matches. **Push back day…**

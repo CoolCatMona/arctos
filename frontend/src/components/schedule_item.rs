@@ -545,7 +545,7 @@ pub fn ScheduleItemDialog(
                             }
                             p { class: "form-text mb-3", "{timezone_label()}. This time stays fixed if matches run late." }
                             div { class: "mb-3",
-                                label { class: "form-label", r#for: "schedule-activity-field", "Field" }
+                                label { class: "form-label", r#for: "schedule-activity-field", "Where it happens (optional)" }
                                 select {
                                     id: "schedule-activity-field",
                                     class: "form-select",
@@ -557,6 +557,7 @@ pub fn ScheduleItemDialog(
                                         option { value: "{option.name}", selected: field() == option.name, "{option.name}" }
                                     }
                                 }
+                                p { class: "form-text", "Shown on every field. Choosing a field here does not block matches." }
                             }
                             div {
                                 label { class: "form-label", r#for: "schedule-activity-location", "Location" }

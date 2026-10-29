@@ -1416,6 +1416,57 @@
 .schedule-add-selection-context span { color: var(--ui-muted); font-variant-numeric: tabular-nums; }
 .schedule-add-selection-body .schedule-add-choices { max-width: 100%; }
 
+/* When timed items share a field, use short rows so the status cannot cover
+   the match title. The full name remains on the match link and card tooltip. */
+.schedule-timeline-event--compact-field {
+    justify-content: flex-start;
+    gap: 2px;
+    padding: 3px 5px;
+    font-size: 12px;
+    line-height: 1.15;
+}
+.schedule-timeline-event--compact-field .schedule-timeline-status-tag--corner {
+    position: static;
+    align-self: flex-start;
+    padding: 0 3px;
+    font-size: 11px;
+    line-height: 1.15;
+}
+.schedule-timeline-event--compact-field .schedule-timeline-event-header {
+    display: block !important;
+    min-width: 0;
+    margin: 0;
+}
+.schedule-timeline-event--compact-field .schedule-timeline-event-name,
+.schedule-timeline-event--compact-field .schedule-match-action {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.15;
+}
+.schedule-timeline-event--compact-field .schedule-timeline-event-teams,
+.schedule-timeline-event--compact-field .schedule-timeline-event-refs {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-wrap: nowrap !important;
+    margin: 0 !important;
+    font-size: 11px;
+    line-height: 1.15;
+}
+.schedule-timeline-event--compact-field .team-label,
+.schedule-timeline-event--compact-field .team-label > span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.schedule-timeline-event--very-dense .schedule-timeline-event-refs {
+    display: none !important;
+}
+
 @media (max-width: 767.98px) {
     /* Overlapping team cards have four short rows: status, field/time, title,
        and opponent/role. Keep the full match link and its accessible name. */
